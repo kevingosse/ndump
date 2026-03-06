@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Ndump.Core/Ndump.Core.csproj" />
+    <Project Path="src/Ndump.Cli/Ndump.Cli.csproj" />
+    <Project Path="src/Ndump.Gui/Ndump.Gui.csproj" />
+  </Folder>
+</Solution>
