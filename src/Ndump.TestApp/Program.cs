@@ -1,0 +1,97 @@
+namespace Ndump.TestApp;
+
+// Simple types with various field kinds for testing proxy generation
+
+public class Order
+{
+    private int _orderId;
+    private double _total;
+    private string _description;
+    private DateTime _createdAt;
+
+    public Order(int orderId, double total, string description)
+    {
+        _orderId = orderId;
+        _total = total;
+        _description = description;
+        _createdAt = DateTime.UtcNow;
+    }
+}
+
+public class Address
+{
+    private string _street;
+    private string _city;
+    private int _zipCode;
+
+    public Address(string street, string city, int zipCode)
+    {
+        _street = street;
+        _city = city;
+        _zipCode = zipCode;
+    }
+}
+
+public class Customer
+{
+    private string _name;
+    private int _age;
+    private bool _isActive;
+    private Order _lastOrder;
+    private Address _address;
+
+    public Customer(string name, int age, bool isActive, Order lastOrder, Address address)
+    {
+        _name = name;
+        _age = age;
+        _isActive = isActive;
+        _lastOrder = lastOrder;
+        _address = address;
+    }
+}
+
+// Test that we handle types with no references
+public class Tag
+{
+    private string _label;
+    private long _id;
+
+    public Tag(string label, long id)
+    {
+        _label = label;
+        _id = id;
+    }
+}
+
+class Program
+{
+    static void Main()
+    {
+        // Create objects that will be on the heap when the dump is taken
+        var addr1 = new Address("123 Main St", "Springfield", 62701);
+        var addr2 = new Address("456 Oak Ave", "Shelbyville", 62702);
+
+        var order1 = new Order(1001, 29.99, "Widget order");
+        var order2 = new Order(1002, 149.50, "Gadget bulk order");
+        var order3 = new Order(1003, 5.00, "Small item");
+
+        var cust1 = new Customer("Alice", 30, true, order1, addr1);
+        var cust2 = new Customer("Bob", 45, false, order2, addr2);
+        var cust3 = new Customer("Charlie", 28, true, order3, addr1);
+
+        var tag1 = new Tag("important", 1);
+        var tag2 = new Tag("urgent", 2);
+
+        // Keep references alive so GC doesn't collect them
+        var allObjects = new object[] { addr1, addr2, order1, order2, order3, cust1, cust2, cust3, tag1, tag2 };
+
+        Console.WriteLine($"READY:{Environment.ProcessId}");
+        Console.Out.Flush();
+
+        // Block until dump is captured
+        Console.ReadLine();
+
+        // Use allObjects to prevent optimization
+        GC.KeepAlive(allObjects);
+    }
+}

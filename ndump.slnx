@@ -3,5 +3,10 @@
     <Project Path="src/Ndump.Core/Ndump.Core.csproj" />
     <Project Path="src/Ndump.Cli/Ndump.Cli.csproj" />
     <Project Path="src/Ndump.Gui/Ndump.Gui.csproj" />
+    <Project Path="src/Ndump.TestApp/Ndump.TestApp.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Ndump.Core.Tests/Ndump.Core.Tests.csproj" />
+    <Project Path="tests/Ndump.IntegrationTests/Ndump.IntegrationTests.csproj" />
   </Folder>
 </Solution>
