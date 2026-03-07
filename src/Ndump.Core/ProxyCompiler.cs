@@ -53,40 +53,26 @@ public sealed class ProxyCompiler
         // Use an isolated AssemblyLoadContext so multiple compilations can coexist
         var alc = new AssemblyLoadContext(assemblyName, isCollectible: true);
 
+        using var ms = new MemoryStream();
+        var result = compilation.Emit(ms);
+        if (!result.Success)
+        {
+            var errors = result.Diagnostics
+                .Where(d => d.Severity == DiagnosticSeverity.Error)
+                .Select(d => d.ToString())
+                .ToList();
+            return CompilationResult.Failure(errors);
+        }
+
+        // Write to disk if requested (before loading, so the file isn't locked by the ALC)
         if (outputPath is not null)
         {
-            // Compile to disk
-            var result = compilation.Emit(outputPath);
-            if (!result.Success)
-            {
-                var errors = result.Diagnostics
-                    .Where(d => d.Severity == DiagnosticSeverity.Error)
-                    .Select(d => d.ToString())
-                    .ToList();
-                return CompilationResult.Failure(errors);
-            }
-
-            var assembly = alc.LoadFromAssemblyPath(Path.GetFullPath(outputPath));
-            return CompilationResult.Success(assembly, outputPath);
+            File.WriteAllBytes(outputPath, ms.ToArray());
         }
-        else
-        {
-            // Compile to memory
-            using var ms = new MemoryStream();
-            var result = compilation.Emit(ms);
-            if (!result.Success)
-            {
-                var errors = result.Diagnostics
-                    .Where(d => d.Severity == DiagnosticSeverity.Error)
-                    .Select(d => d.ToString())
-                    .ToList();
-                return CompilationResult.Failure(errors);
-            }
 
-            ms.Seek(0, SeekOrigin.Begin);
-            var assembly = alc.LoadFromStream(ms);
-            return CompilationResult.Success(assembly);
-        }
+        ms.Seek(0, SeekOrigin.Begin);
+        var assembly = alc.LoadFromStream(ms);
+        return CompilationResult.Success(assembly, outputPath);
     }
 
     private static List<MetadataReference> GetMetadataReferences()
