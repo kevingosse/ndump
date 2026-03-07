@@ -444,10 +444,17 @@ public class ProxyCompilerTests
 
         var tempDir = Path.Combine(Path.GetTempPath(), $"ndump_test_{Guid.NewGuid():N}");
         Directory.CreateDirectory(tempDir);
-        var outputPath = Path.Combine(tempDir, "test.dll");
+        try
+        {
+            var outputPath = Path.Combine(tempDir, "test.dll");
 
-        var result = _compiler.CompileFromSource([sysObjCode, source], outputPath);
-        Assert.True(result.IsSuccess, string.Join("\n", result.Errors));
-        Assert.True(File.Exists(outputPath));
+            var result = _compiler.CompileFromSource([sysObjCode, source], outputPath);
+            Assert.True(result.IsSuccess, string.Join("\n", result.Errors));
+            Assert.True(File.Exists(outputPath));
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, true); } catch { }
+        }
     }
 }

@@ -22,6 +22,7 @@ public sealed class DumpProjector
         public void Dispose()
         {
             Context.Dispose();
+            try { if (Directory.Exists(TempDirectory)) Directory.Delete(TempDirectory, true); } catch { }
         }
     }
 
