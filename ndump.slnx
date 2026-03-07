@@ -9,4 +9,5 @@
     <Project Path="tests/Ndump.Core.Tests/Ndump.Core.Tests.csproj" />
     <Project Path="tests/Ndump.IntegrationTests/Ndump.IntegrationTests.csproj" />
   </Folder>
+  <Project Path="scratchpad/Scratchpad/Scratchpad.csproj" Id="bfb3f79d-1fcf-4a1c-a938-7f6b97428ef4" />
 </Solution>

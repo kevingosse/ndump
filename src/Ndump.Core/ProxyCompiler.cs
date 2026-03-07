@@ -39,7 +39,7 @@ public sealed class ProxyCompiler
 
     private CompilationResult CompileFromTrees(List<SyntaxTree> syntaxTrees, string? outputPath)
     {
-        var assemblyName = $"Ndump.Generated_{Guid.NewGuid():N}";
+        var assemblyName = "Ndump.Generated";
         var references = GetMetadataReferences();
 
         var compilation = CSharpCompilation.Create(
@@ -93,14 +93,30 @@ public sealed class ProxyCompiler
     {
         var refs = new List<MetadataReference>();
 
-        // Add runtime assemblies
-        var trustedAssemblies = AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string;
-        if (trustedAssemblies is not null)
+        // Use reference assemblies from the targeting pack instead of runtime assemblies.
+        // Runtime assemblies (TRUSTED_PLATFORM_ASSEMBLIES) expose System.Private.CoreLib
+        // directly, which causes consumers of the generated DLL to need an explicit
+        // reference to System.Private.CoreLib. Reference assemblies use proper type
+        // forwarding through System.Runtime.
+        var refAssemblyDir = GetReferenceAssemblyDirectory();
+        if (refAssemblyDir is not null)
         {
-            foreach (var path in trustedAssemblies.Split(Path.PathSeparator))
+            foreach (var dll in Directory.GetFiles(refAssemblyDir, "*.dll"))
             {
-                if (File.Exists(path))
-                    refs.Add(MetadataReference.CreateFromFile(path));
+                refs.Add(MetadataReference.CreateFromFile(dll));
+            }
+        }
+        else
+        {
+            // Fallback: use runtime assemblies but exclude System.Private.CoreLib
+            var trustedAssemblies = AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string;
+            if (trustedAssemblies is not null)
+            {
+                foreach (var path in trustedAssemblies.Split(Path.PathSeparator))
+                {
+                    if (File.Exists(path))
+                        refs.Add(MetadataReference.CreateFromFile(path));
+                }
             }
         }
 
@@ -110,6 +126,48 @@ public sealed class ProxyCompiler
             refs.Add(MetadataReference.CreateFromFile(coreAssembly));
 
         return refs;
+    }
+
+    private static string? GetReferenceAssemblyDirectory()
+    {
+        // Locate the .NET reference assemblies from the targeting pack.
+        // Path: {dotnet_root}/packs/Microsoft.NETCore.App.Ref/{version}/ref/net{major}.{minor}/
+        var dotnetRoot = Path.GetDirectoryName(Path.GetDirectoryName(typeof(object).Assembly.Location));
+        if (dotnetRoot is null)
+            return null;
+
+        // Walk up from the runtime directory to the dotnet root
+        // Runtime location is typically: {dotnet_root}/shared/Microsoft.NETCore.App/{version}/
+        var runtimeDir = Path.GetDirectoryName(typeof(object).Assembly.Location);
+        if (runtimeDir is null)
+            return null;
+
+        var runtimeVersion = Path.GetFileName(runtimeDir); // e.g. "10.0.0"
+        var dotnetRootDir = Path.GetFullPath(Path.Combine(runtimeDir, "..", "..", ".."));
+        var packsDir = Path.Combine(dotnetRootDir, "packs", "Microsoft.NETCore.App.Ref");
+
+        if (!Directory.Exists(packsDir))
+            return null;
+
+        // Try to find a matching major.minor version
+        var version = Version.Parse(runtimeVersion);
+        var tfm = $"net{version.Major}.{version.Minor}";
+
+        // Look for the best matching pack version
+        var packVersionDirs = Directory.GetDirectories(packsDir)
+            .Select(d => (Path: d, Name: Path.GetFileName(d)))
+            .Where(d => Version.TryParse(d.Name, out var v) && v.Major == version.Major && v.Minor == version.Minor)
+            .OrderByDescending(d => d.Name)
+            .ToList();
+
+        foreach (var packDir in packVersionDirs)
+        {
+            var refDir = Path.Combine(packDir.Path, "ref", tfm);
+            if (Directory.Exists(refDir))
+                return refDir;
+        }
+
+        return null;
     }
 }
 
