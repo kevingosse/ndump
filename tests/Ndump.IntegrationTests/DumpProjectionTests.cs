@@ -82,7 +82,7 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
         var projector = new DumpProjector();
         using var result = projector.Project(_fixture.DumpPath);
 
-        var customerType = result.GeneratedAssembly.GetType("Ndump.Generated.Customer");
+        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
         Assert.NotNull(customerType);
 
         var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
@@ -103,7 +103,7 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
         var projector = new DumpProjector();
         using var result = projector.Project(_fixture.DumpPath);
 
-        var customerType = result.GeneratedAssembly.GetType("Ndump.Generated.Customer");
+        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
         Assert.NotNull(customerType);
 
         var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
@@ -126,7 +126,7 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
         var projector = new DumpProjector();
         using var result = projector.Project(_fixture.DumpPath);
 
-        var customerType = result.GeneratedAssembly.GetType("Ndump.Generated.Customer");
+        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
         Assert.NotNull(customerType);
 
         var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
@@ -146,7 +146,7 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
         var projector = new DumpProjector();
         using var result = projector.Project(_fixture.DumpPath);
 
-        var customerType = result.GeneratedAssembly.GetType("Ndump.Generated.Customer");
+        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
         Assert.NotNull(customerType);
 
         var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
@@ -168,8 +168,8 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
         var projector = new DumpProjector();
         using var result = projector.Project(_fixture.DumpPath);
 
-        var customerType = result.GeneratedAssembly.GetType("Ndump.Generated.Customer");
-        var orderType = result.GeneratedAssembly.GetType("Ndump.Generated.Order");
+        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
+        var orderType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Order");
         Assert.NotNull(customerType);
         Assert.NotNull(orderType);
 
@@ -201,7 +201,7 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
         var projector = new DumpProjector();
         using var result = projector.Project(_fixture.DumpPath);
 
-        var tagType = result.GeneratedAssembly.GetType("Ndump.Generated.Tag");
+        var tagType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Tag");
         Assert.NotNull(tagType);
 
         var getInstances = tagType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
@@ -222,7 +222,7 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
         var projector = new DumpProjector();
         using var result = projector.Project(_fixture.DumpPath);
 
-        var tagType = result.GeneratedAssembly.GetType("Ndump.Generated.Tag");
+        var tagType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Tag");
         Assert.NotNull(tagType);
 
         // Get an address from EnumerateInstances
@@ -246,7 +246,7 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
         var projector = new DumpProjector();
         using var result = projector.Project(_fixture.DumpPath);
 
-        var orderType = result.GeneratedAssembly.GetType("Ndump.Generated.Order");
+        var orderType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Order");
         Assert.NotNull(orderType);
 
         var getInstances = orderType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);

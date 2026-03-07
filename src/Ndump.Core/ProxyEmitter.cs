@@ -7,8 +7,6 @@ namespace Ndump.Core;
 /// </summary>
 public sealed class ProxyEmitter
 {
-    private const string GeneratedNamespace = "Ndump.Generated";
-
     /// <summary>
     /// Set of fully-qualified type names that have corresponding proxies being generated.
     /// Used to determine if a reference field can resolve to a proxy type.
@@ -29,8 +27,10 @@ public sealed class ProxyEmitter
         foreach (var type in types)
         {
             var code = GenerateProxy(type);
-            var safeName = type.Name.Replace('<', '_').Replace('>', '_').Replace(',', '_');
-            var filePath = Path.Combine(outputDirectory, $"{safeName}.g.cs");
+            // Include namespace in the filename to avoid collisions
+            var nsPrefix = string.IsNullOrEmpty(type.Namespace) ? "" : type.Namespace.Replace('.', '_') + "_";
+            var safeName = SanitizeTypeName(type.Name);
+            var filePath = Path.Combine(outputDirectory, $"{nsPrefix}{safeName}.g.cs");
             File.WriteAllText(filePath, code);
             files.Add(filePath);
         }
@@ -56,37 +56,51 @@ public sealed class ProxyEmitter
         var sb = new StringBuilder();
         sb.AppendLine("using Ndump.Core;");
         sb.AppendLine();
-        sb.AppendLine($"namespace {GeneratedNamespace};");
+
+        var proxyNamespace = GetProxyNamespace(type.Namespace);
+        sb.AppendLine($"namespace {proxyNamespace};");
         sb.AppendLine();
-        sb.AppendLine($"public sealed class {SanitizeTypeName(type.Name)}");
+
+        var sanitizedName = SanitizeTypeName(type.Name);
+        sb.AppendLine($"public sealed class {sanitizedName}");
         sb.AppendLine("{");
         sb.AppendLine("    private readonly ulong _objAddress;");
         sb.AppendLine("    private readonly DumpContext _ctx;");
         sb.AppendLine();
-        sb.AppendLine($"    private {SanitizeTypeName(type.Name)}(ulong address, DumpContext ctx)");
+        sb.AppendLine($"    private {sanitizedName}(ulong address, DumpContext ctx)");
         sb.AppendLine("    {");
         sb.AppendLine("        _objAddress = address;");
         sb.AppendLine("        _ctx = ctx;");
         sb.AppendLine("    }");
 
-        // Properties for each field
+        // Properties for each field (deduplicate property names)
+        var usedNames = new HashSet<string> { sanitizedName, "_objAddress", "_ctx" };
         foreach (var field in type.Fields)
         {
+            var propName = SanitizePropertyName(field.Name);
+            if (!usedNames.Add(propName))
+            {
+                // Skip duplicate property names (can happen with inheritance/hidden fields)
+                sb.AppendLine();
+                sb.AppendLine($"    // Duplicate field skipped: {field.Name} ({field.TypeName})");
+                continue;
+            }
+
             sb.AppendLine();
             EmitProperty(sb, type, field);
         }
 
         // FromAddress factory
         sb.AppendLine();
-        sb.AppendLine($"    public static {SanitizeTypeName(type.Name)} FromAddress(ulong address, DumpContext ctx)");
-        sb.AppendLine($"        => new {SanitizeTypeName(type.Name)}(address, ctx);");
+        sb.AppendLine($"    public static {sanitizedName} FromAddress(ulong address, DumpContext ctx)");
+        sb.AppendLine($"        => new {sanitizedName}(address, ctx);");
 
         // GetInstances
         sb.AppendLine();
-        sb.AppendLine($"    public static System.Collections.Generic.IEnumerable<{SanitizeTypeName(type.Name)}> GetInstances(DumpContext ctx)");
+        sb.AppendLine($"    public static global::System.Collections.Generic.IEnumerable<{sanitizedName}> GetInstances(DumpContext ctx)");
         sb.AppendLine("    {");
         sb.AppendLine($"        foreach (var addr in ctx.EnumerateInstances(\"{type.FullName}\"))");
-        sb.AppendLine($"            yield return new {SanitizeTypeName(type.Name)}(addr, ctx);");
+        sb.AppendLine($"            yield return new {sanitizedName}(addr, ctx);");
         sb.AppendLine("    }");
 
         // Address accessor (method to avoid collisions with object fields)
@@ -95,7 +109,7 @@ public sealed class ProxyEmitter
 
         // ToString override
         sb.AppendLine();
-        sb.AppendLine($"    public override string ToString() => $\"{SanitizeTypeName(type.Name)}@0x{{_objAddress:X}}\";");
+        sb.AppendLine($"    public override string ToString() => $\"{sanitizedName}@0x{{_objAddress:X}}\";");
 
         sb.AppendLine("}");
         return sb.ToString();
@@ -119,13 +133,13 @@ public sealed class ProxyEmitter
             case FieldKind.ObjectReference:
                 if (field.ReferenceTypeName is not null && _knownProxyTypes.Contains(field.ReferenceTypeName))
                 {
-                    var proxyTypeName = SanitizeTypeName(ExtractTypeName(field.ReferenceTypeName));
-                    sb.AppendLine($"    public {proxyTypeName}? {propName}");
+                    var qualifiedProxyType = GetFullyQualifiedProxyType(field.ReferenceTypeName);
+                    sb.AppendLine($"    public {qualifiedProxyType}? {propName}");
                     sb.AppendLine("    {");
                     sb.AppendLine("        get");
                     sb.AppendLine("        {");
                     sb.AppendLine($"            var addr = _ctx.GetObjectAddress(_objAddress, \"{ownerType.FullName}\", \"{field.Name}\");");
-                    sb.AppendLine($"            return addr == 0 ? null : {proxyTypeName}.FromAddress(addr, _ctx);");
+                    sb.AppendLine($"            return addr == 0 ? null : {qualifiedProxyType}.FromAddress(addr, _ctx);");
                     sb.AppendLine("        }");
                     sb.AppendLine("    }");
                 }
@@ -147,7 +161,43 @@ public sealed class ProxyEmitter
         }
     }
 
-    private static string SanitizeTypeName(string name)
+    /// <summary>
+    /// Get the proxy namespace for a given original namespace.
+    /// E.g., "System.Text" → "_.System.Text", "" → "_"
+    /// </summary>
+    internal static string GetProxyNamespace(string originalNamespace)
+    {
+        return string.IsNullOrEmpty(originalNamespace) ? "_" : $"_.{originalNamespace}";
+    }
+
+    /// <summary>
+    /// Get the fully qualified proxy type name for a given CLR full type name.
+    /// E.g., "MyApp.Customer" → "_.MyApp.Customer"
+    /// </summary>
+    private static string GetFullyQualifiedProxyType(string fullTypeName)
+    {
+        // Find split point before any generic markers (<, `, [)
+        var genericStart = fullTypeName.Length;
+        for (int i = 0; i < fullTypeName.Length; i++)
+        {
+            if (fullTypeName[i] is '<' or '`' or '[')
+            {
+                genericStart = i;
+                break;
+            }
+        }
+
+        var lastDot = fullTypeName.LastIndexOf('.', genericStart - 1);
+        if (lastDot > 0)
+        {
+            var ns = fullTypeName[..lastDot];
+            var name = fullTypeName[(lastDot + 1)..];
+            return $"_.{ns}.{SanitizeTypeName(name)}";
+        }
+        return $"_.{SanitizeTypeName(fullTypeName)}";
+    }
+
+    internal static string SanitizeTypeName(string name)
     {
         // Handle nested/generic type names
         return name
@@ -156,7 +206,10 @@ public sealed class ProxyEmitter
             .Replace(',', '_')
             .Replace(' ', '_')
             .Replace('+', '_')
-            .Replace('.', '_');
+            .Replace('.', '_')
+            .Replace('`', '_')
+            .Replace('[', '_')
+            .Replace(']', '_');
     }
 
     private static string SanitizePropertyName(string fieldName)
@@ -177,11 +230,5 @@ public sealed class ProxyEmitter
             .Replace('<', '_')
             .Replace('>', '_')
             .Replace(' ', '_');
-    }
-
-    private static string ExtractTypeName(string fullName)
-    {
-        var lastDot = fullName.LastIndexOf('.');
-        return lastDot > 0 ? fullName[(lastDot + 1)..] : fullName;
     }
 }

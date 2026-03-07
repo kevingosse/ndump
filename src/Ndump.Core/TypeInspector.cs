@@ -7,13 +7,9 @@ namespace Ndump.Core;
 /// </summary>
 public sealed class TypeInspector
 {
-    // Prefixes of types we skip (framework/runtime types)
+    // Prefixes of types we skip (compiler-generated / internal runtime types)
     private static readonly string[] ExcludedPrefixes =
     [
-        "System.",
-        "Microsoft.",
-        "Internal.",
-        "Interop.",
         "<>",
         "<Module>",
         "<PrivateImplementationDetails>"
@@ -106,26 +102,12 @@ public sealed class TypeInspector
         if (kind == FieldKind.String)
             return "string";
 
-        if (kind == FieldKind.Primitive && field.Type is not null)
+        if (kind == FieldKind.Primitive)
         {
-            return field.Type.Name switch
-            {
-                "System.Boolean" => "bool",
-                "System.Byte" => "byte",
-                "System.SByte" => "sbyte",
-                "System.Int16" => "short",
-                "System.UInt16" => "ushort",
-                "System.Int32" => "int",
-                "System.UInt32" => "uint",
-                "System.Int64" => "long",
-                "System.UInt64" => "ulong",
-                "System.Single" => "float",
-                "System.Double" => "double",
-                "System.Char" => "char",
-                "System.IntPtr" => "nint",
-                "System.UIntPtr" => "nuint",
-                _ => field.Type.Name ?? "object"
-            };
+            // Use ElementType to determine the C# primitive type.
+            // This correctly handles enums (maps to their underlying type)
+            // and avoids emitting CLR type names that may conflict with proxy namespaces.
+            return MapElementType(field.ElementType);
         }
 
         // For object references, return the type name (will be mapped to proxy type)
@@ -135,15 +117,62 @@ public sealed class TypeInspector
         return "object";
     }
 
+    private static string MapElementType(ClrElementType elementType)
+    {
+        return elementType switch
+        {
+            ClrElementType.Boolean => "bool",
+            ClrElementType.Char => "char",
+            ClrElementType.Int8 => "sbyte",
+            ClrElementType.UInt8 => "byte",
+            ClrElementType.Int16 => "short",
+            ClrElementType.UInt16 => "ushort",
+            ClrElementType.Int32 => "int",
+            ClrElementType.UInt32 => "uint",
+            ClrElementType.Int64 => "long",
+            ClrElementType.UInt64 => "ulong",
+            ClrElementType.Float => "float",
+            ClrElementType.Double => "double",
+            ClrElementType.NativeInt => "nint",
+            ClrElementType.NativeUInt => "nuint",
+            ClrElementType.Pointer => "nuint",
+            ClrElementType.FunctionPointer => "nuint",
+            _ => "int" // Safe fallback for unknown primitive element types
+        };
+    }
+
+    /// <summary>
+    /// Find the split point between namespace and type name.
+    /// For generic types like "System.Collections.Generic.List&lt;System.String&gt;",
+    /// we need to find the last dot that's part of the namespace, not inside generic args.
+    /// </summary>
+    private static int FindNamespaceSplit(string fullName)
+    {
+        // Find the start of generic args (first '<', '`', or '[' that indicates generics)
+        var genericStart = fullName.Length;
+        for (int i = 0; i < fullName.Length; i++)
+        {
+            if (fullName[i] is '<' or '`' or '[')
+            {
+                genericStart = i;
+                break;
+            }
+        }
+
+        // Find the last dot before generic args
+        var lastDot = fullName.LastIndexOf('.', genericStart - 1);
+        return lastDot;
+    }
+
     private static string ExtractNamespace(string fullName)
     {
-        var lastDot = fullName.LastIndexOf('.');
+        var lastDot = FindNamespaceSplit(fullName);
         return lastDot > 0 ? fullName[..lastDot] : "";
     }
 
     private static string ExtractTypeName(string fullName)
     {
-        var lastDot = fullName.LastIndexOf('.');
+        var lastDot = FindNamespaceSplit(fullName);
         return lastDot > 0 ? fullName[(lastDot + 1)..] : fullName;
     }
 }
