@@ -29,7 +29,7 @@ public partial class EventSource : _.System.Object
 
     public long m_matchAnyKeyword => Field<long>();
 
-    public ulong m_Dispatchers => RefAddress();
+    public global::_.System.Object? m_Dispatchers => Field<global::_.System.Object>();
 
     public _.System.Diagnostics.Tracing.EventSource.OverrideEventProvider? m_etwProvider => Field<_.System.Diagnostics.Tracing.EventSource.OverrideEventProvider>();
 
@@ -45,7 +45,7 @@ public partial class EventSource : _.System.Object
 
     public byte m_outOfBandMessageCount => Field<byte>();
 
-    public ulong m_deferredCommands => RefAddress();
+    public global::_.System.Object? m_deferredCommands => Field<global::_.System.Object>();
 
     // Array field: m_traits (object) — element type not supported
 

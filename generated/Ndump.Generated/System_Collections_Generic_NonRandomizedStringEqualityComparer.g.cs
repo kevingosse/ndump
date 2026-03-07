@@ -7,7 +7,7 @@ public partial class NonRandomizedStringEqualityComparer : _.System.Object
 {
     protected NonRandomizedStringEqualityComparer(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public ulong _underlyingComparer => RefAddress();
+    public global::_.System.Object? _underlyingComparer => Field<global::_.System.Object>();
 
     public static new NonRandomizedStringEqualityComparer FromAddress(ulong address, DumpContext ctx)
         => new NonRandomizedStringEqualityComparer(address, ctx);

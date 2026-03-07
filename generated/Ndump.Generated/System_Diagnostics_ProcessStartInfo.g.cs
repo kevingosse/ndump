@@ -21,7 +21,7 @@ public sealed class ProcessStartInfo : _.System.Object
 
     public int _windowStyle => Field<int>();
 
-    public ulong _environmentVariables => RefAddress();
+    public global::_.System.Object? _environmentVariables => Field<global::_.System.Object>();
 
     public bool CreateNoWindow => Field<bool>("<CreateNoWindow>k__BackingField");
 

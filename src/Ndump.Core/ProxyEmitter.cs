@@ -982,11 +982,11 @@ public sealed class ProxyEmitter
         }
         else
         {
-            // Unknown reference type — expose as address
+            // Unknown reference type — expose as _.System.Object
             if (propName == field.Name)
-                sb.AppendLine($"    public ulong {propName} => RefAddress();");
+                sb.AppendLine($"    public global::_.System.Object? {propName} => Field<global::_.System.Object>();");
             else
-                sb.AppendLine($"    public ulong {propName} => RefAddress(\"{field.Name}\");");
+                sb.AppendLine($"    public global::_.System.Object? {propName} => Field<global::_.System.Object>(\"{field.Name}\");");
         }
     }
 

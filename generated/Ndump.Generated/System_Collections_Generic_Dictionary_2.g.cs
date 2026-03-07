@@ -21,7 +21,7 @@ public sealed class Dictionary<T1, T2> : global::_.System.Object
 
     public int _version => Field<int>();
 
-    public ulong _comparer => RefAddress();
+    public global::_.System.Object? _comparer => Field<global::_.System.Object>();
 
     // Unknown field: _keys (object)
 

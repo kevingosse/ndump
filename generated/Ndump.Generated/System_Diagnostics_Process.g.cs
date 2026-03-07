@@ -19,11 +19,11 @@ public sealed class Process : _.System.ComponentModel.Component
 
     public string? _machineName => Field<string>();
 
-    public ulong _processInfo => RefAddress();
+    public global::_.System.Object? _processInfo => Field<global::_.System.Object>();
 
-    public ulong _threads => RefAddress();
+    public global::_.System.Object? _threads => Field<global::_.System.Object>();
 
-    public ulong _modules => RefAddress();
+    public global::_.System.Object? _modules => Field<global::_.System.Object>();
 
     public bool _haveWorkingSetLimits => Field<bool>();
 
@@ -69,7 +69,7 @@ public sealed class Process : _.System.ComponentModel.Component
 
     public _.System.IO.StreamReader? _standardOutput => Field<_.System.IO.StreamReader>();
 
-    public ulong _standardInput => RefAddress();
+    public global::_.System.Object? _standardInput => Field<global::_.System.Object>();
 
     public _.System.IO.StreamReader? _standardError => Field<_.System.IO.StreamReader>();
 
@@ -81,13 +81,13 @@ public sealed class Process : _.System.ComponentModel.Component
 
     public int _errorStreamReadMode => Field<int>();
 
-    public ulong OutputDataReceived => RefAddress();
+    public global::_.System.Object? OutputDataReceived => Field<global::_.System.Object>();
 
-    public ulong ErrorDataReceived => RefAddress();
+    public global::_.System.Object? ErrorDataReceived => Field<global::_.System.Object>();
 
-    public ulong _output => RefAddress();
+    public global::_.System.Object? _output => Field<global::_.System.Object>();
 
-    public ulong _error => RefAddress();
+    public global::_.System.Object? _error => Field<global::_.System.Object>();
 
     public bool _pendingOutputRead => Field<bool>();
 

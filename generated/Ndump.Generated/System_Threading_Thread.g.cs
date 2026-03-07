@@ -7,13 +7,13 @@ public sealed class Thread : _.System.Runtime.ConstrainedExecution.CriticalFinal
 {
     private Thread(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public ulong _executionContext => RefAddress();
+    public global::_.System.Object? _executionContext => Field<global::_.System.Object>();
 
-    public ulong _synchronizationContext => RefAddress();
+    public global::_.System.Object? _synchronizationContext => Field<global::_.System.Object>();
 
     public string? _name => Field<string>();
 
-    public ulong _startHelper => RefAddress();
+    public global::_.System.Object? _startHelper => Field<global::_.System.Object>();
 
     public nint _DONT_USE_InternalThread => Field<nint>();
 

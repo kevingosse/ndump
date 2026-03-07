@@ -136,8 +136,8 @@ public class ProxyEmitterTests
         Assert.Contains("public bool IsActive => Field<bool>(\"<IsActive>k__BackingField\");", code);
         // Known reference type uses Field<ProxyType>
         Assert.Contains("public _.MyApp.Address? _address => Field<_.MyApp.Address>();", code);
-        // Unknown reference type falls back to RefAddress
-        Assert.Contains("public ulong _widget => RefAddress();", code);
+        // Unknown reference type falls back to _.System.Object
+        Assert.Contains("public global::_.System.Object? _widget => Field<global::_.System.Object>();", code);
     }
 
     [Fact]
@@ -163,7 +163,7 @@ public class ProxyEmitterTests
         // Only MyApp.Customer is known, not SomeLib.Widget
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public ulong _unknown => RefAddress();", code);
+        Assert.Contains("public global::_.System.Object? _unknown => Field<global::_.System.Object>();", code);
     }
 
     [Fact]

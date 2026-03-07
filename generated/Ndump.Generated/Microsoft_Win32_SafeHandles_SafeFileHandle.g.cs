@@ -17,9 +17,9 @@ public sealed class SafeFileHandle : _.Microsoft.Win32.SafeHandles.SafeHandleZer
 
     public int _fileType => Field<int>();
 
-    public ulong ThreadPoolBinding => RefAddress("<ThreadPoolBinding>k__BackingField");
+    public global::_.System.Object? ThreadPoolBinding => Field<global::_.System.Object>("<ThreadPoolBinding>k__BackingField");
 
-    public ulong _reusableOverlappedValueTaskSource => RefAddress();
+    public global::_.System.Object? _reusableOverlappedValueTaskSource => Field<global::_.System.Object>();
 
     public static new SafeFileHandle FromAddress(ulong address, DumpContext ctx)
         => new SafeFileHandle(address, ctx);

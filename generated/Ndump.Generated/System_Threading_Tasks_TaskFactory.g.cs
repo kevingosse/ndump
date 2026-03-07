@@ -9,7 +9,7 @@ public sealed class TaskFactory : _.System.Object
 
     // ValueType field: m_defaultCancellationToken (object) — not yet supported
 
-    public ulong m_defaultScheduler => RefAddress();
+    public global::_.System.Object? m_defaultScheduler => Field<global::_.System.Object>();
 
     public int m_defaultCreationOptions => Field<int>();
 

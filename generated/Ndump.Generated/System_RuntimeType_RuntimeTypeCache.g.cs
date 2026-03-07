@@ -43,7 +43,7 @@ public partial class RuntimeType
 
         public string? m_defaultMemberName => Field<string>();
 
-        public ulong m_genericCache => RefAddress();
+        public global::_.System.Object? m_genericCache => Field<global::_.System.Object>();
 
         public global::Ndump.Core.DumpArray<_.System.Object?>? _emptyArray => ArrayField<_.System.Object?>();
 

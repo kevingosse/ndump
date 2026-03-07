@@ -7,9 +7,9 @@ public class Component : _.System.MarshalByRefObject
 {
     protected Component(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public ulong _site => RefAddress();
+    public global::_.System.Object? _site => Field<global::_.System.Object>();
 
-    public ulong _events => RefAddress();
+    public global::_.System.Object? _events => Field<global::_.System.Object>();
 
     public static new Component FromAddress(ulong address, DumpContext ctx)
         => new Component(address, ctx);

@@ -7,7 +7,7 @@ public sealed class RuntimeAssembly : _.System.Reflection.Assembly
 {
     private RuntimeAssembly(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public ulong _ModuleResolve => RefAddress();
+    public global::_.System.Object? _ModuleResolve => Field<global::_.System.Object>();
 
     public string? m_fullname => Field<string>();
 

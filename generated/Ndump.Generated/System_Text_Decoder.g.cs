@@ -9,7 +9,7 @@ public class Decoder : _.System.Object
 
     public _.System.Text.DecoderFallback? _fallback => Field<_.System.Text.DecoderFallback>();
 
-    public ulong _fallbackBuffer => RefAddress();
+    public global::_.System.Object? _fallbackBuffer => Field<global::_.System.Object>();
 
     public static new Decoder FromAddress(ulong address, DumpContext ctx)
         => new Decoder(address, ctx);

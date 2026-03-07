@@ -7,11 +7,11 @@ public class Exception : _.System.Object
 {
     protected Exception(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public ulong _exceptionMethod => RefAddress();
+    public global::_.System.Object? _exceptionMethod => Field<global::_.System.Object>();
 
     public string? _message => Field<string>();
 
-    public ulong _data => RefAddress();
+    public global::_.System.Object? _data => Field<global::_.System.Object>();
 
     public _.System.Exception? _innerException => Field<_.System.Exception>();
 

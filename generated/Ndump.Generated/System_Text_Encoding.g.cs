@@ -9,7 +9,7 @@ public partial class Encoding : _.System.Object
 
     public int _codePage => Field<int>();
 
-    public ulong _dataItem => RefAddress();
+    public global::_.System.Object? _dataItem => Field<global::_.System.Object>();
 
     public bool _isReadOnly => Field<bool>();
 

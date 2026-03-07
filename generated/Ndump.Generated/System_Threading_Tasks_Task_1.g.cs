@@ -13,13 +13,13 @@ public sealed class Task<T> : global::_.System.Object
 
     public _.System.Object? m_stateObject => Field<_.System.Object>();
 
-    public ulong m_taskScheduler => RefAddress();
+    public global::_.System.Object? m_taskScheduler => Field<global::_.System.Object>();
 
     public int m_stateFlags => Field<int>();
 
     public _.System.Object? m_continuationObject => Field<_.System.Object>();
 
-    public ulong m_contingentProperties => RefAddress();
+    public global::_.System.Object? m_contingentProperties => Field<global::_.System.Object>();
 
     // ValueType field: m_result (object) — not yet supported
 

@@ -7,59 +7,59 @@ public sealed class RuntimeEventSource : _.System.Diagnostics.Tracing.EventSourc
 {
     private RuntimeEventSource(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public ulong _gcHeapSizeCounter => RefAddress();
+    public global::_.System.Object? _gcHeapSizeCounter => Field<global::_.System.Object>();
 
-    public ulong _gen0GCCounter => RefAddress();
+    public global::_.System.Object? _gen0GCCounter => Field<global::_.System.Object>();
 
-    public ulong _gen1GCCounter => RefAddress();
+    public global::_.System.Object? _gen1GCCounter => Field<global::_.System.Object>();
 
-    public ulong _gen2GCCounter => RefAddress();
+    public global::_.System.Object? _gen2GCCounter => Field<global::_.System.Object>();
 
-    public ulong _gen0BudgetCounter => RefAddress();
+    public global::_.System.Object? _gen0BudgetCounter => Field<global::_.System.Object>();
 
-    public ulong _cpuTimeCounter => RefAddress();
+    public global::_.System.Object? _cpuTimeCounter => Field<global::_.System.Object>();
 
-    public ulong _workingSetCounter => RefAddress();
+    public global::_.System.Object? _workingSetCounter => Field<global::_.System.Object>();
 
-    public ulong _threadPoolThreadCounter => RefAddress();
+    public global::_.System.Object? _threadPoolThreadCounter => Field<global::_.System.Object>();
 
-    public ulong _monitorContentionCounter => RefAddress();
+    public global::_.System.Object? _monitorContentionCounter => Field<global::_.System.Object>();
 
-    public ulong _threadPoolQueueCounter => RefAddress();
+    public global::_.System.Object? _threadPoolQueueCounter => Field<global::_.System.Object>();
 
-    public ulong _completedItemsCounter => RefAddress();
+    public global::_.System.Object? _completedItemsCounter => Field<global::_.System.Object>();
 
-    public ulong _allocRateCounter => RefAddress();
+    public global::_.System.Object? _allocRateCounter => Field<global::_.System.Object>();
 
-    public ulong _timerCounter => RefAddress();
+    public global::_.System.Object? _timerCounter => Field<global::_.System.Object>();
 
-    public ulong _fragmentationCounter => RefAddress();
+    public global::_.System.Object? _fragmentationCounter => Field<global::_.System.Object>();
 
-    public ulong _committedCounter => RefAddress();
+    public global::_.System.Object? _committedCounter => Field<global::_.System.Object>();
 
-    public ulong _exceptionCounter => RefAddress();
+    public global::_.System.Object? _exceptionCounter => Field<global::_.System.Object>();
 
-    public ulong _gcTimeCounter => RefAddress();
+    public global::_.System.Object? _gcTimeCounter => Field<global::_.System.Object>();
 
-    public ulong _totalGcPauseTimeCounter => RefAddress();
+    public global::_.System.Object? _totalGcPauseTimeCounter => Field<global::_.System.Object>();
 
-    public ulong _gen0SizeCounter => RefAddress();
+    public global::_.System.Object? _gen0SizeCounter => Field<global::_.System.Object>();
 
-    public ulong _gen1SizeCounter => RefAddress();
+    public global::_.System.Object? _gen1SizeCounter => Field<global::_.System.Object>();
 
-    public ulong _gen2SizeCounter => RefAddress();
+    public global::_.System.Object? _gen2SizeCounter => Field<global::_.System.Object>();
 
-    public ulong _lohSizeCounter => RefAddress();
+    public global::_.System.Object? _lohSizeCounter => Field<global::_.System.Object>();
 
-    public ulong _pohSizeCounter => RefAddress();
+    public global::_.System.Object? _pohSizeCounter => Field<global::_.System.Object>();
 
-    public ulong _assemblyCounter => RefAddress();
+    public global::_.System.Object? _assemblyCounter => Field<global::_.System.Object>();
 
-    public ulong _ilBytesJittedCounter => RefAddress();
+    public global::_.System.Object? _ilBytesJittedCounter => Field<global::_.System.Object>();
 
-    public ulong _methodsJittedCounter => RefAddress();
+    public global::_.System.Object? _methodsJittedCounter => Field<global::_.System.Object>();
 
-    public ulong _jitTimeCounter => RefAddress();
+    public global::_.System.Object? _jitTimeCounter => Field<global::_.System.Object>();
 
     public static new RuntimeEventSource FromAddress(ulong address, DumpContext ctx)
         => new RuntimeEventSource(address, ctx);
