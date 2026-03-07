@@ -41,7 +41,7 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public string? _name => _ctx.GetStringField(_objAddress, \"MyApp.Customer\", \"_name\");", code);
+        Assert.Contains("public string? _name => _ctx.GetStringField(_objAddress, \"_name\");", code);
     }
 
     [Fact]
@@ -60,7 +60,7 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public int _age => _ctx.GetFieldValue<int>(_objAddress, \"MyApp.Customer\", \"_age\");", code);
+        Assert.Contains("public int _age => _ctx.GetFieldValue<int>(_objAddress, \"_age\");", code);
     }
 
     [Fact]
