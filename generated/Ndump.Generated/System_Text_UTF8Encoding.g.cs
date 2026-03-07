@@ -3,7 +3,7 @@ using Ndump.Core;
 
 namespace _.System.Text;
 
-public class UTF8Encoding : _.System.Text.Encoding
+public partial class UTF8Encoding : _.System.Text.Encoding
 {
     protected UTF8Encoding(ulong address, DumpContext ctx) : base(address, ctx) { }
 

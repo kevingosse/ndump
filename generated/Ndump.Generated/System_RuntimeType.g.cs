@@ -3,7 +3,7 @@ using Ndump.Core;
 
 namespace _.System;
 
-public sealed class RuntimeType : _.System.Reflection.TypeInfo
+public sealed partial class RuntimeType : _.System.Reflection.TypeInfo
 {
     private RuntimeType(ulong address, DumpContext ctx) : base(address, ctx) { }
 

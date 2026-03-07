@@ -3,18 +3,25 @@ using Ndump.Core;
 
 namespace _;
 
-public sealed class Interop_Kernel32_ProcessWaitHandle : _.System.Threading.WaitHandle
+public partial class Interop
 {
-    private Interop_Kernel32_ProcessWaitHandle(ulong address, DumpContext ctx) : base(address, ctx) { }
-
-    public static new Interop_Kernel32_ProcessWaitHandle FromAddress(ulong address, DumpContext ctx)
-        => new Interop_Kernel32_ProcessWaitHandle(address, ctx);
-
-    public static new global::System.Collections.Generic.IEnumerable<Interop_Kernel32_ProcessWaitHandle> GetInstances(DumpContext ctx)
+    public partial class Kernel32
     {
-        foreach (var addr in ctx.EnumerateInstances("Interop+Kernel32+ProcessWaitHandle"))
-            yield return new Interop_Kernel32_ProcessWaitHandle(addr, ctx);
-    }
+        public sealed class ProcessWaitHandle : _.System.Threading.WaitHandle
+        {
+            private ProcessWaitHandle(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public override string ToString() => $"Interop_Kernel32_ProcessWaitHandle@0x{_objAddress:X}";
+            public static new ProcessWaitHandle FromAddress(ulong address, DumpContext ctx)
+                => new ProcessWaitHandle(address, ctx);
+
+            public static new global::System.Collections.Generic.IEnumerable<ProcessWaitHandle> GetInstances(DumpContext ctx)
+            {
+                foreach (var addr in ctx.EnumerateInstances("Interop+Kernel32+ProcessWaitHandle"))
+                    yield return new ProcessWaitHandle(addr, ctx);
+            }
+
+            public override string ToString() => $"ProcessWaitHandle@0x{_objAddress:X}";
+        }
+
+    }
 }

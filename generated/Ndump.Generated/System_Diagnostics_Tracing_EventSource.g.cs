@@ -3,7 +3,7 @@ using Ndump.Core;
 
 namespace _.System.Diagnostics.Tracing;
 
-public class EventSource : _.System.Object
+public partial class EventSource : _.System.Object
 {
     protected EventSource(ulong address, DumpContext ctx) : base(address, ctx) { }
 
@@ -15,7 +15,16 @@ public class EventSource : _.System.Object
 
     public ulong m_eventData => RefAddress();
 
-    // Array field: m_rawManifest (object) — element type not supported
+    public global::Ndump.Core.DumpArray<byte>? m_rawManifest
+    {
+        get
+        {
+            var addr = RefAddress();
+            if (addr == 0) return null;
+            var len = _ctx.GetArrayLength(addr);
+            return new global::Ndump.Core.DumpArray<byte>(addr, len, i => _ctx.GetArrayElementValue<byte>(addr, i));
+        }
+    }
 
     // Unknown field: m_eventCommandExecuted (object)
 
@@ -31,12 +40,12 @@ public class EventSource : _.System.Object
 
     public ulong m_Dispatchers => RefAddress();
 
-    public _.System.Diagnostics.Tracing.EventSource_OverrideEventProvider? m_etwProvider
+    public _.System.Diagnostics.Tracing.EventSource.OverrideEventProvider? m_etwProvider
     {
         get
         {
             var addr = RefAddress();
-            return addr == 0 ? null : _.System.Diagnostics.Tracing.EventSource_OverrideEventProvider.FromAddress(addr, _ctx);
+            return addr == 0 ? null : _.System.Diagnostics.Tracing.EventSource.OverrideEventProvider.FromAddress(addr, _ctx);
         }
     }
 
@@ -51,12 +60,12 @@ public class EventSource : _.System.Object
 
     public nint m_writeEventStringEventHandle => Field<nint>();
 
-    public _.System.Diagnostics.Tracing.EventSource_OverrideEventProvider? m_eventPipeProvider
+    public _.System.Diagnostics.Tracing.EventSource.OverrideEventProvider? m_eventPipeProvider
     {
         get
         {
             var addr = RefAddress();
-            return addr == 0 ? null : _.System.Diagnostics.Tracing.EventSource_OverrideEventProvider.FromAddress(addr, _ctx);
+            return addr == 0 ? null : _.System.Diagnostics.Tracing.EventSource.OverrideEventProvider.FromAddress(addr, _ctx);
         }
     }
 
@@ -97,7 +106,16 @@ public class EventSource : _.System.Object
         }
     }
 
-    // Array field: m_providerMetadata (object) — element type not supported
+    public global::Ndump.Core.DumpArray<byte>? m_providerMetadata
+    {
+        get
+        {
+            var addr = RefAddress();
+            if (addr == 0) return null;
+            var len = _ctx.GetArrayLength(addr);
+            return new global::Ndump.Core.DumpArray<byte>(addr, len, i => _ctx.GetArrayElementValue<byte>(addr, i));
+        }
+    }
 
     public _.System.Diagnostics.Tracing.TraceLoggingEventHandleTable? m_eventHandleTable
     {

@@ -3,18 +3,22 @@ using Ndump.Core;
 
 namespace _.System.Threading.Tasks;
 
-public sealed class Task___c : _.System.Object
+public partial class Task
 {
-    private Task___c(ulong address, DumpContext ctx) : base(address, ctx) { }
-
-    public static new Task___c FromAddress(ulong address, DumpContext ctx)
-        => new Task___c(address, ctx);
-
-    public static new global::System.Collections.Generic.IEnumerable<Task___c> GetInstances(DumpContext ctx)
+    public sealed class __c : _.System.Object
     {
-        foreach (var addr in ctx.EnumerateInstances("System.Threading.Tasks.Task+<>c"))
-            yield return new Task___c(addr, ctx);
+        private __c(ulong address, DumpContext ctx) : base(address, ctx) { }
+
+        public static new __c FromAddress(ulong address, DumpContext ctx)
+            => new __c(address, ctx);
+
+        public static new global::System.Collections.Generic.IEnumerable<__c> GetInstances(DumpContext ctx)
+        {
+            foreach (var addr in ctx.EnumerateInstances("System.Threading.Tasks.Task+<>c"))
+                yield return new __c(addr, ctx);
+        }
+
+        public override string ToString() => $"__c@0x{_objAddress:X}";
     }
 
-    public override string ToString() => $"Task___c@0x{_objAddress:X}";
 }

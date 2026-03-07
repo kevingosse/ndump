@@ -796,7 +796,7 @@ public class ProxyEmitterTests
     }
 
     [Fact]
-    public void GenerateProxy_NestedType_SanitizesName()
+    public void GenerateProxy_NestedType_EmitsNestedClass()
     {
         var type = new TypeMetadata
         {
@@ -808,7 +808,177 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public sealed class RuntimeType_RuntimeTypeCache", code);
         Assert.Contains("namespace _.System;", code);
+        // Outer class is partial (shell for nesting)
+        Assert.Contains("public partial class RuntimeType", code);
+        // Inner class uses the leaf name only
+        Assert.Contains("public sealed class RuntimeTypeCache : global::_.System.Object", code);
+        // Factories use the leaf name
+        Assert.Contains("RuntimeTypeCache FromAddress(ulong address, DumpContext ctx)", code);
+        Assert.Contains("new RuntimeTypeCache(addr, ctx)", code);
+        // EnumerateInstances still uses the full CLR name
+        Assert.Contains("ctx.EnumerateInstances(\"System.RuntimeType+RuntimeTypeCache\")", code);
+    }
+
+    [Fact]
+    public void GenerateProxy_DeeplyNestedType_EmitsMultipleLevels()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "Interop+Kernel32+ProcessWaitHandle",
+            Namespace = "",
+            Name = "Interop+Kernel32+ProcessWaitHandle",
+            Fields = []
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        Assert.Contains("namespace _;", code);
+        Assert.Contains("public partial class Interop", code);
+        Assert.Contains("public partial class Kernel32", code);
+        Assert.Contains("public sealed class ProcessWaitHandle : global::_.System.Object", code);
+    }
+
+    [Fact]
+    public void GenerateProxy_NestingContainerType_IsPartial()
+    {
+        var runtimeType = new TypeMetadata
+        {
+            FullName = "System.RuntimeType",
+            Namespace = "System",
+            Name = "RuntimeType",
+            Fields = []
+        };
+        var nested = new TypeMetadata
+        {
+            FullName = "System.RuntimeType+ActivatorCache",
+            Namespace = "System",
+            Name = "RuntimeType+ActivatorCache",
+            Fields = []
+        };
+
+        var code = _emitter.GenerateProxyCode(runtimeType, allTypes: [runtimeType, nested]);
+
+        // RuntimeType is a nesting container, so it must be partial
+        Assert.Contains("partial class RuntimeType", code);
+    }
+
+    [Fact]
+    public void GenerateProxy_GenericWithNestedTypeArg_DoesNotNest()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "System.Collections.Generic.Dictionary<System.String, System.Diagnostics.Tracing.EventSource+OverrideEventProvider>",
+            Namespace = "System.Collections.Generic",
+            Name = "Dictionary<System.String, System.Diagnostics.Tracing.EventSource+OverrideEventProvider>",
+            Fields = []
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        // The + is inside <>, so this should NOT be nested
+        Assert.DoesNotContain("partial class", code);
+        Assert.Contains("public sealed class Dictionary_System_String__System_Diagnostics_Tracing_EventSource_OverrideEventProvider_", code);
+    }
+
+    [Fact]
+    public void GenerateProxy_NestedType_ReferenceUsesNestedSyntax()
+    {
+        var runtimeType = new TypeMetadata
+        {
+            FullName = "System.RuntimeType",
+            Namespace = "System",
+            Name = "RuntimeType",
+            Fields = []
+        };
+        var cache = new TypeMetadata
+        {
+            FullName = "System.RuntimeType+ActivatorCache",
+            Namespace = "System",
+            Name = "RuntimeType+ActivatorCache",
+            Fields = []
+        };
+        var owner = new TypeMetadata
+        {
+            FullName = "MyApp.Foo",
+            Namespace = "MyApp",
+            Name = "Foo",
+            Fields =
+            [
+                new FieldInfo
+                {
+                    Name = "_cache",
+                    TypeName = "System.RuntimeType+ActivatorCache",
+                    Kind = FieldKind.ObjectReference,
+                    ReferenceTypeName = "System.RuntimeType+ActivatorCache"
+                }
+            ]
+        };
+
+        var code = _emitter.GenerateProxyCode(owner, allTypes: [runtimeType, cache, owner]);
+
+        // Reference to nested type uses dot-separated C# syntax
+        Assert.Contains("_.System.RuntimeType.ActivatorCache", code);
+    }
+
+    [Fact]
+    public void SplitNestingParts_SimpleType_ReturnsSinglePart()
+    {
+        Assert.Equal(["Customer"], ProxyEmitter.SplitNestingParts("Customer"));
+    }
+
+    [Fact]
+    public void SplitNestingParts_NestedType_SplitsOnPlus()
+    {
+        Assert.Equal(["RuntimeType", "ActivatorCache"], ProxyEmitter.SplitNestingParts("RuntimeType+ActivatorCache"));
+    }
+
+    [Fact]
+    public void SplitNestingParts_DeeplyNested_SplitsAllLevels()
+    {
+        Assert.Equal(["Interop", "Kernel32", "ProcessWaitHandle"], ProxyEmitter.SplitNestingParts("Interop+Kernel32+ProcessWaitHandle"));
+    }
+
+    [Fact]
+    public void SplitNestingParts_PlusInsideGenerics_DoesNotSplit()
+    {
+        var name = "Dictionary<String, EventSource+OverrideEventProvider>";
+        Assert.Equal([name], ProxyEmitter.SplitNestingParts(name));
+    }
+
+    [Fact]
+    public void SplitNestingParts_NestedWithGenerics_SplitsCorrectly()
+    {
+        // Task+<>c — the + is before the generic markers
+        Assert.Equal(["Task", "<>c"], ProxyEmitter.SplitNestingParts("Task+<>c"));
+    }
+
+    [Fact]
+    public void GetProxyTypeName_NestedType_UsesPlusSeparator()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "System.RuntimeType+ActivatorCache",
+            Namespace = "System",
+            Name = "RuntimeType+ActivatorCache",
+            Fields = []
+        };
+
+        // CLR reflection uses + for nested types
+        Assert.Equal("_.System.RuntimeType+ActivatorCache", ProxyEmitter.GetProxyTypeName(type));
+    }
+
+    [Fact]
+    public void GetProxyTypeName_DeeplyNestedNoNamespace_UsesPlusSeparator()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "Interop+Kernel32+ProcessWaitHandle",
+            Namespace = "",
+            Name = "Interop+Kernel32+ProcessWaitHandle",
+            Fields = []
+        };
+
+        Assert.Equal("_.Interop+Kernel32+ProcessWaitHandle", ProxyEmitter.GetProxyTypeName(type));
     }
 }

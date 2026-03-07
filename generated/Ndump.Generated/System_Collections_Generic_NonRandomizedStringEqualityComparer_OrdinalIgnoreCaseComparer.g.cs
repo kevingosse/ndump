@@ -3,18 +3,22 @@ using Ndump.Core;
 
 namespace _.System.Collections.Generic;
 
-public sealed class NonRandomizedStringEqualityComparer_OrdinalIgnoreCaseComparer : _.System.Collections.Generic.NonRandomizedStringEqualityComparer
+public partial class NonRandomizedStringEqualityComparer
 {
-    private NonRandomizedStringEqualityComparer_OrdinalIgnoreCaseComparer(ulong address, DumpContext ctx) : base(address, ctx) { }
-
-    public static new NonRandomizedStringEqualityComparer_OrdinalIgnoreCaseComparer FromAddress(ulong address, DumpContext ctx)
-        => new NonRandomizedStringEqualityComparer_OrdinalIgnoreCaseComparer(address, ctx);
-
-    public static new global::System.Collections.Generic.IEnumerable<NonRandomizedStringEqualityComparer_OrdinalIgnoreCaseComparer> GetInstances(DumpContext ctx)
+    public sealed class OrdinalIgnoreCaseComparer : _.System.Collections.Generic.NonRandomizedStringEqualityComparer
     {
-        foreach (var addr in ctx.EnumerateInstances("System.Collections.Generic.NonRandomizedStringEqualityComparer+OrdinalIgnoreCaseComparer"))
-            yield return new NonRandomizedStringEqualityComparer_OrdinalIgnoreCaseComparer(addr, ctx);
+        private OrdinalIgnoreCaseComparer(ulong address, DumpContext ctx) : base(address, ctx) { }
+
+        public static new OrdinalIgnoreCaseComparer FromAddress(ulong address, DumpContext ctx)
+            => new OrdinalIgnoreCaseComparer(address, ctx);
+
+        public static new global::System.Collections.Generic.IEnumerable<OrdinalIgnoreCaseComparer> GetInstances(DumpContext ctx)
+        {
+            foreach (var addr in ctx.EnumerateInstances("System.Collections.Generic.NonRandomizedStringEqualityComparer+OrdinalIgnoreCaseComparer"))
+                yield return new OrdinalIgnoreCaseComparer(addr, ctx);
+        }
+
+        public override string ToString() => $"OrdinalIgnoreCaseComparer@0x{_objAddress:X}";
     }
 
-    public override string ToString() => $"NonRandomizedStringEqualityComparer_OrdinalIgnoreCaseComparer@0x{_objAddress:X}";
 }

@@ -3,7 +3,7 @@ using Ndump.Core;
 
 namespace _.System.Collections.Generic;
 
-public class NonRandomizedStringEqualityComparer : _.System.Object
+public partial class NonRandomizedStringEqualityComparer : _.System.Object
 {
     protected NonRandomizedStringEqualityComparer(ulong address, DumpContext ctx) : base(address, ctx) { }
 

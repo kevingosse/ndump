@@ -3,7 +3,7 @@ using Ndump.Core;
 
 namespace _.System.Threading.Tasks;
 
-public class Task : _.System.Object
+public partial class Task : _.System.Object
 {
     protected Task(ulong address, DumpContext ctx) : base(address, ctx) { }
 

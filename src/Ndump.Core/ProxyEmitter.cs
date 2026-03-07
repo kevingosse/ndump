@@ -25,6 +25,12 @@ public sealed class ProxyEmitter
     private HashSet<string> _baseTypes = [];
 
     /// <summary>
+    /// CLR type names that serve as outer (container) types for nested proxy types.
+    /// These must be declared as partial so the nested type can be added in a separate file.
+    /// </summary>
+    private HashSet<string> _nestingContainerTypes = [];
+
+    /// <summary>
     /// Emit .cs files for all discovered types into the given output directory.
     /// Returns the list of generated file paths.
     /// </summary>
@@ -70,6 +76,7 @@ public sealed class ProxyEmitter
                 : new HashSet<string> { type.FullName };
             _typesByName = [];
             _baseTypes = [];
+            _nestingContainerTypes = [];
         }
 
         return GenerateProxy(type);
@@ -82,6 +89,22 @@ public sealed class ProxyEmitter
         _baseTypes = new HashSet<string>(
             types.Where(t => t.BaseTypeName is not null && _knownProxyTypes.Contains(t.BaseTypeName))
                  .Select(t => t.BaseTypeName!));
+
+        // Find types that are nesting containers for other known nested types
+        _nestingContainerTypes = [];
+        foreach (var type in types)
+        {
+            var parts = SplitNestingParts(type.Name);
+            if (parts.Length <= 1) continue;
+
+            for (int depth = 0; depth < parts.Length - 1; depth++)
+            {
+                var outerName = string.Join("+", parts[..(depth + 1)]);
+                var outerFullName = string.IsNullOrEmpty(type.Namespace) ? outerName : $"{type.Namespace}.{outerName}";
+                if (_knownProxyTypes.Contains(outerFullName))
+                    _nestingContainerTypes.Add(outerFullName);
+            }
+        }
     }
 
     private string GenerateProxy(TypeMetadata type)
@@ -92,16 +115,10 @@ public sealed class ProxyEmitter
         if (type.FullName == "System.String")
             return GenerateSystemStringProxy(type);
 
-        var sb = new StringBuilder();
-        sb.AppendLine("#nullable enable");
-        sb.AppendLine("using Ndump.Core;");
-        sb.AppendLine();
-
-        var proxyNamespace = GetProxyNamespace(type.Namespace);
-        sb.AppendLine($"namespace {proxyNamespace};");
-        sb.AppendLine();
-
-        var sanitizedName = SanitizeTypeName(type.Name);
+        // Split nested type name into parts (handling + outside generic markers)
+        var nestingParts = SplitNestingParts(type.Name);
+        var sanitizedName = SanitizeTypeName(nestingParts[^1]);
+        var nestingDepth = nestingParts.Length - 1;
 
         // Determine base class: use proxy of CLR base type if known, otherwise _.System.Object
         var hasKnownBase = type.BaseTypeName is not null && _knownProxyTypes.Contains(type.BaseTypeName);
@@ -112,11 +129,14 @@ public sealed class ProxyEmitter
         // Don't seal types that serve as bases for other proxies
         var isSealed = !_baseTypes.Contains(type.FullName);
         var sealedKeyword = isSealed ? "sealed " : "";
+        var partialKeyword = _nestingContainerTypes.Contains(type.FullName) ? "partial " : "";
 
-        sb.AppendLine($"public {sealedKeyword}class {sanitizedName} : {baseClass}");
-        sb.AppendLine("{");
+        // Generate the class body with standard indentation
+        var body = new StringBuilder();
+        body.AppendLine($"public {sealedKeyword}{partialKeyword}class {sanitizedName} : {baseClass}");
+        body.AppendLine("{");
         var ctorAccess = isSealed ? "private" : "protected";
-        sb.AppendLine($"    {ctorAccess} {sanitizedName}(ulong address, DumpContext ctx) : base(address, ctx) {{ }}");
+        body.AppendLine($"    {ctorAccess} {sanitizedName}(ulong address, DumpContext ctx) : base(address, ctx) {{ }}");
 
         // Collect field names from the base type to skip inherited fields
         var baseFieldNames = CollectBaseFieldNames(type);
@@ -132,34 +152,78 @@ public sealed class ProxyEmitter
             if (!usedNames.Add(propName))
             {
                 // Skip duplicate property names (can happen with inheritance/hidden fields)
-                sb.AppendLine();
-                sb.AppendLine($"    // Duplicate field skipped: {field.Name} ({field.TypeName})");
+                body.AppendLine();
+                body.AppendLine($"    // Duplicate field skipped: {field.Name} ({field.TypeName})");
                 continue;
             }
 
-            sb.AppendLine();
-            EmitProperty(sb, type, field);
+            body.AppendLine();
+            EmitProperty(body, type, field);
         }
 
         // FromAddress factory — use 'new' keyword if base also has FromAddress
         var newKeyword = hasKnownBase ? "new " : "";
-        sb.AppendLine();
-        sb.AppendLine($"    public static {newKeyword}{sanitizedName} FromAddress(ulong address, DumpContext ctx)");
-        sb.AppendLine($"        => new {sanitizedName}(address, ctx);");
+        body.AppendLine();
+        body.AppendLine($"    public static {newKeyword}{sanitizedName} FromAddress(ulong address, DumpContext ctx)");
+        body.AppendLine($"        => new {sanitizedName}(address, ctx);");
 
         // GetInstances
-        sb.AppendLine();
-        sb.AppendLine($"    public static {newKeyword}global::System.Collections.Generic.IEnumerable<{sanitizedName}> GetInstances(DumpContext ctx)");
-        sb.AppendLine("    {");
-        sb.AppendLine($"        foreach (var addr in ctx.EnumerateInstances(\"{type.FullName}\"))");
-        sb.AppendLine($"            yield return new {sanitizedName}(addr, ctx);");
-        sb.AppendLine("    }");
+        body.AppendLine();
+        body.AppendLine($"    public static {newKeyword}global::System.Collections.Generic.IEnumerable<{sanitizedName}> GetInstances(DumpContext ctx)");
+        body.AppendLine("    {");
+        body.AppendLine($"        foreach (var addr in ctx.EnumerateInstances(\"{type.FullName}\"))");
+        body.AppendLine($"            yield return new {sanitizedName}(addr, ctx);");
+        body.AppendLine("    }");
 
         // ToString override
-        sb.AppendLine();
-        sb.AppendLine($"    public override string ToString() => $\"{sanitizedName}@0x{{_objAddress:X}}\";");
+        body.AppendLine();
+        body.AppendLine($"    public override string ToString() => $\"{sanitizedName}@0x{{_objAddress:X}}\";");
 
-        sb.AppendLine("}");
+        body.AppendLine("}");
+
+        // Build the final output with preamble and optional nesting wrapper
+        var sb = new StringBuilder();
+        sb.AppendLine("#nullable enable");
+        sb.AppendLine("using Ndump.Core;");
+        sb.AppendLine();
+
+        var proxyNamespace = GetProxyNamespace(type.Namespace);
+        sb.AppendLine($"namespace {proxyNamespace};");
+        sb.AppendLine();
+
+        if (nestingDepth > 0)
+        {
+            // Open outer nesting classes
+            for (int i = 0; i < nestingDepth; i++)
+            {
+                var indent = new string(' ', i * 4);
+                sb.AppendLine($"{indent}public partial class {SanitizeTypeName(nestingParts[i])}");
+                sb.AppendLine($"{indent}{{");
+            }
+
+            // Indent and append class body
+            var nestIndent = new string(' ', nestingDepth * 4);
+            foreach (var line in body.ToString().TrimEnd('\n', '\r').Split('\n'))
+            {
+                var trimmed = line.TrimEnd('\r');
+                if (string.IsNullOrEmpty(trimmed))
+                    sb.AppendLine();
+                else
+                    sb.AppendLine(nestIndent + trimmed);
+            }
+
+            // Close outer nesting classes
+            sb.AppendLine();
+            for (int i = nestingDepth - 1; i >= 0; i--)
+            {
+                sb.AppendLine($"{new string(' ', i * 4)}}}");
+            }
+        }
+        else
+        {
+            sb.Append(body);
+        }
+
         return sb.ToString();
     }
 
@@ -431,7 +495,11 @@ public sealed class ProxyEmitter
     /// </summary>
     public static string GetProxyTypeName(TypeMetadata type)
     {
-        return $"{GetProxyNamespace(type.Namespace)}.{SanitizeTypeName(type.Name)}";
+        // Split on nesting separators (+) outside generics, sanitize each part,
+        // and rejoin with + (CLR nested type separator for Assembly.GetType)
+        var parts = SplitNestingParts(type.Name);
+        var sanitized = string.Join("+", parts.Select(SanitizeTypeName));
+        return $"{GetProxyNamespace(type.Namespace)}.{sanitized}";
     }
 
     /// <summary>
@@ -456,14 +524,26 @@ public sealed class ProxyEmitter
         {
             var ns = fullTypeName[..lastDot];
             var name = fullTypeName[(lastDot + 1)..];
-            return $"_.{ns}.{SanitizeTypeName(name)}";
+            return $"_.{ns}.{SanitizeTypeNameForSource(name)}";
         }
-        return $"_.{SanitizeTypeName(fullTypeName)}";
+        return $"_.{SanitizeTypeNameForSource(fullTypeName)}";
+    }
+
+    /// <summary>
+    /// Sanitize a type name for use in C# source code, replacing nested type
+    /// separators (+) outside generics with dots (.) for proper nested type access.
+    /// </summary>
+    private static string SanitizeTypeNameForSource(string name)
+    {
+        var parts = SplitNestingParts(name);
+        return string.Join(".", parts.Select(SanitizeTypeName));
     }
 
     internal static string SanitizeTypeName(string name)
     {
-        // Handle nested/generic type names
+        // Handle generic type names and other special characters.
+        // Note: + (nested type separator) is intentionally kept — nesting
+        // is handled at a higher level via SplitNestingParts.
         return name
             .Replace('<', '_')
             .Replace('>', '_')
@@ -474,6 +554,32 @@ public sealed class ProxyEmitter
             .Replace('`', '_')
             .Replace('[', '_')
             .Replace(']', '_');
+    }
+
+    /// <summary>
+    /// Split a type name on the nested type separator (+), but only at the top level
+    /// (not inside generic angle brackets). E.g.:
+    /// "RuntimeType+ActivatorCache" → ["RuntimeType", "ActivatorCache"]
+    /// "Task+&lt;&gt;c" → ["Task", "&lt;&gt;c"]
+    /// "Dictionary&lt;String, EventSource+Override&gt;" → ["Dictionary&lt;String, EventSource+Override&gt;"] (no split)
+    /// </summary>
+    internal static string[] SplitNestingParts(string name)
+    {
+        var parts = new List<string>();
+        var depth = 0;
+        var start = 0;
+        for (int i = 0; i < name.Length; i++)
+        {
+            if (name[i] == '<') depth++;
+            else if (name[i] == '>') depth--;
+            else if (name[i] == '+' && depth == 0)
+            {
+                parts.Add(name[start..i]);
+                start = i + 1;
+            }
+        }
+        parts.Add(name[start..]);
+        return parts.ToArray();
     }
 
     internal static string GenerateProxyResolver()
@@ -523,9 +629,28 @@ public sealed class ProxyEmitter
         sb.AppendLine("        {");
         sb.AppendLine("            var ns = clrTypeName[..lastDot];");
         sb.AppendLine("            var name = clrTypeName[(lastDot + 1)..];");
-        sb.AppendLine("            return \"_.\" + ns + \".\" + Sanitize(name);");
+        sb.AppendLine("            return \"_.\" + ns + \".\" + SanitizeNested(name);");
         sb.AppendLine("        }");
-        sb.AppendLine("        return \"_.\" + Sanitize(clrTypeName);");
+        sb.AppendLine("        return \"_.\" + SanitizeNested(clrTypeName);");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    private static string SanitizeNested(string name)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        // Split on + outside <>, sanitize each part, rejoin with + for CLR nested type lookup");
+        sb.AppendLine("        var parts = new global::System.Collections.Generic.List<string>();");
+        sb.AppendLine("        int depth = 0, start = 0;");
+        sb.AppendLine("        for (int i = 0; i < name.Length; i++)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            if (name[i] == '<') depth++;");
+        sb.AppendLine("            else if (name[i] == '>') depth--;");
+        sb.AppendLine("            else if (name[i] == '+' && depth == 0)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                parts.Add(Sanitize(name[start..i]));");
+        sb.AppendLine("                start = i + 1;");
+        sb.AppendLine("            }");
+        sb.AppendLine("        }");
+        sb.AppendLine("        parts.Add(Sanitize(name[start..]));");
+        sb.AppendLine("        return string.Join(\"+\", parts);");
         sb.AppendLine("    }");
         sb.AppendLine();
         sb.AppendLine("    private static string Sanitize(string name)");

@@ -42,9 +42,28 @@ internal static class ProxyResolver
         {
             var ns = clrTypeName[..lastDot];
             var name = clrTypeName[(lastDot + 1)..];
-            return "_." + ns + "." + Sanitize(name);
+            return "_." + ns + "." + SanitizeNested(name);
         }
-        return "_." + Sanitize(clrTypeName);
+        return "_." + SanitizeNested(clrTypeName);
+    }
+
+    private static string SanitizeNested(string name)
+    {
+        // Split on + outside <>, sanitize each part, rejoin with + for CLR nested type lookup
+        var parts = new global::System.Collections.Generic.List<string>();
+        int depth = 0, start = 0;
+        for (int i = 0; i < name.Length; i++)
+        {
+            if (name[i] == '<') depth++;
+            else if (name[i] == '>') depth--;
+            else if (name[i] == '+' && depth == 0)
+            {
+                parts.Add(Sanitize(name[start..i]));
+                start = i + 1;
+            }
+        }
+        parts.Add(Sanitize(name[start..]));
+        return string.Join("+", parts);
     }
 
     private static string Sanitize(string name)

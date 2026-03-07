@@ -3,22 +3,26 @@ using Ndump.Core;
 
 namespace _.System;
 
-public sealed class DateTime_LeapSecondCache : _.System.Object
+public partial class DateTime
 {
-    private DateTime_LeapSecondCache(ulong address, DumpContext ctx) : base(address, ctx) { }
-
-    public ulong OSFileTimeTicksAtStartOfValidityWindow => Field<ulong>();
-
-    public ulong DotnetDateDataAtStartOfValidityWindow => Field<ulong>();
-
-    public static new DateTime_LeapSecondCache FromAddress(ulong address, DumpContext ctx)
-        => new DateTime_LeapSecondCache(address, ctx);
-
-    public static new global::System.Collections.Generic.IEnumerable<DateTime_LeapSecondCache> GetInstances(DumpContext ctx)
+    public sealed class LeapSecondCache : _.System.Object
     {
-        foreach (var addr in ctx.EnumerateInstances("System.DateTime+LeapSecondCache"))
-            yield return new DateTime_LeapSecondCache(addr, ctx);
+        private LeapSecondCache(ulong address, DumpContext ctx) : base(address, ctx) { }
+
+        public ulong OSFileTimeTicksAtStartOfValidityWindow => Field<ulong>();
+
+        public ulong DotnetDateDataAtStartOfValidityWindow => Field<ulong>();
+
+        public static new LeapSecondCache FromAddress(ulong address, DumpContext ctx)
+            => new LeapSecondCache(address, ctx);
+
+        public static new global::System.Collections.Generic.IEnumerable<LeapSecondCache> GetInstances(DumpContext ctx)
+        {
+            foreach (var addr in ctx.EnumerateInstances("System.DateTime+LeapSecondCache"))
+                yield return new LeapSecondCache(addr, ctx);
+        }
+
+        public override string ToString() => $"LeapSecondCache@0x{_objAddress:X}";
     }
 
-    public override string ToString() => $"DateTime_LeapSecondCache@0x{_objAddress:X}";
 }
