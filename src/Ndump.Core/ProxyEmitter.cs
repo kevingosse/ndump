@@ -84,6 +84,9 @@ public sealed class ProxyEmitter
         if (type.FullName == "System.Object")
             return GenerateSystemObjectProxy(type);
 
+        if (type.FullName == "System.String")
+            return GenerateSystemStringProxy(type);
+
         var sb = new StringBuilder();
         sb.AppendLine("using Ndump.Core;");
         sb.AppendLine();
@@ -188,6 +191,43 @@ public sealed class ProxyEmitter
         sb.AppendLine("    }");
         sb.AppendLine();
         sb.AppendLine("    public override string ToString() => $\"Object@0x{_objAddress:X}\";");
+        sb.AppendLine("}");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Generate the System.String proxy with implicit conversion to string and ToString override.
+    /// </summary>
+    private string GenerateSystemStringProxy(TypeMetadata type)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("using Ndump.Core;");
+        sb.AppendLine();
+        sb.AppendLine("namespace _.System;");
+        sb.AppendLine();
+
+        var isSealed = !_baseTypes.Contains(type.FullName);
+        var sealedKeyword = isSealed ? "sealed " : "";
+
+        sb.AppendLine($"public {sealedKeyword}class String : global::_.System.Object");
+        sb.AppendLine("{");
+        var ctorAccess = isSealed ? "private" : "protected";
+        sb.AppendLine($"    {ctorAccess} String(ulong address, DumpContext ctx) : base(address, ctx) {{ }}");
+        sb.AppendLine();
+        sb.AppendLine("    public string? Value => _ctx.GetStringValue(_objAddress);");
+        sb.AppendLine();
+        sb.AppendLine("    public static implicit operator string?(String? proxy) => proxy?._ctx.GetStringValue(proxy._objAddress);");
+        sb.AppendLine();
+        sb.AppendLine("    public override string ToString() => _ctx.GetStringValue(_objAddress) ?? $\"String@0x{_objAddress:X}\";");
+        sb.AppendLine();
+        sb.AppendLine("    public static new String FromAddress(ulong address, DumpContext ctx)");
+        sb.AppendLine("        => new String(address, ctx);");
+        sb.AppendLine();
+        sb.AppendLine("    public static new global::System.Collections.Generic.IEnumerable<String> GetInstances(DumpContext ctx)");
+        sb.AppendLine("    {");
+        sb.AppendLine($"        foreach (var addr in ctx.EnumerateInstances(\"{type.FullName}\"))");
+        sb.AppendLine("            yield return new String(addr, ctx);");
+        sb.AppendLine("    }");
         sb.AppendLine("}");
         return sb.ToString();
     }

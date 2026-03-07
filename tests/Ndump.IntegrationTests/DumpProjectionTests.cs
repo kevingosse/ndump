@@ -66,6 +66,7 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
         Assert.Contains("_orderHistory", fieldNames);
         Assert.Contains("_mixedItems", fieldNames);
         Assert.Contains("_pets", fieldNames);
+        Assert.Contains("_tags", fieldNames);
     }
 
     [Fact]
@@ -543,5 +544,116 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
 
         var orderType = Assembly.GetType("_.Ndump.TestApp.Order")!;
         Assert.True(sysObjType.IsAssignableFrom(orderType));
+    }
+
+    [Fact]
+    public void Proxies_SystemString_HasImplicitConversionToString()
+    {
+        var stringType = Assembly.GetType("_.System.String")!;
+        var sysObjType = Assembly.GetType("_.System.Object")!;
+
+        // _.System.String should extend _.System.Object
+        Assert.True(sysObjType.IsAssignableFrom(stringType));
+
+        // Should have an implicit operator to string?
+        var implicitOp = stringType.GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .SingleOrDefault(m => m.Name == "op_Implicit" && m.ReturnType == typeof(string));
+        Assert.NotNull(implicitOp);
+    }
+
+    [Fact]
+    public void Proxies_SystemString_ToStringReturnsValue()
+    {
+        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
+        var stringType = Assembly.GetType("_.System.String")!;
+
+        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
+        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
+
+        var nameProp = customerType.GetProperty("_name")!;
+        var mixedProp = customerType.GetProperty("_mixedItems")!;
+
+        // Alice has [order1, addr1, tag1, "hello"] — the string element should have ToString() == "hello"
+        var alice = instances.Single(c => (string?)nameProp.GetValue(c) == "Alice");
+        var aliceMixed = ((IEnumerable)mixedProp.GetValue(alice)!).Cast<object>().ToList();
+
+        var stringElement = aliceMixed.Single(d => d.GetType() == stringType);
+        Assert.Equal("hello", stringElement.ToString());
+    }
+
+    [Fact]
+    public void Proxies_SystemString_ImplicitOperatorReturnsValue()
+    {
+        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
+        var stringType = Assembly.GetType("_.System.String")!;
+
+        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
+        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
+
+        var nameProp = customerType.GetProperty("_name")!;
+        var mixedProp = customerType.GetProperty("_mixedItems")!;
+
+        // Alice has "hello" in _mixedItems
+        var alice = instances.Single(c => (string?)nameProp.GetValue(c) == "Alice");
+        var aliceMixed = ((IEnumerable)mixedProp.GetValue(alice)!).Cast<object>().ToList();
+
+        var stringElement = aliceMixed.Single(d => d.GetType() == stringType);
+
+        // Use the implicit operator via reflection
+        var implicitOp = stringType.GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .Single(m => m.Name == "op_Implicit" && m.ReturnType == typeof(string));
+        var result = (string?)implicitOp.Invoke(null, [stringElement]);
+        Assert.Equal("hello", result);
+    }
+
+    [Fact]
+    public void Proxies_SystemString_ValuePropertyReturnsValue()
+    {
+        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
+        var stringType = Assembly.GetType("_.System.String")!;
+
+        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
+        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
+
+        var nameProp = customerType.GetProperty("_name")!;
+        var mixedProp = customerType.GetProperty("_mixedItems")!;
+
+        // Charlie has "world" in _mixedItems
+        var charlie = instances.Single(c => (string?)nameProp.GetValue(c) == "Charlie");
+        var charlieMixed = ((IEnumerable)mixedProp.GetValue(charlie)!).Cast<object>().ToList();
+
+        var stringElement = charlieMixed.Single(d => d.GetType() == stringType);
+        var valueProp = stringType.GetProperty("Value")!;
+        Assert.Equal("world", valueProp.GetValue(stringElement));
+    }
+
+    [Fact]
+    public void Proxies_StringArrayField_ReturnsStringValues()
+    {
+        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
+
+        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
+        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
+
+        var nameProp = customerType.GetProperty("_name")!;
+        var tagsProp = customerType.GetProperty("_tags")!;
+
+        // Alice has ["vip", "early-adopter"]
+        var alice = instances.Single(c => (string?)nameProp.GetValue(c) == "Alice");
+        var aliceTags = ((IEnumerable)tagsProp.GetValue(alice)!).Cast<string?>().ToList();
+        Assert.Equal(2, aliceTags.Count);
+        Assert.Contains("vip", aliceTags);
+        Assert.Contains("early-adopter", aliceTags);
+
+        // Bob has ["regular"]
+        var bob = instances.Single(c => (string?)nameProp.GetValue(c) == "Bob");
+        var bobTags = ((IEnumerable)tagsProp.GetValue(bob)!).Cast<string?>().ToList();
+        Assert.Equal(["regular"], bobTags);
+
+        // Charlie has ["vip", "premium", "newsletter"]
+        var charlie = instances.Single(c => (string?)nameProp.GetValue(c) == "Charlie");
+        var charlieTags = ((IEnumerable)tagsProp.GetValue(charlie)!).Cast<string?>().ToList();
+        Assert.Equal(3, charlieTags.Count);
+        Assert.Contains("premium", charlieTags);
     }
 }

@@ -185,6 +185,16 @@ public sealed class DumpContext : IDisposable
     }
 
     /// <summary>
+    /// Read the string value of a System.String object at the given address.
+    /// </summary>
+    public string? GetStringValue(ulong objAddress)
+    {
+        var obj = Heap.GetObject(objAddress);
+        if (!obj.IsValid) return null;
+        return obj.AsString();
+    }
+
+    /// <summary>
     /// Enumerate all heap objects whose type name matches exactly.
     /// </summary>
     public IEnumerable<ulong> EnumerateInstances(string typeName)

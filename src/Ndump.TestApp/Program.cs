@@ -45,8 +45,9 @@ public class Customer
     private Order[] _orderHistory;
     private object[] _mixedItems;
     private Animal[] _pets;
+    private string[] _tags;
 
-    public Customer(string name, int age, bool isActive, Order lastOrder, Address address, Order[] orderHistory, object[] mixedItems, Animal[] pets)
+    public Customer(string name, int age, bool isActive, Order lastOrder, Address address, Order[] orderHistory, object[] mixedItems, Animal[] pets, string[] tags)
     {
         _name = name;
         _age = age;
@@ -56,6 +57,7 @@ public class Customer
         _orderHistory = orderHistory;
         _mixedItems = mixedItems;
         _pets = pets;
+        _tags = tags;
     }
 }
 
@@ -134,11 +136,11 @@ class Program
         var dog2 = new Dog("Buddy", 2, "Golden Retriever");
 
         var cust1 = new Customer("Alice", 30, true, order1, addr1, [order1, order2],
-            [order1, addr1, tag1, "hello"], [cat1, dog1]);
+            [order1, addr1, tag1, "hello"], [cat1, dog1], ["vip", "early-adopter"]);
         var cust2 = new Customer("Bob", 45, false, order2, addr2, [order2],
-            [tag2, order2], [dog2]);
+            [tag2, order2], [dog2], ["regular"]);
         var cust3 = new Customer("Charlie", 28, true, order3, addr1, [order1, order2, order3],
-            [addr2, "world", order3, tag1, addr1], [cat2, dog1, cat1]);
+            [addr2, "world", order3, tag1, addr1], [cat2, dog1, cat1], ["vip", "premium", "newsletter"]);
 
         // Keep references alive so GC doesn't collect them
         var allObjects = new object[] { addr1, addr2, order1, order2, order3, cust1, cust2, cust3, tag1, tag2, cat1, cat2, dog1, dog2 };

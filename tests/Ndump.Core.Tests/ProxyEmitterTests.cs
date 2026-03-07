@@ -756,6 +756,46 @@ public class ProxyEmitterTests
     }
 
     [Fact]
+    public void GenerateProxy_SystemString_HasImplicitOperatorAndToString()
+    {
+        var sysObj = new TypeMetadata { FullName = "System.Object", Namespace = "System", Name = "Object", Fields = [] };
+        var type = new TypeMetadata
+        {
+            FullName = "System.String",
+            Namespace = "System",
+            Name = "String",
+            BaseTypeName = "System.Object",
+            Fields = []
+        };
+
+        var code = _emitter.GenerateProxyCode(type, allTypes: [sysObj, type]);
+
+        Assert.Contains("namespace _.System;", code);
+        Assert.Contains("class String : global::_.System.Object", code);
+        Assert.Contains("public string? Value => _ctx.GetStringValue(_objAddress);", code);
+        Assert.Contains("public static implicit operator string?(String? proxy)", code);
+        Assert.Contains("public override string ToString()", code);
+        Assert.Contains("public static new String FromAddress", code);
+        Assert.Contains("public static new global::System.Collections.Generic.IEnumerable<String> GetInstances", code);
+    }
+
+    [Fact]
+    public void GenerateProxy_SystemString_IsSealed_WhenNoSubtypes()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "System.String",
+            Namespace = "System",
+            Name = "String",
+            Fields = []
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        Assert.Contains("public sealed class String", code);
+    }
+
+    [Fact]
     public void GenerateProxy_NestedType_SanitizesName()
     {
         var type = new TypeMetadata
