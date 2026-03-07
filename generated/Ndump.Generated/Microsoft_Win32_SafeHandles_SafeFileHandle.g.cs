@@ -7,19 +7,19 @@ public sealed class SafeFileHandle : _.Microsoft.Win32.SafeHandles.SafeHandleZer
 {
     private SafeFileHandle(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public string? _path => _ctx.GetStringField(_objAddress, "_path");
+    public string? _path => StringField();
 
-    public long _length => _ctx.GetFieldValue<long>(_objAddress, "_length");
+    public long _length => Field<long>();
 
-    public bool _lengthCanBeCached => _ctx.GetFieldValue<bool>(_objAddress, "_lengthCanBeCached");
+    public bool _lengthCanBeCached => Field<bool>();
 
-    public int _fileOptions => _ctx.GetFieldValue<int>(_objAddress, "_fileOptions");
+    public int _fileOptions => Field<int>();
 
-    public int _fileType => _ctx.GetFieldValue<int>(_objAddress, "_fileType");
+    public int _fileType => Field<int>();
 
-    public ulong ThreadPoolBinding => _ctx.GetObjectAddress(_objAddress, "<ThreadPoolBinding>k__BackingField");
+    public ulong ThreadPoolBinding => RefAddress("<ThreadPoolBinding>k__BackingField");
 
-    public ulong _reusableOverlappedValueTaskSource => _ctx.GetObjectAddress(_objAddress, "_reusableOverlappedValueTaskSource");
+    public ulong _reusableOverlappedValueTaskSource => RefAddress();
 
     public static new SafeFileHandle FromAddress(ulong address, DumpContext ctx)
         => new SafeFileHandle(address, ctx);

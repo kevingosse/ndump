@@ -11,29 +11,29 @@ public sealed class BufferedFileStreamStrategy : _.System.IO.Strategies.FileStre
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_strategy");
+            var addr = RefAddress();
             return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.IO.Strategies.FileStreamStrategy ?? _.System.IO.Strategies.FileStreamStrategy.FromAddress(addr, _ctx);
         }
     }
 
-    public int _bufferSize => _ctx.GetFieldValue<int>(_objAddress, "_bufferSize");
+    public int _bufferSize => Field<int>();
 
     public global::Ndump.Core.DumpArray<byte>? _buffer
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_buffer");
+            var addr = RefAddress();
             if (addr == 0) return null;
             var len = _ctx.GetArrayLength(addr);
             return new global::Ndump.Core.DumpArray<byte>(addr, len, i => _ctx.GetArrayElementValue<byte>(addr, i));
         }
     }
 
-    public int _writePos => _ctx.GetFieldValue<int>(_objAddress, "_writePos");
+    public int _writePos => Field<int>();
 
-    public int _readPos => _ctx.GetFieldValue<int>(_objAddress, "_readPos");
+    public int _readPos => Field<int>();
 
-    public int _readLen => _ctx.GetFieldValue<int>(_objAddress, "_readLen");
+    public int _readLen => Field<int>();
 
     // ValueType field: _lastSyncCompletedReadTask (object) — not yet supported
 

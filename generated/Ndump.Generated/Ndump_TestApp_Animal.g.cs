@@ -7,9 +7,9 @@ public class Animal : _.System.Object
 {
     protected Animal(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public string? _name => _ctx.GetStringField(_objAddress, "_name");
+    public string? _name => StringField();
 
-    public int _age => _ctx.GetFieldValue<int>(_objAddress, "_age");
+    public int _age => Field<int>();
 
     public static new Animal FromAddress(ulong address, DumpContext ctx)
         => new Animal(address, ctx);

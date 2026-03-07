@@ -7,7 +7,7 @@ public sealed class OSEncoding : _.System.Text.Encoding
 {
     private OSEncoding(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public string? _encodingName => _ctx.GetStringField(_objAddress, "_encodingName");
+    public string? _encodingName => StringField();
 
     public static new OSEncoding FromAddress(ulong address, DumpContext ctx)
         => new OSEncoding(address, ctx);

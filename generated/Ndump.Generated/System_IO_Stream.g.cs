@@ -7,7 +7,7 @@ public class Stream : _.System.MarshalByRefObject
 {
     protected Stream(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public ulong _asyncActiveSemaphore => _ctx.GetObjectAddress(_objAddress, "_asyncActiveSemaphore");
+    public ulong _asyncActiveSemaphore => RefAddress();
 
     public static new Stream FromAddress(ulong address, DumpContext ctx)
         => new Stream(address, ctx);

@@ -11,7 +11,7 @@ public class WaitHandle : _.System.MarshalByRefObject
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_waitHandle");
+            var addr = RefAddress();
             return addr == 0 ? null : _.Microsoft.Win32.SafeHandles.SafeWaitHandle.FromAddress(addr, _ctx);
         }
     }

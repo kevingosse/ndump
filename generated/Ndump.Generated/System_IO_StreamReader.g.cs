@@ -11,7 +11,7 @@ public sealed class StreamReader : _.System.IO.TextReader
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_stream");
+            var addr = RefAddress();
             return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.IO.Stream ?? _.System.IO.Stream.FromAddress(addr, _ctx);
         }
     }
@@ -20,7 +20,7 @@ public sealed class StreamReader : _.System.IO.TextReader
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_encoding");
+            var addr = RefAddress();
             return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Text.Encoding ?? _.System.Text.Encoding.FromAddress(addr, _ctx);
         }
     }
@@ -29,7 +29,7 @@ public sealed class StreamReader : _.System.IO.TextReader
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_decoder");
+            var addr = RefAddress();
             return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Text.Decoder ?? _.System.Text.Decoder.FromAddress(addr, _ctx);
         }
     }
@@ -38,7 +38,7 @@ public sealed class StreamReader : _.System.IO.TextReader
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_byteBuffer");
+            var addr = RefAddress();
             if (addr == 0) return null;
             var len = _ctx.GetArrayLength(addr);
             return new global::Ndump.Core.DumpArray<byte>(addr, len, i => _ctx.GetArrayElementValue<byte>(addr, i));
@@ -49,38 +49,38 @@ public sealed class StreamReader : _.System.IO.TextReader
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_charBuffer");
+            var addr = RefAddress();
             if (addr == 0) return null;
             var len = _ctx.GetArrayLength(addr);
             return new global::Ndump.Core.DumpArray<char>(addr, len, i => _ctx.GetArrayElementValue<char>(addr, i));
         }
     }
 
-    public int _charPos => _ctx.GetFieldValue<int>(_objAddress, "_charPos");
+    public int _charPos => Field<int>();
 
-    public int _charLen => _ctx.GetFieldValue<int>(_objAddress, "_charLen");
+    public int _charLen => Field<int>();
 
-    public int _byteLen => _ctx.GetFieldValue<int>(_objAddress, "_byteLen");
+    public int _byteLen => Field<int>();
 
-    public int _bytePos => _ctx.GetFieldValue<int>(_objAddress, "_bytePos");
+    public int _bytePos => Field<int>();
 
-    public int _maxCharsPerBuffer => _ctx.GetFieldValue<int>(_objAddress, "_maxCharsPerBuffer");
+    public int _maxCharsPerBuffer => Field<int>();
 
-    public bool _disposed => _ctx.GetFieldValue<bool>(_objAddress, "_disposed");
+    public bool _disposed => Field<bool>();
 
-    public bool _detectEncoding => _ctx.GetFieldValue<bool>(_objAddress, "_detectEncoding");
+    public bool _detectEncoding => Field<bool>();
 
-    public bool _checkPreamble => _ctx.GetFieldValue<bool>(_objAddress, "_checkPreamble");
+    public bool _checkPreamble => Field<bool>();
 
-    public bool _isBlocked => _ctx.GetFieldValue<bool>(_objAddress, "_isBlocked");
+    public bool _isBlocked => Field<bool>();
 
-    public bool _closable => _ctx.GetFieldValue<bool>(_objAddress, "_closable");
+    public bool _closable => Field<bool>();
 
     public _.System.Threading.Tasks.Task? _asyncReadTask
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_asyncReadTask");
+            var addr = RefAddress();
             return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Threading.Tasks.Task ?? _.System.Threading.Tasks.Task.FromAddress(addr, _ctx);
         }
     }

@@ -15,7 +15,7 @@ public sealed class RuntimeType_ActivatorCache : _.System.Object
 
     // Unknown field: _pfnValueCtor (object)
 
-    public bool _ctorIsPublic => _ctx.GetFieldValue<bool>(_objAddress, "_ctorIsPublic");
+    public bool _ctorIsPublic => Field<bool>();
 
     public static new RuntimeType_ActivatorCache FromAddress(ulong address, DumpContext ctx)
         => new RuntimeType_ActivatorCache(address, ctx);

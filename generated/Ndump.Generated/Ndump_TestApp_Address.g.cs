@@ -7,11 +7,11 @@ public sealed class Address : _.System.Object
 {
     private Address(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public string? _street => _ctx.GetStringField(_objAddress, "_street");
+    public string? _street => StringField();
 
-    public string? _city => _ctx.GetStringField(_objAddress, "_city");
+    public string? _city => StringField();
 
-    public int _zipCode => _ctx.GetFieldValue<int>(_objAddress, "_zipCode");
+    public int _zipCode => Field<int>();
 
     public static new Address FromAddress(ulong address, DumpContext ctx)
         => new Address(address, ctx);

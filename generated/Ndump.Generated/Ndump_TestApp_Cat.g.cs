@@ -7,7 +7,7 @@ public sealed class Cat : _.Ndump.TestApp.Animal
 {
     private Cat(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public bool _isIndoor => _ctx.GetFieldValue<bool>(_objAddress, "_isIndoor");
+    public bool _isIndoor => Field<bool>();
 
     public static new Cat FromAddress(ulong address, DumpContext ctx)
         => new Cat(address, ctx);

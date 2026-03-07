@@ -11,16 +11,16 @@ public class EventProvider : _.System.Object
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_eventProvider");
+            var addr = RefAddress();
             return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Diagnostics.Tracing.EventProviderImpl ?? _.System.Diagnostics.Tracing.EventProviderImpl.FromAddress(addr, _ctx);
         }
     }
 
-    public string? _providerName => _ctx.GetStringField(_objAddress, "_providerName");
+    public string? _providerName => StringField();
 
     // ValueType field: _providerId (object) — not yet supported
 
-    public bool _disposed => _ctx.GetFieldValue<bool>(_objAddress, "_disposed");
+    public bool _disposed => Field<bool>();
 
     public static new EventProvider FromAddress(ulong address, DumpContext ctx)
         => new EventProvider(address, ctx);

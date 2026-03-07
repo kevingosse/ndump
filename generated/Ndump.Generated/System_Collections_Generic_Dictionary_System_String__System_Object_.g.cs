@@ -11,7 +11,7 @@ public sealed class Dictionary_System_String__System_Object_ : _.System.Object
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_buckets");
+            var addr = RefAddress();
             if (addr == 0) return null;
             var len = _ctx.GetArrayLength(addr);
             return new global::Ndump.Core.DumpArray<int>(addr, len, i => _ctx.GetArrayElementValue<int>(addr, i));
@@ -20,17 +20,17 @@ public sealed class Dictionary_System_String__System_Object_ : _.System.Object
 
     // Array field: _entries (System.Collections.Generic.Dictionary`2+Entry[]) — element type not supported
 
-    public ulong _fastModMultiplier => _ctx.GetFieldValue<ulong>(_objAddress, "_fastModMultiplier");
+    public ulong _fastModMultiplier => Field<ulong>();
 
-    public int _count => _ctx.GetFieldValue<int>(_objAddress, "_count");
+    public int _count => Field<int>();
 
-    public int _freeList => _ctx.GetFieldValue<int>(_objAddress, "_freeList");
+    public int _freeList => Field<int>();
 
-    public int _freeCount => _ctx.GetFieldValue<int>(_objAddress, "_freeCount");
+    public int _freeCount => Field<int>();
 
-    public int _version => _ctx.GetFieldValue<int>(_objAddress, "_version");
+    public int _version => Field<int>();
 
-    public ulong _comparer => _ctx.GetObjectAddress(_objAddress, "_comparer");
+    public ulong _comparer => RefAddress();
 
     // Unknown field: _keys (object)
 

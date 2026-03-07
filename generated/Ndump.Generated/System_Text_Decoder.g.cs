@@ -11,12 +11,12 @@ public class Decoder : _.System.Object
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_fallback");
+            var addr = RefAddress();
             return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Text.DecoderFallback ?? _.System.Text.DecoderFallback.FromAddress(addr, _ctx);
         }
     }
 
-    public ulong _fallbackBuffer => _ctx.GetObjectAddress(_objAddress, "_fallbackBuffer");
+    public ulong _fallbackBuffer => RefAddress();
 
     public static new Decoder FromAddress(ulong address, DumpContext ctx)
         => new Decoder(address, ctx);

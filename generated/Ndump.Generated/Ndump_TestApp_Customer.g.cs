@@ -7,17 +7,17 @@ public sealed class Customer : _.System.Object
 {
     private Customer(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public string? _name => _ctx.GetStringField(_objAddress, "_name");
+    public string? _name => StringField();
 
-    public int _age => _ctx.GetFieldValue<int>(_objAddress, "_age");
+    public int _age => Field<int>();
 
-    public bool _isActive => _ctx.GetFieldValue<bool>(_objAddress, "_isActive");
+    public bool _isActive => Field<bool>();
 
     public _.Ndump.TestApp.Order? _lastOrder
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_lastOrder");
+            var addr = RefAddress();
             return addr == 0 ? null : _.Ndump.TestApp.Order.FromAddress(addr, _ctx);
         }
     }
@@ -26,7 +26,7 @@ public sealed class Customer : _.System.Object
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_address");
+            var addr = RefAddress();
             return addr == 0 ? null : _.Ndump.TestApp.Address.FromAddress(addr, _ctx);
         }
     }
@@ -35,7 +35,7 @@ public sealed class Customer : _.System.Object
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_orderHistory");
+            var addr = RefAddress();
             if (addr == 0) return null;
             var len = _ctx.GetArrayLength(addr);
             return new global::Ndump.Core.DumpArray<_.Ndump.TestApp.Order?>(addr, len, i => { var ea = _ctx.GetArrayElementAddress(addr, i); return ea == 0 ? null : _.Ndump.TestApp.Order.FromAddress(ea, _ctx); });
@@ -46,7 +46,7 @@ public sealed class Customer : _.System.Object
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_mixedItems");
+            var addr = RefAddress();
             if (addr == 0) return null;
             var len = _ctx.GetArrayLength(addr);
             return new global::Ndump.Core.DumpArray<_.System.Object?>(addr, len, i => { var ea = _ctx.GetArrayElementAddress(addr, i); return ea == 0 ? null : global::_.ProxyResolver.Resolve(ea, _ctx) as _.System.Object ?? _.System.Object.FromAddress(ea, _ctx); });
@@ -57,7 +57,7 @@ public sealed class Customer : _.System.Object
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_pets");
+            var addr = RefAddress();
             if (addr == 0) return null;
             var len = _ctx.GetArrayLength(addr);
             return new global::Ndump.Core.DumpArray<_.Ndump.TestApp.Animal?>(addr, len, i => { var ea = _ctx.GetArrayElementAddress(addr, i); return ea == 0 ? null : global::_.ProxyResolver.Resolve(ea, _ctx) as _.Ndump.TestApp.Animal ?? _.Ndump.TestApp.Animal.FromAddress(ea, _ctx); });
@@ -68,7 +68,7 @@ public sealed class Customer : _.System.Object
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_tags");
+            var addr = RefAddress();
             if (addr == 0) return null;
             var len = _ctx.GetArrayLength(addr);
             return new global::Ndump.Core.DumpArray<string?>(addr, len, i => _ctx.GetArrayElementString(addr, i));

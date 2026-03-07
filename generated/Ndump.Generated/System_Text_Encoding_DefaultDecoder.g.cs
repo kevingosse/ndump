@@ -11,7 +11,7 @@ public sealed class Encoding_DefaultDecoder : _.System.Text.Decoder
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_encoding");
+            var addr = RefAddress();
             return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Text.Encoding ?? _.System.Text.Encoding.FromAddress(addr, _ctx);
         }
     }

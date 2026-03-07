@@ -7,56 +7,47 @@ public class Exception : _.System.Object
 {
     protected Exception(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public ulong _exceptionMethod => _ctx.GetObjectAddress(_objAddress, "_exceptionMethod");
+    public ulong _exceptionMethod => RefAddress();
 
-    public string? _message => _ctx.GetStringField(_objAddress, "_message");
+    public string? _message => StringField();
 
-    public ulong _data => _ctx.GetObjectAddress(_objAddress, "_data");
+    public ulong _data => RefAddress();
 
     public _.System.Exception? _innerException
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_innerException");
+            var addr = RefAddress();
             return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Exception ?? _.System.Exception.FromAddress(addr, _ctx);
         }
     }
 
-    public string? _helpURL => _ctx.GetStringField(_objAddress, "_helpURL");
+    public string? _helpURL => StringField();
 
     public _.System.Object? _stackTrace
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_stackTrace");
+            var addr = RefAddress();
             return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Object ?? _.System.Object.FromAddress(addr, _ctx);
         }
     }
 
-    public global::Ndump.Core.DumpArray<byte>? _watsonBuckets
-    {
-        get
-        {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_watsonBuckets");
-            if (addr == 0) return null;
-            var len = _ctx.GetArrayLength(addr);
-            return new global::Ndump.Core.DumpArray<byte>(addr, len, i => _ctx.GetArrayElementValue<byte>(addr, i));
-        }
-    }
+    // Array field: _watsonBuckets (object) — element type not supported
 
-    public string? _stackTraceString => _ctx.GetStringField(_objAddress, "_stackTraceString");
+    public string? _stackTraceString => StringField();
 
-    public string? _remoteStackTraceString => _ctx.GetStringField(_objAddress, "_remoteStackTraceString");
+    public string? _remoteStackTraceString => StringField();
 
-    public string? _source => _ctx.GetStringField(_objAddress, "_source");
+    public string? _source => StringField();
 
-    public nuint _ipForWatsonBuckets => _ctx.GetFieldValue<nuint>(_objAddress, "_ipForWatsonBuckets");
+    public nuint _ipForWatsonBuckets => Field<nuint>();
 
-    public nint _xptrs => _ctx.GetFieldValue<nint>(_objAddress, "_xptrs");
+    public nint _xptrs => Field<nint>();
 
-    public int _xcode => _ctx.GetFieldValue<int>(_objAddress, "_xcode");
+    public int _xcode => Field<int>();
 
-    public int _HResult => _ctx.GetFieldValue<int>(_objAddress, "_HResult");
+    public int _HResult => Field<int>();
 
     public static new Exception FromAddress(ulong address, DumpContext ctx)
         => new Exception(address, ctx);

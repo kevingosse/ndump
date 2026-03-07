@@ -9,9 +9,9 @@ public sealed class List_System_WeakReference_System_Diagnostics_Tracing_EventSo
 
     // Array field: _items (T[]) — element type not supported
 
-    public int _size => _ctx.GetFieldValue<int>(_objAddress, "_size");
+    public int _size => Field<int>();
 
-    public int _version => _ctx.GetFieldValue<int>(_objAddress, "_version");
+    public int _version => Field<int>();
 
     public static new List_System_WeakReference_System_Diagnostics_Tracing_EventSource__ FromAddress(ulong address, DumpContext ctx)
         => new List_System_WeakReference_System_Diagnostics_Tracing_EventSource__(address, ctx);

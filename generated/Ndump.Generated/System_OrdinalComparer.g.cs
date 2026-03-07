@@ -7,7 +7,7 @@ public class OrdinalComparer : _.System.StringComparer
 {
     protected OrdinalComparer(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public bool _ignoreCase => _ctx.GetFieldValue<bool>(_objAddress, "_ignoreCase");
+    public bool _ignoreCase => Field<bool>();
 
     public static new OrdinalComparer FromAddress(ulong address, DumpContext ctx)
         => new OrdinalComparer(address, ctx);

@@ -7,9 +7,9 @@ public sealed class DateTime_LeapSecondCache : _.System.Object
 {
     private DateTime_LeapSecondCache(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public ulong OSFileTimeTicksAtStartOfValidityWindow => _ctx.GetFieldValue<ulong>(_objAddress, "OSFileTimeTicksAtStartOfValidityWindow");
+    public ulong OSFileTimeTicksAtStartOfValidityWindow => Field<ulong>();
 
-    public ulong DotnetDateDataAtStartOfValidityWindow => _ctx.GetFieldValue<ulong>(_objAddress, "DotnetDateDataAtStartOfValidityWindow");
+    public ulong DotnetDateDataAtStartOfValidityWindow => Field<ulong>();
 
     public static new DateTime_LeapSecondCache FromAddress(ulong address, DumpContext ctx)
         => new DateTime_LeapSecondCache(address, ctx);

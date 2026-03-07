@@ -7,25 +7,25 @@ public sealed class Thread : _.System.Runtime.ConstrainedExecution.CriticalFinal
 {
     private Thread(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public ulong _executionContext => _ctx.GetObjectAddress(_objAddress, "_executionContext");
+    public ulong _executionContext => RefAddress();
 
-    public ulong _synchronizationContext => _ctx.GetObjectAddress(_objAddress, "_synchronizationContext");
+    public ulong _synchronizationContext => RefAddress();
 
-    public string? _name => _ctx.GetStringField(_objAddress, "_name");
+    public string? _name => StringField();
 
-    public ulong _startHelper => _ctx.GetObjectAddress(_objAddress, "_startHelper");
+    public ulong _startHelper => RefAddress();
 
-    public nint _DONT_USE_InternalThread => _ctx.GetFieldValue<nint>(_objAddress, "_DONT_USE_InternalThread");
+    public nint _DONT_USE_InternalThread => Field<nint>();
 
-    public int _priority => _ctx.GetFieldValue<int>(_objAddress, "_priority");
+    public int _priority => Field<int>();
 
-    public int _managedThreadId => _ctx.GetFieldValue<int>(_objAddress, "_managedThreadId");
+    public int _managedThreadId => Field<int>();
 
-    public bool _mayNeedResetForThreadPool => _ctx.GetFieldValue<bool>(_objAddress, "_mayNeedResetForThreadPool");
+    public bool _mayNeedResetForThreadPool => Field<bool>();
 
-    public bool _isDead => _ctx.GetFieldValue<bool>(_objAddress, "_isDead");
+    public bool _isDead => Field<bool>();
 
-    public bool _isThreadPool => _ctx.GetFieldValue<bool>(_objAddress, "_isThreadPool");
+    public bool _isThreadPool => Field<bool>();
 
     public static new Thread FromAddress(ulong address, DumpContext ctx)
         => new Thread(address, ctx);

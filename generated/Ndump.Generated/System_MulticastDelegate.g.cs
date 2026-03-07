@@ -11,12 +11,12 @@ public class MulticastDelegate : _.System.Delegate
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_invocationList");
+            var addr = RefAddress();
             return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Object ?? _.System.Object.FromAddress(addr, _ctx);
         }
     }
 
-    public nint _invocationCount => _ctx.GetFieldValue<nint>(_objAddress, "_invocationCount");
+    public nint _invocationCount => Field<nint>();
 
     public static new MulticastDelegate FromAddress(ulong address, DumpContext ctx)
         => new MulticastDelegate(address, ctx);

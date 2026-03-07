@@ -7,11 +7,11 @@ public sealed class Order : _.System.Object
 {
     private Order(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public int _orderId => _ctx.GetFieldValue<int>(_objAddress, "_orderId");
+    public int _orderId => Field<int>();
 
-    public double _total => _ctx.GetFieldValue<double>(_objAddress, "_total");
+    public double _total => Field<double>();
 
-    public string? _description => _ctx.GetStringField(_objAddress, "_description");
+    public string? _description => StringField();
 
     // ValueType field: _createdAt (object) — not yet supported
 

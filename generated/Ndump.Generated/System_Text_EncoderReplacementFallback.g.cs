@@ -7,7 +7,7 @@ public sealed class EncoderReplacementFallback : _.System.Text.EncoderFallback
 {
     private EncoderReplacementFallback(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public string? _strDefault => _ctx.GetStringField(_objAddress, "_strDefault");
+    public string? _strDefault => StringField();
 
     public static new EncoderReplacementFallback FromAddress(ulong address, DumpContext ctx)
         => new EncoderReplacementFallback(address, ctx);

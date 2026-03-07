@@ -11,12 +11,12 @@ public sealed class EventSource_OverrideEventProvider : _.System.Diagnostics.Tra
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_eventSourceFactory");
+            var addr = RefAddress();
             return addr == 0 ? null : _.System.Func_System_Diagnostics_Tracing_EventSource_.FromAddress(addr, _ctx);
         }
     }
 
-    public int _eventProviderType => _ctx.GetFieldValue<int>(_objAddress, "_eventProviderType");
+    public int _eventProviderType => Field<int>();
 
     public static new EventSource_OverrideEventProvider FromAddress(ulong address, DumpContext ctx)
         => new EventSource_OverrideEventProvider(address, ctx);

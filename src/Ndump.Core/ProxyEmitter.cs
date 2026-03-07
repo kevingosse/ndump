@@ -172,6 +172,7 @@ public sealed class ProxyEmitter
         var sb = new StringBuilder();
         sb.AppendLine("#nullable enable");
         sb.AppendLine("using Ndump.Core;");
+        sb.AppendLine("using System.Runtime.CompilerServices;");
         sb.AppendLine();
         sb.AppendLine("namespace _.System;");
         sb.AppendLine();
@@ -187,6 +188,15 @@ public sealed class ProxyEmitter
         sb.AppendLine("    }");
         sb.AppendLine();
         sb.AppendLine("    public ulong GetObjAddress() => _objAddress;");
+        sb.AppendLine();
+        sb.AppendLine("    protected T Field<T>([CallerMemberName] string fieldName = \"\") where T : unmanaged");
+        sb.AppendLine("        => _ctx.GetFieldValue<T>(_objAddress, fieldName);");
+        sb.AppendLine();
+        sb.AppendLine("    protected string? StringField([CallerMemberName] string fieldName = \"\")");
+        sb.AppendLine("        => _ctx.GetStringField(_objAddress, fieldName);");
+        sb.AppendLine();
+        sb.AppendLine("    protected ulong RefAddress([CallerMemberName] string fieldName = \"\")");
+        sb.AppendLine("        => _ctx.GetObjectAddress(_objAddress, fieldName);");
         sb.AppendLine();
         sb.AppendLine("    public static Object FromAddress(ulong address, DumpContext ctx)");
         sb.AppendLine("        => new Object(address, ctx);");
@@ -260,12 +270,18 @@ public sealed class ProxyEmitter
         switch (field.Kind)
         {
             case FieldKind.String:
-                sb.AppendLine($"    public string? {propName} => _ctx.GetStringField(_objAddress, \"{field.Name}\");");
+                if (propName == field.Name)
+                    sb.AppendLine($"    public string? {propName} => StringField();");
+                else
+                    sb.AppendLine($"    public string? {propName} => StringField(\"{field.Name}\");");
                 break;
 
             case FieldKind.Primitive:
                 var csType = field.TypeName;
-                sb.AppendLine($"    public {csType} {propName} => _ctx.GetFieldValue<{csType}>(_objAddress, \"{field.Name}\");");
+                if (propName == field.Name)
+                    sb.AppendLine($"    public {csType} {propName} => Field<{csType}>();");
+                else
+                    sb.AppendLine($"    public {csType} {propName} => Field<{csType}>(\"{field.Name}\");");
                 break;
 
             case FieldKind.ObjectReference:
@@ -297,11 +313,12 @@ public sealed class ProxyEmitter
         {
             var qualifiedProxyType = GetFullyQualifiedProxyType(field.ReferenceTypeName!);
             var isBaseType = _baseTypes.Contains(field.ReferenceTypeName!);
+            var addrExpr = propName == field.Name ? "RefAddress()" : $"RefAddress(\"{field.Name}\")";
             sb.AppendLine($"    public {qualifiedProxyType}? {propName}");
             sb.AppendLine("    {");
             sb.AppendLine("        get");
             sb.AppendLine("        {");
-            sb.AppendLine($"            var addr = _ctx.GetObjectAddress(_objAddress, \"{field.Name}\");");
+            sb.AppendLine($"            var addr = {addrExpr};");
             if (isBaseType)
                 sb.AppendLine($"            return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as {qualifiedProxyType} ?? {qualifiedProxyType}.FromAddress(addr, _ctx);");
             else
@@ -312,7 +329,10 @@ public sealed class ProxyEmitter
         else
         {
             // Unknown reference type — expose as address
-            sb.AppendLine($"    public ulong {propName} => _ctx.GetObjectAddress(_objAddress, \"{field.Name}\");");
+            if (propName == field.Name)
+                sb.AppendLine($"    public ulong {propName} => RefAddress();");
+            else
+                sb.AppendLine($"    public ulong {propName} => RefAddress(\"{field.Name}\");");
         }
     }
 
@@ -361,11 +381,12 @@ public sealed class ProxyEmitter
                 return;
         }
 
+        var arrayAddrExpr = propName == field.Name ? "RefAddress()" : $"RefAddress(\"{field.Name}\")";
         sb.AppendLine($"    public global::Ndump.Core.DumpArray<{csElementType}>? {propName}");
         sb.AppendLine("    {");
         sb.AppendLine("        get");
         sb.AppendLine("        {");
-        sb.AppendLine($"            var addr = _ctx.GetObjectAddress(_objAddress, \"{field.Name}\");");
+        sb.AppendLine($"            var addr = {arrayAddrExpr};");
         sb.AppendLine("            if (addr == 0) return null;");
         sb.AppendLine($"            var len = _ctx.GetArrayLength(addr);");
         sb.AppendLine($"            return new global::Ndump.Core.DumpArray<{csElementType}>(addr, len, {readerLambda});");

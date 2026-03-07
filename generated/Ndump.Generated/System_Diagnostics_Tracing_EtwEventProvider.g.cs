@@ -11,16 +11,16 @@ public sealed class EtwEventProvider : _.System.Diagnostics.Tracing.EventProvide
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_eventProvider");
+            var addr = RefAddress();
             return addr == 0 ? null : _.System.WeakReference_System_Diagnostics_Tracing_EventProvider_.FromAddress(addr, _ctx);
         }
     }
 
-    public long _registrationHandle => _ctx.GetFieldValue<long>(_objAddress, "_registrationHandle");
+    public long _registrationHandle => Field<long>();
 
     // ValueType field: _gcHandle (object) — not yet supported
 
-    public ulong _liveSessions => _ctx.GetObjectAddress(_objAddress, "_liveSessions");
+    public ulong _liveSessions => RefAddress();
 
     // ValueType field: _providerId (object) — not yet supported
 

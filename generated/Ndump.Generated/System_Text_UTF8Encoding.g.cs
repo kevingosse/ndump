@@ -7,9 +7,9 @@ public class UTF8Encoding : _.System.Text.Encoding
 {
     protected UTF8Encoding(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public bool _emitUTF8Identifier => _ctx.GetFieldValue<bool>(_objAddress, "_emitUTF8Identifier");
+    public bool _emitUTF8Identifier => Field<bool>();
 
-    public bool _isThrowException => _ctx.GetFieldValue<bool>(_objAddress, "_isThrowException");
+    public bool _isThrowException => Field<bool>();
 
     public static new UTF8Encoding FromAddress(ulong address, DumpContext ctx)
         => new UTF8Encoding(address, ctx);

@@ -7,59 +7,59 @@ public sealed class RuntimeEventSource : _.System.Diagnostics.Tracing.EventSourc
 {
     private RuntimeEventSource(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public ulong _gcHeapSizeCounter => _ctx.GetObjectAddress(_objAddress, "_gcHeapSizeCounter");
+    public ulong _gcHeapSizeCounter => RefAddress();
 
-    public ulong _gen0GCCounter => _ctx.GetObjectAddress(_objAddress, "_gen0GCCounter");
+    public ulong _gen0GCCounter => RefAddress();
 
-    public ulong _gen1GCCounter => _ctx.GetObjectAddress(_objAddress, "_gen1GCCounter");
+    public ulong _gen1GCCounter => RefAddress();
 
-    public ulong _gen2GCCounter => _ctx.GetObjectAddress(_objAddress, "_gen2GCCounter");
+    public ulong _gen2GCCounter => RefAddress();
 
-    public ulong _gen0BudgetCounter => _ctx.GetObjectAddress(_objAddress, "_gen0BudgetCounter");
+    public ulong _gen0BudgetCounter => RefAddress();
 
-    public ulong _cpuTimeCounter => _ctx.GetObjectAddress(_objAddress, "_cpuTimeCounter");
+    public ulong _cpuTimeCounter => RefAddress();
 
-    public ulong _workingSetCounter => _ctx.GetObjectAddress(_objAddress, "_workingSetCounter");
+    public ulong _workingSetCounter => RefAddress();
 
-    public ulong _threadPoolThreadCounter => _ctx.GetObjectAddress(_objAddress, "_threadPoolThreadCounter");
+    public ulong _threadPoolThreadCounter => RefAddress();
 
-    public ulong _monitorContentionCounter => _ctx.GetObjectAddress(_objAddress, "_monitorContentionCounter");
+    public ulong _monitorContentionCounter => RefAddress();
 
-    public ulong _threadPoolQueueCounter => _ctx.GetObjectAddress(_objAddress, "_threadPoolQueueCounter");
+    public ulong _threadPoolQueueCounter => RefAddress();
 
-    public ulong _completedItemsCounter => _ctx.GetObjectAddress(_objAddress, "_completedItemsCounter");
+    public ulong _completedItemsCounter => RefAddress();
 
-    public ulong _allocRateCounter => _ctx.GetObjectAddress(_objAddress, "_allocRateCounter");
+    public ulong _allocRateCounter => RefAddress();
 
-    public ulong _timerCounter => _ctx.GetObjectAddress(_objAddress, "_timerCounter");
+    public ulong _timerCounter => RefAddress();
 
-    public ulong _fragmentationCounter => _ctx.GetObjectAddress(_objAddress, "_fragmentationCounter");
+    public ulong _fragmentationCounter => RefAddress();
 
-    public ulong _committedCounter => _ctx.GetObjectAddress(_objAddress, "_committedCounter");
+    public ulong _committedCounter => RefAddress();
 
-    public ulong _exceptionCounter => _ctx.GetObjectAddress(_objAddress, "_exceptionCounter");
+    public ulong _exceptionCounter => RefAddress();
 
-    public ulong _gcTimeCounter => _ctx.GetObjectAddress(_objAddress, "_gcTimeCounter");
+    public ulong _gcTimeCounter => RefAddress();
 
-    public ulong _totalGcPauseTimeCounter => _ctx.GetObjectAddress(_objAddress, "_totalGcPauseTimeCounter");
+    public ulong _totalGcPauseTimeCounter => RefAddress();
 
-    public ulong _gen0SizeCounter => _ctx.GetObjectAddress(_objAddress, "_gen0SizeCounter");
+    public ulong _gen0SizeCounter => RefAddress();
 
-    public ulong _gen1SizeCounter => _ctx.GetObjectAddress(_objAddress, "_gen1SizeCounter");
+    public ulong _gen1SizeCounter => RefAddress();
 
-    public ulong _gen2SizeCounter => _ctx.GetObjectAddress(_objAddress, "_gen2SizeCounter");
+    public ulong _gen2SizeCounter => RefAddress();
 
-    public ulong _lohSizeCounter => _ctx.GetObjectAddress(_objAddress, "_lohSizeCounter");
+    public ulong _lohSizeCounter => RefAddress();
 
-    public ulong _pohSizeCounter => _ctx.GetObjectAddress(_objAddress, "_pohSizeCounter");
+    public ulong _pohSizeCounter => RefAddress();
 
-    public ulong _assemblyCounter => _ctx.GetObjectAddress(_objAddress, "_assemblyCounter");
+    public ulong _assemblyCounter => RefAddress();
 
-    public ulong _ilBytesJittedCounter => _ctx.GetObjectAddress(_objAddress, "_ilBytesJittedCounter");
+    public ulong _ilBytesJittedCounter => RefAddress();
 
-    public ulong _methodsJittedCounter => _ctx.GetObjectAddress(_objAddress, "_methodsJittedCounter");
+    public ulong _methodsJittedCounter => RefAddress();
 
-    public ulong _jitTimeCounter => _ctx.GetObjectAddress(_objAddress, "_jitTimeCounter");
+    public ulong _jitTimeCounter => RefAddress();
 
     public static new RuntimeEventSource FromAddress(ulong address, DumpContext ctx)
         => new RuntimeEventSource(address, ctx);

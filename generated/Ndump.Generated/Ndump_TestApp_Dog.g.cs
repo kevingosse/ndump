@@ -7,7 +7,7 @@ public sealed class Dog : _.Ndump.TestApp.Animal
 {
     private Dog(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public string? _breed => _ctx.GetStringField(_objAddress, "_breed");
+    public string? _breed => StringField();
 
     public static new Dog FromAddress(ulong address, DumpContext ctx)
         => new Dog(address, ctx);

@@ -7,7 +7,7 @@ public sealed class WeakReference_System_Diagnostics_Tracing_EventProvider_ : _.
 {
     private WeakReference_System_Diagnostics_Tracing_EventProvider_(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public nint _taggedHandle => _ctx.GetFieldValue<nint>(_objAddress, "_taggedHandle");
+    public nint _taggedHandle => Field<nint>();
 
     public static new WeakReference_System_Diagnostics_Tracing_EventProvider_ FromAddress(ulong address, DumpContext ctx)
         => new WeakReference_System_Diagnostics_Tracing_EventProvider_(address, ctx);

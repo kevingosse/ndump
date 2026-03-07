@@ -7,9 +7,9 @@ public sealed class ActivityTracker : _.System.Object
 {
     private ActivityTracker(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public ulong m_current => _ctx.GetObjectAddress(_objAddress, "m_current");
+    public ulong m_current => RefAddress();
 
-    public bool m_checkedForEnable => _ctx.GetFieldValue<bool>(_objAddress, "m_checkedForEnable");
+    public bool m_checkedForEnable => Field<bool>();
 
     public static new ActivityTracker FromAddress(ulong address, DumpContext ctx)
         => new ActivityTracker(address, ctx);

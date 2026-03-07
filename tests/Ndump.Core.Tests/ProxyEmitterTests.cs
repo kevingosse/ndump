@@ -41,7 +41,7 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public string? _name => _ctx.GetStringField(_objAddress, \"_name\");", code);
+        Assert.Contains("public string? _name => StringField();", code);
     }
 
     [Fact]
@@ -60,7 +60,7 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public int _age => _ctx.GetFieldValue<int>(_objAddress, \"_age\");", code);
+        Assert.Contains("public int _age => Field<int>();", code);
     }
 
     [Fact]
@@ -114,7 +114,7 @@ public class ProxyEmitterTests
         // Only MyApp.Customer is known, not SomeLib.Widget
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public ulong _unknown => _ctx.GetObjectAddress", code);
+        Assert.Contains("public ulong _unknown => RefAddress();", code);
     }
 
     [Fact]
@@ -333,7 +333,7 @@ public class ProxyEmitterTests
         var code = _emitter.GenerateProxyCode(type, knownTypes);
 
         Assert.Contains("public global::Ndump.Core.DumpArray<_.MyApp.Order?>? _orderHistory", code);
-        Assert.Contains("_ctx.GetObjectAddress(_objAddress,", code);
+        Assert.Contains("RefAddress()", code);
         Assert.Contains("_ctx.GetArrayLength(addr)", code);
         // Order is a leaf type (no subtypes), so uses direct FromAddress
         Assert.Contains("_.MyApp.Order.FromAddress(ea, _ctx)", code);

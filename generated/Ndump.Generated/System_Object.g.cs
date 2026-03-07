@@ -1,5 +1,6 @@
 #nullable enable
 using Ndump.Core;
+using System.Runtime.CompilerServices;
 
 namespace _.System;
 
@@ -15,6 +16,15 @@ public class Object
     }
 
     public ulong GetObjAddress() => _objAddress;
+
+    protected T Field<T>([CallerMemberName] string fieldName = "") where T : unmanaged
+        => _ctx.GetFieldValue<T>(_objAddress, fieldName);
+
+    protected string? StringField([CallerMemberName] string fieldName = "")
+        => _ctx.GetStringField(_objAddress, fieldName);
+
+    protected ulong RefAddress([CallerMemberName] string fieldName = "")
+        => _ctx.GetObjectAddress(_objAddress, fieldName);
 
     public static Object FromAddress(ulong address, DumpContext ctx)
         => new Object(address, ctx);

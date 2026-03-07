@@ -11,7 +11,7 @@ public class Delegate : _.System.Object
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_target");
+            var addr = RefAddress();
             return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Object ?? _.System.Object.FromAddress(addr, _ctx);
         }
     }
@@ -20,14 +20,14 @@ public class Delegate : _.System.Object
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_methodBase");
+            var addr = RefAddress();
             return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Object ?? _.System.Object.FromAddress(addr, _ctx);
         }
     }
 
-    public nint _methodPtr => _ctx.GetFieldValue<nint>(_objAddress, "_methodPtr");
+    public nint _methodPtr => Field<nint>();
 
-    public nint _methodPtrAux => _ctx.GetFieldValue<nint>(_objAddress, "_methodPtrAux");
+    public nint _methodPtrAux => Field<nint>();
 
     public static new Delegate FromAddress(ulong address, DumpContext ctx)
         => new Delegate(address, ctx);

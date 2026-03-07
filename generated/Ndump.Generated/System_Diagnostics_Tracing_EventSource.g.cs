@@ -7,44 +7,35 @@ public class EventSource : _.System.Object
 {
     protected EventSource(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public string? m_name => _ctx.GetStringField(_objAddress, "m_name");
+    public string? m_name => StringField();
 
-    public int m_id => _ctx.GetFieldValue<int>(_objAddress, "m_id");
+    public int m_id => Field<int>();
 
     // ValueType field: m_guid (object) — not yet supported
 
-    public ulong m_eventData => _ctx.GetObjectAddress(_objAddress, "m_eventData");
+    public ulong m_eventData => RefAddress();
 
-    public global::Ndump.Core.DumpArray<byte>? m_rawManifest
-    {
-        get
-        {
-            var addr = _ctx.GetObjectAddress(_objAddress, "m_rawManifest");
-            if (addr == 0) return null;
-            var len = _ctx.GetArrayLength(addr);
-            return new global::Ndump.Core.DumpArray<byte>(addr, len, i => _ctx.GetArrayElementValue<byte>(addr, i));
-        }
-    }
+    // Array field: m_rawManifest (object) — element type not supported
 
     // Unknown field: m_eventCommandExecuted (object)
 
-    public int m_config => _ctx.GetFieldValue<int>(_objAddress, "m_config");
+    public int m_config => Field<int>();
 
-    public bool m_eventSourceDisposed => _ctx.GetFieldValue<bool>(_objAddress, "m_eventSourceDisposed");
+    public bool m_eventSourceDisposed => Field<bool>();
 
-    public bool m_eventSourceEnabled => _ctx.GetFieldValue<bool>(_objAddress, "m_eventSourceEnabled");
+    public bool m_eventSourceEnabled => Field<bool>();
 
-    public int m_level => _ctx.GetFieldValue<int>(_objAddress, "m_level");
+    public int m_level => Field<int>();
 
-    public long m_matchAnyKeyword => _ctx.GetFieldValue<long>(_objAddress, "m_matchAnyKeyword");
+    public long m_matchAnyKeyword => Field<long>();
 
-    public ulong m_Dispatchers => _ctx.GetObjectAddress(_objAddress, "m_Dispatchers");
+    public ulong m_Dispatchers => RefAddress();
 
     public _.System.Diagnostics.Tracing.EventSource_OverrideEventProvider? m_etwProvider
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "m_etwProvider");
+            var addr = RefAddress();
             return addr == 0 ? null : _.System.Diagnostics.Tracing.EventSource_OverrideEventProvider.FromAddress(addr, _ctx);
         }
     }
@@ -53,36 +44,36 @@ public class EventSource : _.System.Object
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "m_createEventLock");
+            var addr = RefAddress();
             return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Object ?? _.System.Object.FromAddress(addr, _ctx);
         }
     }
 
-    public nint m_writeEventStringEventHandle => _ctx.GetFieldValue<nint>(_objAddress, "m_writeEventStringEventHandle");
+    public nint m_writeEventStringEventHandle => Field<nint>();
 
     public _.System.Diagnostics.Tracing.EventSource_OverrideEventProvider? m_eventPipeProvider
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "m_eventPipeProvider");
+            var addr = RefAddress();
             return addr == 0 ? null : _.System.Diagnostics.Tracing.EventSource_OverrideEventProvider.FromAddress(addr, _ctx);
         }
     }
 
-    public bool m_completelyInited => _ctx.GetFieldValue<bool>(_objAddress, "m_completelyInited");
+    public bool m_completelyInited => Field<bool>();
 
     public _.System.Exception? m_constructionException
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "m_constructionException");
+            var addr = RefAddress();
             return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Exception ?? _.System.Exception.FromAddress(addr, _ctx);
         }
     }
 
-    public byte m_outOfBandMessageCount => _ctx.GetFieldValue<byte>(_objAddress, "m_outOfBandMessageCount");
+    public byte m_outOfBandMessageCount => Field<byte>();
 
-    public ulong m_deferredCommands => _ctx.GetObjectAddress(_objAddress, "m_deferredCommands");
+    public ulong m_deferredCommands => RefAddress();
 
     // Array field: m_traits (object) — element type not supported
 
@@ -90,7 +81,7 @@ public class EventSource : _.System.Object
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "m_channelData");
+            var addr = RefAddress();
             if (addr == 0) return null;
             var len = _ctx.GetArrayLength(addr);
             return new global::Ndump.Core.DumpArray<ulong>(addr, len, i => _ctx.GetArrayElementValue<ulong>(addr, i));
@@ -101,27 +92,18 @@ public class EventSource : _.System.Object
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "m_activityTracker");
+            var addr = RefAddress();
             return addr == 0 ? null : _.System.Diagnostics.Tracing.ActivityTracker.FromAddress(addr, _ctx);
         }
     }
 
-    public global::Ndump.Core.DumpArray<byte>? m_providerMetadata
-    {
-        get
-        {
-            var addr = _ctx.GetObjectAddress(_objAddress, "m_providerMetadata");
-            if (addr == 0) return null;
-            var len = _ctx.GetArrayLength(addr);
-            return new global::Ndump.Core.DumpArray<byte>(addr, len, i => _ctx.GetArrayElementValue<byte>(addr, i));
-        }
-    }
+    // Array field: m_providerMetadata (object) — element type not supported
 
     public _.System.Diagnostics.Tracing.TraceLoggingEventHandleTable? m_eventHandleTable
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "m_eventHandleTable");
+            var addr = RefAddress();
             return addr == 0 ? null : _.System.Diagnostics.Tracing.TraceLoggingEventHandleTable.FromAddress(addr, _ctx);
         }
     }

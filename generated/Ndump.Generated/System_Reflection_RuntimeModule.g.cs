@@ -11,7 +11,7 @@ public sealed class RuntimeModule : _.System.Reflection.Module
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "m_runtimeType");
+            var addr = RefAddress();
             return addr == 0 ? null : _.System.RuntimeType.FromAddress(addr, _ctx);
         }
     }
@@ -20,12 +20,12 @@ public sealed class RuntimeModule : _.System.Reflection.Module
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "m_runtimeAssembly");
+            var addr = RefAddress();
             return addr == 0 ? null : _.System.Reflection.RuntimeAssembly.FromAddress(addr, _ctx);
         }
     }
 
-    public nint m_pData => _ctx.GetFieldValue<nint>(_objAddress, "m_pData");
+    public nint m_pData => Field<nint>();
 
     public static new RuntimeModule FromAddress(ulong address, DumpContext ctx)
         => new RuntimeModule(address, ctx);

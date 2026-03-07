@@ -7,7 +7,7 @@ public sealed class DeserializationTracker : _.System.Object
 {
     private DeserializationTracker(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public bool DeserializationInProgress => _ctx.GetFieldValue<bool>(_objAddress, "<DeserializationInProgress>k__BackingField");
+    public bool DeserializationInProgress => Field<bool>("<DeserializationInProgress>k__BackingField");
 
     public static new DeserializationTracker FromAddress(ulong address, DumpContext ctx)
         => new DeserializationTracker(address, ctx);

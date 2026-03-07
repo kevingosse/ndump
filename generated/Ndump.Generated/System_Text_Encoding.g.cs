@@ -7,17 +7,17 @@ public class Encoding : _.System.Object
 {
     protected Encoding(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public int _codePage => _ctx.GetFieldValue<int>(_objAddress, "_codePage");
+    public int _codePage => Field<int>();
 
-    public ulong _dataItem => _ctx.GetObjectAddress(_objAddress, "_dataItem");
+    public ulong _dataItem => RefAddress();
 
-    public bool _isReadOnly => _ctx.GetFieldValue<bool>(_objAddress, "_isReadOnly");
+    public bool _isReadOnly => Field<bool>();
 
     public _.System.Text.EncoderFallback? encoderFallback
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "encoderFallback");
+            var addr = RefAddress();
             return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Text.EncoderFallback ?? _.System.Text.EncoderFallback.FromAddress(addr, _ctx);
         }
     }
@@ -26,7 +26,7 @@ public class Encoding : _.System.Object
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "decoderFallback");
+            var addr = RefAddress();
             return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Text.DecoderFallback ?? _.System.Text.DecoderFallback.FromAddress(addr, _ctx);
         }
     }

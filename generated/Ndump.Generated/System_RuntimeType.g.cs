@@ -11,14 +11,14 @@ public sealed class RuntimeType : _.System.Reflection.TypeInfo
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "m_keepalive");
+            var addr = RefAddress();
             return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Object ?? _.System.Object.FromAddress(addr, _ctx);
         }
     }
 
-    public nint m_cache => _ctx.GetFieldValue<nint>(_objAddress, "m_cache");
+    public nint m_cache => Field<nint>();
 
-    public nint m_handle => _ctx.GetFieldValue<nint>(_objAddress, "m_handle");
+    public nint m_handle => Field<nint>();
 
     public static new RuntimeType FromAddress(ulong address, DumpContext ctx)
         => new RuntimeType(address, ctx);

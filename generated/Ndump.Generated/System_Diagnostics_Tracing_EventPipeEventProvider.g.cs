@@ -11,12 +11,12 @@ public sealed class EventPipeEventProvider : _.System.Diagnostics.Tracing.EventP
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_eventProvider");
+            var addr = RefAddress();
             return addr == 0 ? null : _.System.WeakReference_System_Diagnostics_Tracing_EventProvider_.FromAddress(addr, _ctx);
         }
     }
 
-    public nint _provHandle => _ctx.GetFieldValue<nint>(_objAddress, "_provHandle");
+    public nint _provHandle => Field<nint>();
 
     // ValueType field: _gcHandle (object) — not yet supported
 

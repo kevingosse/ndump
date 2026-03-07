@@ -9,11 +9,11 @@ public sealed class TaskFactory : _.System.Object
 
     // ValueType field: m_defaultCancellationToken (object) — not yet supported
 
-    public ulong m_defaultScheduler => _ctx.GetObjectAddress(_objAddress, "m_defaultScheduler");
+    public ulong m_defaultScheduler => RefAddress();
 
-    public int m_defaultCreationOptions => _ctx.GetFieldValue<int>(_objAddress, "m_defaultCreationOptions");
+    public int m_defaultCreationOptions => Field<int>();
 
-    public int m_defaultContinuationOptions => _ctx.GetFieldValue<int>(_objAddress, "m_defaultContinuationOptions");
+    public int m_defaultContinuationOptions => Field<int>();
 
     public static new TaskFactory FromAddress(ulong address, DumpContext ctx)
         => new TaskFactory(address, ctx);

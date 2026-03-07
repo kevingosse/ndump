@@ -7,7 +7,7 @@ public class NonRandomizedStringEqualityComparer : _.System.Object
 {
     protected NonRandomizedStringEqualityComparer(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public ulong _underlyingComparer => _ctx.GetObjectAddress(_objAddress, "_underlyingComparer");
+    public ulong _underlyingComparer => RefAddress();
 
     public static new NonRandomizedStringEqualityComparer FromAddress(ulong address, DumpContext ctx)
         => new NonRandomizedStringEqualityComparer(address, ctx);

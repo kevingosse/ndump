@@ -7,7 +7,7 @@ public class FileStreamStrategy : _.System.IO.Stream
 {
     protected FileStreamStrategy(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public bool IsDerived => _ctx.GetFieldValue<bool>(_objAddress, "<IsDerived>k__BackingField");
+    public bool IsDerived => Field<bool>("<IsDerived>k__BackingField");
 
     public static new FileStreamStrategy FromAddress(ulong address, DumpContext ctx)
         => new FileStreamStrategy(address, ctx);

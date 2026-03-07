@@ -7,13 +7,13 @@ public class SafeHandle : _.System.Runtime.ConstrainedExecution.CriticalFinalize
 {
     protected SafeHandle(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public nint handle => _ctx.GetFieldValue<nint>(_objAddress, "handle");
+    public nint handle => Field<nint>();
 
-    public int _state => _ctx.GetFieldValue<int>(_objAddress, "_state");
+    public int _state => Field<int>();
 
-    public bool _ownsHandle => _ctx.GetFieldValue<bool>(_objAddress, "_ownsHandle");
+    public bool _ownsHandle => Field<bool>();
 
-    public bool _fullyInitialized => _ctx.GetFieldValue<bool>(_objAddress, "_fullyInitialized");
+    public bool _fullyInitialized => Field<bool>();
 
     public static new SafeHandle FromAddress(ulong address, DumpContext ctx)
         => new SafeHandle(address, ctx);

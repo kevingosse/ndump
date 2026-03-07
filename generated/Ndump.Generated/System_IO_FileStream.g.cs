@@ -11,7 +11,7 @@ public sealed class FileStream : _.System.IO.Stream
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_strategy");
+            var addr = RefAddress();
             return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.IO.Strategies.FileStreamStrategy ?? _.System.IO.Strategies.FileStreamStrategy.FromAddress(addr, _ctx);
         }
     }

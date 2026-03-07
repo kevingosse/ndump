@@ -11,16 +11,16 @@ public class OSFileStreamStrategy : _.System.IO.Strategies.FileStreamStrategy
     {
         get
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, "_fileHandle");
+            var addr = RefAddress();
             return addr == 0 ? null : _.Microsoft.Win32.SafeHandles.SafeFileHandle.FromAddress(addr, _ctx);
         }
     }
 
-    public int _access => _ctx.GetFieldValue<int>(_objAddress, "_access");
+    public int _access => Field<int>();
 
-    public long _filePosition => _ctx.GetFieldValue<long>(_objAddress, "_filePosition");
+    public long _filePosition => Field<long>();
 
-    public long _appendStart => _ctx.GetFieldValue<long>(_objAddress, "_appendStart");
+    public long _appendStart => Field<long>();
 
     public static new OSFileStreamStrategy FromAddress(ulong address, DumpContext ctx)
         => new OSFileStreamStrategy(address, ctx);
