@@ -40,6 +40,9 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
         Assert.Contains("Ndump.TestApp.Order", typeNames);
         Assert.Contains("Ndump.TestApp.Address", typeNames);
         Assert.Contains("Ndump.TestApp.Tag", typeNames);
+        Assert.Contains("Ndump.TestApp.Cat", typeNames);
+        Assert.Contains("Ndump.TestApp.Dog", typeNames);
+        Assert.Contains("System.Object", typeNames);
     }
 
     [Fact]
@@ -58,6 +61,8 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
         Assert.Contains("_lastOrder", fieldNames);
         Assert.Contains("_address", fieldNames);
         Assert.Contains("_orderHistory", fieldNames);
+        Assert.Contains("_mixedItems", fieldNames);
+        Assert.Contains("_pets", fieldNames);
     }
 
     [Fact]
@@ -344,5 +349,324 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
         Assert.Equal(5.00, totals[0], precision: 2);
         Assert.Equal(29.99, totals[1], precision: 2);
         Assert.Equal(149.50, totals[2], precision: 2);
+    }
+
+    [Fact]
+    public void TypeInspector_CustomerMixedItemsIsObjectArray()
+    {
+        using var ctx = DumpContext.Open(_fixture.DumpPath);
+        var inspector = new TypeInspector();
+        var types = inspector.DiscoverTypes(ctx);
+
+        var customer = types.Single(t => t.FullName == "Ndump.TestApp.Customer");
+        var field = customer.Fields.Single(f => f.Name == "_mixedItems");
+
+        Assert.Equal(FieldKind.Array, field.Kind);
+        Assert.Equal("System.Object", field.ArrayElementTypeName);
+        Assert.Equal(FieldKind.ObjectReference, field.ArrayElementKind);
+    }
+
+    [Fact]
+    public void Proxies_CanReadObjectArrayField()
+    {
+        var projector = new DumpProjector();
+        using var result = projector.Project(_fixture.DumpPath);
+
+        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
+        Assert.NotNull(customerType);
+
+        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
+        var instances = (getInstances!.Invoke(null, [result.Context]) as IEnumerable)!.Cast<object>().ToList();
+
+        var nameProp = customerType.GetProperty("_name");
+        var mixedProp = customerType.GetProperty("_mixedItems");
+        Assert.NotNull(nameProp);
+        Assert.NotNull(mixedProp);
+
+        // Alice has [order1, addr1, tag1, "hello"] — 4 elements
+        var alice = instances.Single(c => (string?)nameProp.GetValue(c) == "Alice");
+        var aliceMixed = mixedProp.GetValue(alice);
+        Assert.NotNull(aliceMixed);
+
+        var aliceItems = ((IEnumerable)aliceMixed).Cast<object>().ToList();
+        Assert.Equal(4, aliceItems.Count);
+    }
+
+    [Fact]
+    public void Proxies_ObjectArrayElements_InheritFromSystemObject()
+    {
+        var projector = new DumpProjector();
+        using var result = projector.Project(_fixture.DumpPath);
+
+        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
+        var sysObjType = result.GeneratedAssembly.GetType("_.System.Object");
+        Assert.NotNull(customerType);
+        Assert.NotNull(sysObjType);
+
+        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
+        var instances = (getInstances!.Invoke(null, [result.Context]) as IEnumerable)!.Cast<object>().ToList();
+
+        var nameProp = customerType.GetProperty("_name");
+        var mixedProp = customerType.GetProperty("_mixedItems");
+        Assert.NotNull(nameProp);
+        Assert.NotNull(mixedProp);
+
+        // Bob has [tag2, order2] — elements should inherit from _.System.Object
+        var bob = instances.Single(c => (string?)nameProp.GetValue(c) == "Bob");
+        var bobMixed = mixedProp.GetValue(bob)!;
+
+        var bobItems = ((IEnumerable)bobMixed).Cast<object>().ToList();
+        Assert.Equal(2, bobItems.Count);
+
+        foreach (var item in bobItems)
+        {
+            Assert.True(sysObjType.IsInstanceOfType(item));
+        }
+    }
+
+    [Fact]
+    public void Proxies_ObjectArrayElements_AreCorrectProxyTypes()
+    {
+        var projector = new DumpProjector();
+        using var result = projector.Project(_fixture.DumpPath);
+
+        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
+        var tagType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Tag");
+        var orderType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Order");
+        Assert.NotNull(customerType);
+        Assert.NotNull(tagType);
+        Assert.NotNull(orderType);
+
+        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
+        var instances = (getInstances!.Invoke(null, [result.Context]) as IEnumerable)!.Cast<object>().ToList();
+
+        var nameProp = customerType.GetProperty("_name");
+        var mixedProp = customerType.GetProperty("_mixedItems");
+        Assert.NotNull(nameProp);
+        Assert.NotNull(mixedProp);
+
+        // Bob has [tag2, order2] — elements should be actual proxy types
+        var bob = instances.Single(c => (string?)nameProp.GetValue(c) == "Bob");
+        var bobMixed = mixedProp.GetValue(bob)!;
+        var bobItems = ((IEnumerable)bobMixed).Cast<object>().ToList();
+
+        var proxyTypes = bobItems.Select(d => d.GetType()).ToList();
+        Assert.Contains(tagType, proxyTypes);
+        Assert.Contains(orderType, proxyTypes);
+    }
+
+    [Fact]
+    public void Proxies_ObjectArrayElements_CanReadFieldsDirectly()
+    {
+        var projector = new DumpProjector();
+        using var result = projector.Project(_fixture.DumpPath);
+
+        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
+        var orderType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Order");
+        Assert.NotNull(customerType);
+        Assert.NotNull(orderType);
+
+        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
+        var instances = (getInstances!.Invoke(null, [result.Context]) as IEnumerable)!.Cast<object>().ToList();
+
+        var nameProp = customerType.GetProperty("_name");
+        var mixedProp = customerType.GetProperty("_mixedItems");
+        var orderIdProp = orderType.GetProperty("_orderId");
+        Assert.NotNull(nameProp);
+        Assert.NotNull(mixedProp);
+        Assert.NotNull(orderIdProp);
+
+        // Bob has [tag2, order2] — the Order element is already the right proxy type
+        var bob = instances.Single(c => (string?)nameProp.GetValue(c) == "Bob");
+        var bobMixed = mixedProp.GetValue(bob)!;
+        var bobItems = ((IEnumerable)bobMixed).Cast<object>().ToList();
+
+        var orderElement = bobItems.Single(d => d.GetType() == orderType);
+
+        // Can read fields directly — no cast needed since ResolveProxy returns the right type
+        var orderId = (int)orderIdProp.GetValue(orderElement)!;
+        Assert.Equal(1002, orderId);
+    }
+
+    [Fact]
+    public void Proxies_ObjectArrayElements_HasCorrectProxyTypes()
+    {
+        var projector = new DumpProjector();
+        using var result = projector.Project(_fixture.DumpPath);
+
+        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
+        Assert.NotNull(customerType);
+
+        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
+        var instances = (getInstances!.Invoke(null, [result.Context]) as IEnumerable)!.Cast<object>().ToList();
+
+        var nameProp = customerType.GetProperty("_name");
+        var mixedProp = customerType.GetProperty("_mixedItems");
+        Assert.NotNull(nameProp);
+        Assert.NotNull(mixedProp);
+
+        // Alice has [order1, addr1, tag1, "hello"] — check proxy types
+        var alice = instances.Single(c => (string?)nameProp.GetValue(c) == "Alice");
+        var aliceMixed = mixedProp.GetValue(alice)!;
+        var aliceItems = ((IEnumerable)aliceMixed).Cast<object>().ToList();
+
+        var proxyTypeNames = aliceItems.Select(d => d.GetType().FullName).ToList();
+        Assert.Contains("_.Ndump.TestApp.Order", proxyTypeNames);
+        Assert.Contains("_.Ndump.TestApp.Address", proxyTypeNames);
+        Assert.Contains("_.Ndump.TestApp.Tag", proxyTypeNames);
+        // String gets a System.String proxy (_.System.String)
+        Assert.Contains("_.System.String", proxyTypeNames);
+    }
+
+    [Fact]
+    public void TypeInspector_DiscoversAnimalHierarchy()
+    {
+        using var ctx = DumpContext.Open(_fixture.DumpPath);
+        var inspector = new TypeInspector();
+        var types = inspector.DiscoverTypes(ctx);
+
+        var typeNames = types.Select(t => t.FullName).ToHashSet();
+
+        Assert.Contains("Ndump.TestApp.Cat", typeNames);
+        Assert.Contains("Ndump.TestApp.Dog", typeNames);
+
+        // Cat and Dog should have Animal as BaseTypeName
+        var cat = types.Single(t => t.FullName == "Ndump.TestApp.Cat");
+        Assert.Equal("Ndump.TestApp.Animal", cat.BaseTypeName);
+
+        var dog = types.Single(t => t.FullName == "Ndump.TestApp.Dog");
+        Assert.Equal("Ndump.TestApp.Animal", dog.BaseTypeName);
+    }
+
+    [Fact]
+    public void Proxies_AnimalArray_ContainsCatsAndDogs()
+    {
+        var projector = new DumpProjector();
+        using var result = projector.Project(_fixture.DumpPath);
+
+        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
+        var catType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Cat");
+        var dogType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Dog");
+        var animalType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Animal");
+        Assert.NotNull(customerType);
+        Assert.NotNull(catType);
+        Assert.NotNull(dogType);
+        Assert.NotNull(animalType);
+
+        // Cat and Dog should extend Animal in the proxy hierarchy
+        Assert.True(animalType.IsAssignableFrom(catType));
+        Assert.True(animalType.IsAssignableFrom(dogType));
+
+        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
+        var instances = (getInstances!.Invoke(null, [result.Context]) as IEnumerable)!.Cast<object>().ToList();
+
+        var nameProp = customerType.GetProperty("_name");
+        var petsProp = customerType.GetProperty("_pets");
+        Assert.NotNull(nameProp);
+        Assert.NotNull(petsProp);
+
+        // Alice has [cat1, dog1]
+        var alice = instances.Single(c => (string?)nameProp.GetValue(c) == "Alice");
+        var alicePets = ((IEnumerable)petsProp.GetValue(alice)!).Cast<object>().ToList();
+        Assert.Equal(2, alicePets.Count);
+
+        // Elements should be actual Cat and Dog proxy types, not just Animal
+        var petTypes = alicePets.Select(p => p.GetType()).ToList();
+        Assert.Contains(catType, petTypes);
+        Assert.Contains(dogType, petTypes);
+
+        // All pets are assignable to Animal
+        foreach (var pet in alicePets)
+        {
+            Assert.True(animalType.IsInstanceOfType(pet));
+        }
+    }
+
+    [Fact]
+    public void Proxies_AnimalArray_CanReadInheritedAndOwnFields()
+    {
+        var projector = new DumpProjector();
+        using var result = projector.Project(_fixture.DumpPath);
+
+        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
+        var animalType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Animal");
+        var dogType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Dog");
+        Assert.NotNull(customerType);
+        Assert.NotNull(animalType);
+        Assert.NotNull(dogType);
+
+        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
+        var instances = (getInstances!.Invoke(null, [result.Context]) as IEnumerable)!.Cast<object>().ToList();
+
+        var nameProp = customerType.GetProperty("_name");
+        var petsProp = customerType.GetProperty("_pets");
+        Assert.NotNull(nameProp);
+        Assert.NotNull(petsProp);
+
+        // Alice has [cat1("Whiskers", 3, indoor=true), dog1("Rex", 4, "German Shepherd")]
+        var alice = instances.Single(c => (string?)nameProp.GetValue(c) == "Alice");
+        var alicePets = ((IEnumerable)petsProp.GetValue(alice)!).Cast<object>().ToList();
+
+        // Read inherited _name field (declared on Animal proxy) from a Dog
+        var animalNameProp = animalType.GetProperty("_name");
+        Assert.NotNull(animalNameProp);
+
+        var petNames = alicePets.Select(p => (string?)animalNameProp.GetValue(p)).OrderBy(n => n).ToList();
+        Assert.Equal(["Rex", "Whiskers"], petNames);
+
+        // Read Dog-specific _breed field
+        var breedProp = dogType.GetProperty("_breed");
+        Assert.NotNull(breedProp);
+
+        var dog = alicePets.Single(p => p.GetType() == dogType);
+        Assert.Equal("German Shepherd", breedProp.GetValue(dog));
+    }
+
+    [Fact]
+    public void Proxies_AnimalArray_Charlie_HasMixedPets()
+    {
+        var projector = new DumpProjector();
+        using var result = projector.Project(_fixture.DumpPath);
+
+        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
+        var catType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Cat");
+        var dogType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Dog");
+        Assert.NotNull(customerType);
+        Assert.NotNull(catType);
+        Assert.NotNull(dogType);
+
+        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
+        var instances = (getInstances!.Invoke(null, [result.Context]) as IEnumerable)!.Cast<object>().ToList();
+
+        var nameProp = customerType.GetProperty("_name");
+        var petsProp = customerType.GetProperty("_pets");
+
+        // Charlie has [cat2("Mittens"), dog1("Rex"), cat1("Whiskers")]
+        var charlie = instances.Single(c => (string?)nameProp!.GetValue(c) == "Charlie");
+        var charliePets = ((IEnumerable)petsProp!.GetValue(charlie)!).Cast<object>().ToList();
+        Assert.Equal(3, charliePets.Count);
+
+        var catCount = charliePets.Count(p => p.GetType() == catType);
+        var dogCount = charliePets.Count(p => p.GetType() == dogType);
+        Assert.Equal(2, catCount);
+        Assert.Equal(1, dogCount);
+    }
+
+    [Fact]
+    public void Proxies_InheritFromSystemObject()
+    {
+        var projector = new DumpProjector();
+        using var result = projector.Project(_fixture.DumpPath);
+
+        var sysObjType = result.GeneratedAssembly.GetType("_.System.Object");
+        Assert.NotNull(sysObjType);
+
+        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
+        Assert.NotNull(customerType);
+        Assert.True(sysObjType.IsAssignableFrom(customerType));
+
+        var orderType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Order");
+        Assert.NotNull(orderType);
+        Assert.True(sysObjType.IsAssignableFrom(orderType));
     }
 }

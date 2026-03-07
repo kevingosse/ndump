@@ -21,10 +21,8 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public sealed class Customer", code);
-        Assert.Contains("private readonly ulong _objAddress;", code);
-        Assert.Contains("private readonly DumpContext _ctx;", code);
-        Assert.Contains("private Customer(ulong address, DumpContext ctx)", code);
+        Assert.Contains("public sealed class Customer : global::_.System.Object", code);
+        Assert.Contains("Customer(ulong address, DumpContext ctx) : base(address, ctx) { }", code);
     }
 
     [Fact]
@@ -89,6 +87,7 @@ public class ProxyEmitterTests
         var code = _emitter.GenerateProxyCode(type, knownTypes);
 
         Assert.Contains("public _.MyApp.Order? _lastOrder", code);
+        // Order is a leaf type (no subtypes), so uses direct FromAddress
         Assert.Contains("_.MyApp.Order.FromAddress(addr, _ctx)", code);
     }
 
@@ -152,7 +151,7 @@ public class ProxyEmitterTests
     }
 
     [Fact]
-    public void GenerateProxy_HasAddressMethod()
+    public void GenerateProxy_InheritsFromSystemObject()
     {
         var type = new TypeMetadata
         {
@@ -164,7 +163,9 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public ulong GetObjAddress() => _objAddress;", code);
+        // GetObjAddress is inherited from _.System.Object, not emitted directly
+        Assert.DoesNotContain("public ulong GetObjAddress()", code);
+        Assert.Contains(": global::_.System.Object", code);
     }
 
     [Fact]
@@ -334,6 +335,7 @@ public class ProxyEmitterTests
         Assert.Contains("public global::Ndump.Core.DumpArray<_.MyApp.Order?>? _orderHistory", code);
         Assert.Contains("_ctx.GetObjectAddress(_objAddress,", code);
         Assert.Contains("_ctx.GetArrayLength(addr)", code);
+        // Order is a leaf type (no subtypes), so uses direct FromAddress
         Assert.Contains("_.MyApp.Order.FromAddress(ea, _ctx)", code);
     }
 
@@ -419,6 +421,38 @@ public class ProxyEmitterTests
     }
 
     [Fact]
+    public void GenerateProxy_ArrayField_ObjectElements_UsesSystemObjectProxy()
+    {
+        var knownTypes = new HashSet<string> { "MyApp.Customer", "MyApp.Order", "System.Object" };
+        var type = new TypeMetadata
+        {
+            FullName = "MyApp.Customer",
+            Namespace = "MyApp",
+            Name = "Customer",
+            Fields =
+            [
+                new FieldInfo
+                {
+                    Name = "_mixedItems",
+                    TypeName = "System.Object[]",
+                    Kind = FieldKind.Array,
+                    ArrayElementTypeName = "System.Object",
+                    ArrayElementKind = FieldKind.ObjectReference
+                }
+            ]
+        };
+
+        // System.Object is a base type for Customer and Order, so use allTypes to set that up
+        var sysObj = new TypeMetadata { FullName = "System.Object", Namespace = "System", Name = "Object", Fields = [] };
+        var order = new TypeMetadata { FullName = "MyApp.Order", Namespace = "MyApp", Name = "Order", Fields = [], BaseTypeName = "System.Object" };
+        var code = _emitter.GenerateProxyCode(type, allTypes: [sysObj, order, type]);
+
+        // System.Object is a known proxy type and a base type, so should use resolver with fallback
+        Assert.Contains("public global::Ndump.Core.DumpArray<_.System.Object?>? _mixedItems", code);
+        Assert.Contains("_ctx.ResolveProxy(ea) as _.System.Object ?? _.System.Object.FromAddress(ea, _ctx)", code);
+    }
+
+    [Fact]
     public void GenerateProxy_DuplicateFieldNames_SkipsDuplicates()
     {
         var type = new TypeMetadata
@@ -456,6 +490,269 @@ public class ProxyEmitterTests
 
         // Must use global:: to avoid resolving to proxy namespace
         Assert.Contains("global::System.Collections.Generic.IEnumerable<", code);
+    }
+
+    [Fact]
+    public void GenerateProxy_WithKnownBaseType_ExtendsBaseProxy()
+    {
+        var animal = new TypeMetadata
+        {
+            FullName = "MyApp.Animal",
+            Namespace = "MyApp",
+            Name = "Animal",
+            Fields =
+            [
+                new FieldInfo { Name = "_name", TypeName = "string", Kind = FieldKind.String },
+                new FieldInfo { Name = "_age", TypeName = "int", Kind = FieldKind.Primitive }
+            ]
+        };
+        var cat = new TypeMetadata
+        {
+            FullName = "MyApp.Cat",
+            Namespace = "MyApp",
+            Name = "Cat",
+            BaseTypeName = "MyApp.Animal",
+            Fields =
+            [
+                new FieldInfo { Name = "_name", TypeName = "string", Kind = FieldKind.String },
+                new FieldInfo { Name = "_age", TypeName = "int", Kind = FieldKind.Primitive },
+                new FieldInfo { Name = "_isIndoor", TypeName = "bool", Kind = FieldKind.Primitive }
+            ]
+        };
+
+        var code = _emitter.GenerateProxyCode(cat, allTypes: [animal, cat]);
+
+        // Cat should extend Animal proxy, not _.System.Object
+        Assert.Contains("class Cat : _.MyApp.Animal", code);
+        // Cat should NOT re-emit inherited fields
+        Assert.DoesNotContain("_name", code);
+        Assert.DoesNotContain("_age", code);
+        // Cat SHOULD have its own field
+        Assert.Contains("public bool _isIndoor", code);
+    }
+
+    [Fact]
+    public void GenerateProxy_BaseType_IsNotSealed()
+    {
+        var animal = new TypeMetadata
+        {
+            FullName = "MyApp.Animal",
+            Namespace = "MyApp",
+            Name = "Animal",
+            Fields =
+            [
+                new FieldInfo { Name = "_name", TypeName = "string", Kind = FieldKind.String }
+            ]
+        };
+        var cat = new TypeMetadata
+        {
+            FullName = "MyApp.Cat",
+            Namespace = "MyApp",
+            Name = "Cat",
+            BaseTypeName = "MyApp.Animal",
+            Fields =
+            [
+                new FieldInfo { Name = "_name", TypeName = "string", Kind = FieldKind.String }
+            ]
+        };
+
+        var animalCode = _emitter.GenerateProxyCode(animal, allTypes: [animal, cat]);
+
+        // Animal should NOT be sealed since Cat extends it
+        Assert.DoesNotContain("sealed", animalCode);
+        Assert.Contains("public class Animal : global::_.System.Object", animalCode);
+    }
+
+    [Fact]
+    public void GenerateProxy_LeafType_IsSealed()
+    {
+        var animal = new TypeMetadata
+        {
+            FullName = "MyApp.Animal",
+            Namespace = "MyApp",
+            Name = "Animal",
+            Fields = []
+        };
+        var cat = new TypeMetadata
+        {
+            FullName = "MyApp.Cat",
+            Namespace = "MyApp",
+            Name = "Cat",
+            BaseTypeName = "MyApp.Animal",
+            Fields = []
+        };
+
+        var catCode = _emitter.GenerateProxyCode(cat, allTypes: [animal, cat]);
+
+        Assert.Contains("public sealed class Cat : _.MyApp.Animal", catCode);
+    }
+
+    [Fact]
+    public void GenerateProxy_DerivedType_HasNewKeywordOnFactories()
+    {
+        var animal = new TypeMetadata
+        {
+            FullName = "MyApp.Animal",
+            Namespace = "MyApp",
+            Name = "Animal",
+            Fields = []
+        };
+        var cat = new TypeMetadata
+        {
+            FullName = "MyApp.Cat",
+            Namespace = "MyApp",
+            Name = "Cat",
+            BaseTypeName = "MyApp.Animal",
+            Fields = []
+        };
+
+        var catCode = _emitter.GenerateProxyCode(cat, allTypes: [animal, cat]);
+
+        Assert.Contains("public static new Cat FromAddress", catCode);
+        Assert.Contains("public static new global::System.Collections.Generic.IEnumerable<Cat> GetInstances", catCode);
+    }
+
+    [Fact]
+    public void GenerateProxy_ArrayField_BaseElementType_UsesResolverWithFallback()
+    {
+        var animal = new TypeMetadata
+        {
+            FullName = "MyApp.Animal",
+            Namespace = "MyApp",
+            Name = "Animal",
+            Fields = []
+        };
+        var cat = new TypeMetadata
+        {
+            FullName = "MyApp.Cat",
+            Namespace = "MyApp",
+            Name = "Cat",
+            BaseTypeName = "MyApp.Animal",
+            Fields = []
+        };
+        var owner = new TypeMetadata
+        {
+            FullName = "MyApp.Owner",
+            Namespace = "MyApp",
+            Name = "Owner",
+            Fields =
+            [
+                new FieldInfo
+                {
+                    Name = "_pets",
+                    TypeName = "MyApp.Animal[]",
+                    Kind = FieldKind.Array,
+                    ArrayElementTypeName = "MyApp.Animal",
+                    ArrayElementKind = FieldKind.ObjectReference
+                }
+            ]
+        };
+
+        var code = _emitter.GenerateProxyCode(owner, allTypes: [animal, cat, owner]);
+
+        Assert.Contains("DumpArray<_.MyApp.Animal?>?", code);
+        // Uses resolver with fallback for base types
+        Assert.Contains("_ctx.ResolveProxy(ea) as _.MyApp.Animal ?? _.MyApp.Animal.FromAddress(ea, _ctx)", code);
+    }
+
+    [Fact]
+    public void GenerateProxy_ArrayField_LeafElementType_UsesDirectFromAddress()
+    {
+        var order = new TypeMetadata
+        {
+            FullName = "MyApp.Order",
+            Namespace = "MyApp",
+            Name = "Order",
+            Fields = []
+        };
+        var owner = new TypeMetadata
+        {
+            FullName = "MyApp.Owner",
+            Namespace = "MyApp",
+            Name = "Owner",
+            Fields =
+            [
+                new FieldInfo
+                {
+                    Name = "_orders",
+                    TypeName = "MyApp.Order[]",
+                    Kind = FieldKind.Array,
+                    ArrayElementTypeName = "MyApp.Order",
+                    ArrayElementKind = FieldKind.ObjectReference
+                }
+            ]
+        };
+
+        var code = _emitter.GenerateProxyCode(owner, allTypes: [order, owner]);
+
+        Assert.Contains("DumpArray<_.MyApp.Order?>?", code);
+        // Leaf types use direct FromAddress (no resolver)
+        Assert.Contains("_.MyApp.Order.FromAddress(ea, _ctx)", code);
+        Assert.DoesNotContain("ResolveProxy", code);
+    }
+
+    [Fact]
+    public void GenerateProxy_ObjectRefField_BaseType_UsesResolverWithFallback()
+    {
+        var animal = new TypeMetadata
+        {
+            FullName = "MyApp.Animal",
+            Namespace = "MyApp",
+            Name = "Animal",
+            Fields = []
+        };
+        var cat = new TypeMetadata
+        {
+            FullName = "MyApp.Cat",
+            Namespace = "MyApp",
+            Name = "Cat",
+            BaseTypeName = "MyApp.Animal",
+            Fields = []
+        };
+        var owner = new TypeMetadata
+        {
+            FullName = "MyApp.Owner",
+            Namespace = "MyApp",
+            Name = "Owner",
+            Fields =
+            [
+                new FieldInfo
+                {
+                    Name = "_pet",
+                    TypeName = "MyApp.Animal",
+                    Kind = FieldKind.ObjectReference,
+                    ReferenceTypeName = "MyApp.Animal"
+                }
+            ]
+        };
+
+        var code = _emitter.GenerateProxyCode(owner, allTypes: [animal, cat, owner]);
+
+        Assert.Contains("_ctx.ResolveProxy(addr) as _.MyApp.Animal ?? _.MyApp.Animal.FromAddress(addr, _ctx)", code);
+    }
+
+    [Fact]
+    public void GenerateProxy_SystemObject_IsRootProxy()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "System.Object",
+            Namespace = "System",
+            Name = "Object",
+            Fields = []
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        Assert.Contains("namespace _.System;", code);
+        Assert.Contains("public class Object", code);
+        // Should declare _objAddress and _ctx fields
+        Assert.Contains("protected readonly ulong _objAddress;", code);
+        Assert.Contains("protected readonly DumpContext _ctx;", code);
+        Assert.Contains("public ulong GetObjAddress() => _objAddress;", code);
+        // Should NOT extend any base class
+        Assert.DoesNotContain(": global::", code);
+        Assert.DoesNotContain("sealed", code);
     }
 
     [Fact]

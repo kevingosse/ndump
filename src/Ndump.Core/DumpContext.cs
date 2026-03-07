@@ -10,6 +10,7 @@ public sealed class DumpContext : IDisposable
 {
     private readonly DataTarget _dataTarget;
     private readonly ClrRuntime _runtime;
+    private readonly Dictionary<string, Func<ulong, DumpContext, object>> _proxyFactories = new();
     private bool _disposed;
 
     public ClrRuntime Runtime => _runtime;
@@ -21,6 +22,27 @@ public sealed class DumpContext : IDisposable
         _runtime = runtime;
     }
 
+    /// <summary>
+    /// Register a factory function that creates a proxy for a given CLR type name.
+    /// Called by DumpProjector after compilation to enable runtime type resolution.
+    /// </summary>
+    public void RegisterProxyFactory(string clrTypeName, Func<ulong, DumpContext, object> factory)
+    {
+        _proxyFactories[clrTypeName] = factory;
+    }
+
+    /// <summary>
+    /// Resolve a heap object to its most-specific proxy type.
+    /// Returns null if no proxy factory is registered for the runtime type.
+    /// </summary>
+    public object? ResolveProxy(ulong address)
+    {
+        var typeName = GetTypeName(address);
+        if (typeName is not null && _proxyFactories.TryGetValue(typeName, out var factory))
+            return factory(address, this);
+        return null;
+    }
+
     public static DumpContext Open(string dumpPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dumpPath);
@@ -30,6 +52,18 @@ public sealed class DumpContext : IDisposable
         var dataTarget = DataTarget.LoadDump(dumpPath);
         var runtime = dataTarget.ClrVersions[0].CreateRuntime();
         return new DumpContext(dataTarget, runtime);
+    }
+
+    /// <summary>
+    /// Get the CLR type name of the object at the given address.
+    /// Returns null if the object is invalid or has no type info.
+    /// </summary>
+    public string? GetTypeName(ulong objAddress)
+    {
+        var obj = Heap.GetObject(objAddress);
+        if (!obj.IsValid || obj.Type is null)
+            return null;
+        return obj.Type.Name;
     }
 
     /// <summary>

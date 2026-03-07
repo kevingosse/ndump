@@ -27,29 +27,36 @@ public sealed class TypeInspector
         {
             if (!obj.IsValid || obj.Type is null) continue;
 
+            // Walk the type and its base types to discover abstract/base types too
             var clrType = obj.Type;
-            if (clrType.Name is null) continue;
-            if (!seen.Add(clrType.Name)) continue;
-            if (ShouldExclude(clrType.Name)) continue;
-            if (clrType.IsArray) continue;
-
-            var fields = new List<FieldInfo>();
-            foreach (var f in clrType.Fields)
+            while (clrType is not null && clrType.Name is not null)
             {
-                fields.Add(MapField(f));
+                if (!seen.Add(clrType.Name) || ShouldExclude(clrType.Name) || clrType.IsArray)
+                {
+                    clrType = clrType.BaseType;
+                    continue;
+                }
+
+                var fields = new List<FieldInfo>();
+                foreach (var f in clrType.Fields)
+                {
+                    fields.Add(MapField(f));
+                }
+
+                var ns = ExtractNamespace(clrType.Name);
+                var name = ExtractTypeName(clrType.Name);
+
+                result.Add(new TypeMetadata
+                {
+                    FullName = clrType.Name,
+                    Namespace = ns,
+                    Name = name,
+                    Fields = fields,
+                    BaseTypeName = clrType.BaseType?.Name
+                });
+
+                clrType = clrType.BaseType;
             }
-
-            var ns = ExtractNamespace(clrType.Name);
-            var name = ExtractTypeName(clrType.Name);
-
-            result.Add(new TypeMetadata
-            {
-                FullName = clrType.Name,
-                Namespace = ns,
-                Name = name,
-                Fields = fields,
-                BaseTypeName = clrType.BaseType?.Name == "System.Object" ? null : clrType.BaseType?.Name
-            });
         }
 
         return result;

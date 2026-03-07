@@ -14,14 +14,24 @@ public sealed class ProxyEmitter
     private HashSet<string> _knownProxyTypes = [];
 
     /// <summary>
+    /// Lookup from full CLR name to TypeMetadata, for resolving base type field lists.
+    /// </summary>
+    private Dictionary<string, TypeMetadata> _typesByName = [];
+
+    /// <summary>
+    /// CLR type names that serve as bases for other known proxy types.
+    /// These must not be sealed so derived proxies can extend them.
+    /// </summary>
+    private HashSet<string> _baseTypes = [];
+
+    /// <summary>
     /// Emit .cs files for all discovered types into the given output directory.
     /// Returns the list of generated file paths.
     /// </summary>
     public IReadOnlyList<string> EmitProxies(IReadOnlyList<TypeMetadata> types, string outputDirectory)
     {
         Directory.CreateDirectory(outputDirectory);
-
-        _knownProxyTypes = new HashSet<string>(types.Select(t => t.FullName));
+        SetupContext(types);
         var files = new List<string>();
 
         foreach (var type in types)
@@ -42,17 +52,38 @@ public sealed class ProxyEmitter
     /// Generate proxy source code for a given type.
     /// Useful for unit testing without writing to disk.
     /// </summary>
-    public string GenerateProxyCode(TypeMetadata type, ISet<string>? knownTypes = null)
+    public string GenerateProxyCode(TypeMetadata type, ISet<string>? knownTypes = null, IReadOnlyList<TypeMetadata>? allTypes = null)
     {
-        _knownProxyTypes = knownTypes is not null
-            ? new HashSet<string>(knownTypes)
-            : new HashSet<string> { type.FullName };
+        if (allTypes is not null)
+        {
+            SetupContext(allTypes);
+        }
+        else
+        {
+            _knownProxyTypes = knownTypes is not null
+                ? new HashSet<string>(knownTypes)
+                : new HashSet<string> { type.FullName };
+            _typesByName = [];
+            _baseTypes = [];
+        }
 
         return GenerateProxy(type);
     }
 
+    private void SetupContext(IReadOnlyList<TypeMetadata> types)
+    {
+        _knownProxyTypes = new HashSet<string>(types.Select(t => t.FullName));
+        _typesByName = types.ToDictionary(t => t.FullName);
+        _baseTypes = new HashSet<string>(
+            types.Where(t => t.BaseTypeName is not null && _knownProxyTypes.Contains(t.BaseTypeName))
+                 .Select(t => t.BaseTypeName!));
+    }
+
     private string GenerateProxy(TypeMetadata type)
     {
+        if (type.FullName == "System.Object")
+            return GenerateSystemObjectProxy(type);
+
         var sb = new StringBuilder();
         sb.AppendLine("using Ndump.Core;");
         sb.AppendLine();
@@ -62,21 +93,32 @@ public sealed class ProxyEmitter
         sb.AppendLine();
 
         var sanitizedName = SanitizeTypeName(type.Name);
-        sb.AppendLine($"public sealed class {sanitizedName}");
-        sb.AppendLine("{");
-        sb.AppendLine("    private readonly ulong _objAddress;");
-        sb.AppendLine("    private readonly DumpContext _ctx;");
-        sb.AppendLine();
-        sb.AppendLine($"    private {sanitizedName}(ulong address, DumpContext ctx)");
-        sb.AppendLine("    {");
-        sb.AppendLine("        _objAddress = address;");
-        sb.AppendLine("        _ctx = ctx;");
-        sb.AppendLine("    }");
 
-        // Properties for each field (deduplicate property names)
+        // Determine base class: use proxy of CLR base type if known, otherwise _.System.Object
+        var hasKnownBase = type.BaseTypeName is not null && _knownProxyTypes.Contains(type.BaseTypeName);
+        var baseClass = hasKnownBase
+            ? GetFullyQualifiedProxyType(type.BaseTypeName!)
+            : "global::_.System.Object";
+
+        // Don't seal types that serve as bases for other proxies
+        var isSealed = !_baseTypes.Contains(type.FullName);
+        var sealedKeyword = isSealed ? "sealed " : "";
+
+        sb.AppendLine($"public {sealedKeyword}class {sanitizedName} : {baseClass}");
+        sb.AppendLine("{");
+        var ctorAccess = isSealed ? "private" : "protected";
+        sb.AppendLine($"    {ctorAccess} {sanitizedName}(ulong address, DumpContext ctx) : base(address, ctx) {{ }}");
+
+        // Collect field names from the base type to skip inherited fields
+        var baseFieldNames = CollectBaseFieldNames(type);
+
+        // Properties for each field (deduplicate property names, skip inherited)
         var usedNames = new HashSet<string> { sanitizedName, "_objAddress", "_ctx" };
         foreach (var field in type.Fields)
         {
+            if (baseFieldNames.Contains(field.Name))
+                continue;
+
             var propName = SanitizePropertyName(field.Name);
             if (!usedNames.Add(propName))
             {
@@ -90,22 +132,19 @@ public sealed class ProxyEmitter
             EmitProperty(sb, type, field);
         }
 
-        // FromAddress factory
+        // FromAddress factory — use 'new' keyword if base also has FromAddress
+        var newKeyword = hasKnownBase ? "new " : "";
         sb.AppendLine();
-        sb.AppendLine($"    public static {sanitizedName} FromAddress(ulong address, DumpContext ctx)");
+        sb.AppendLine($"    public static {newKeyword}{sanitizedName} FromAddress(ulong address, DumpContext ctx)");
         sb.AppendLine($"        => new {sanitizedName}(address, ctx);");
 
         // GetInstances
         sb.AppendLine();
-        sb.AppendLine($"    public static global::System.Collections.Generic.IEnumerable<{sanitizedName}> GetInstances(DumpContext ctx)");
+        sb.AppendLine($"    public static {newKeyword}global::System.Collections.Generic.IEnumerable<{sanitizedName}> GetInstances(DumpContext ctx)");
         sb.AppendLine("    {");
         sb.AppendLine($"        foreach (var addr in ctx.EnumerateInstances(\"{type.FullName}\"))");
         sb.AppendLine($"            yield return new {sanitizedName}(addr, ctx);");
         sb.AppendLine("    }");
-
-        // Address accessor (method to avoid collisions with object fields)
-        sb.AppendLine();
-        sb.AppendLine("    public ulong GetObjAddress() => _objAddress;");
 
         // ToString override
         sb.AppendLine();
@@ -113,6 +152,57 @@ public sealed class ProxyEmitter
 
         sb.AppendLine("}");
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Generate the root System.Object proxy that declares _objAddress, _ctx, and GetObjAddress().
+    /// All other proxies ultimately inherit from this type.
+    /// </summary>
+    private static string GenerateSystemObjectProxy(TypeMetadata type)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("using Ndump.Core;");
+        sb.AppendLine();
+        sb.AppendLine("namespace _.System;");
+        sb.AppendLine();
+        sb.AppendLine("public class Object");
+        sb.AppendLine("{");
+        sb.AppendLine("    protected readonly ulong _objAddress;");
+        sb.AppendLine("    protected readonly DumpContext _ctx;");
+        sb.AppendLine();
+        sb.AppendLine("    protected Object(ulong address, DumpContext ctx)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        _objAddress = address;");
+        sb.AppendLine("        _ctx = ctx;");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    public ulong GetObjAddress() => _objAddress;");
+        sb.AppendLine();
+        sb.AppendLine("    public static Object FromAddress(ulong address, DumpContext ctx)");
+        sb.AppendLine("        => new Object(address, ctx);");
+        sb.AppendLine();
+        sb.AppendLine("    public static global::System.Collections.Generic.IEnumerable<Object> GetInstances(DumpContext ctx)");
+        sb.AppendLine("    {");
+        sb.AppendLine($"        foreach (var addr in ctx.EnumerateInstances(\"{type.FullName}\"))");
+        sb.AppendLine("            yield return new Object(addr, ctx);");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    public override string ToString() => $\"Object@0x{_objAddress:X}\";");
+        sb.AppendLine("}");
+        return sb.ToString();
+    }
+
+    private HashSet<string> CollectBaseFieldNames(TypeMetadata type)
+    {
+        var result = new HashSet<string>();
+        var current = type.BaseTypeName;
+        while (current is not null && _typesByName.TryGetValue(current, out var baseMeta))
+        {
+            foreach (var f in baseMeta.Fields)
+                result.Add(f.Name);
+            current = baseMeta.BaseTypeName;
+        }
+        return result;
     }
 
     private void EmitProperty(StringBuilder sb, TypeMetadata ownerType, FieldInfo field)
@@ -131,23 +221,7 @@ public sealed class ProxyEmitter
                 break;
 
             case FieldKind.ObjectReference:
-                if (field.ReferenceTypeName is not null && _knownProxyTypes.Contains(field.ReferenceTypeName))
-                {
-                    var qualifiedProxyType = GetFullyQualifiedProxyType(field.ReferenceTypeName);
-                    sb.AppendLine($"    public {qualifiedProxyType}? {propName}");
-                    sb.AppendLine("    {");
-                    sb.AppendLine("        get");
-                    sb.AppendLine("        {");
-                    sb.AppendLine($"            var addr = _ctx.GetObjectAddress(_objAddress, \"{ownerType.FullName}\", \"{field.Name}\");");
-                    sb.AppendLine($"            return addr == 0 ? null : {qualifiedProxyType}.FromAddress(addr, _ctx);");
-                    sb.AppendLine("        }");
-                    sb.AppendLine("    }");
-                }
-                else
-                {
-                    // Unknown reference type — expose as address
-                    sb.AppendLine($"    public ulong {propName} => _ctx.GetObjectAddress(_objAddress, \"{ownerType.FullName}\", \"{field.Name}\");");
-                }
+                EmitObjectReferenceProperty(sb, ownerType, field, propName);
                 break;
 
             case FieldKind.Array:
@@ -155,13 +229,42 @@ public sealed class ProxyEmitter
                 break;
 
             case FieldKind.ValueType:
-                // Value types are complex; for now expose as object via GetFieldValue with appropriate struct type
                 sb.AppendLine($"    // ValueType field: {field.Name} ({field.TypeName}) — not yet supported");
                 break;
 
             default:
                 sb.AppendLine($"    // Unknown field: {field.Name} ({field.TypeName})");
                 break;
+        }
+    }
+
+    private static bool IsUsableProxyType(string? typeName, HashSet<string> knownTypes)
+    {
+        return typeName is not null && knownTypes.Contains(typeName);
+    }
+
+    private void EmitObjectReferenceProperty(StringBuilder sb, TypeMetadata ownerType, FieldInfo field, string propName)
+    {
+        if (IsUsableProxyType(field.ReferenceTypeName, _knownProxyTypes))
+        {
+            var qualifiedProxyType = GetFullyQualifiedProxyType(field.ReferenceTypeName!);
+            var isBaseType = _baseTypes.Contains(field.ReferenceTypeName!);
+            sb.AppendLine($"    public {qualifiedProxyType}? {propName}");
+            sb.AppendLine("    {");
+            sb.AppendLine("        get");
+            sb.AppendLine("        {");
+            sb.AppendLine($"            var addr = _ctx.GetObjectAddress(_objAddress, \"{ownerType.FullName}\", \"{field.Name}\");");
+            if (isBaseType)
+                sb.AppendLine($"            return addr == 0 ? null : _ctx.ResolveProxy(addr) as {qualifiedProxyType} ?? {qualifiedProxyType}.FromAddress(addr, _ctx);");
+            else
+                sb.AppendLine($"            return addr == 0 ? null : {qualifiedProxyType}.FromAddress(addr, _ctx);");
+            sb.AppendLine("        }");
+            sb.AppendLine("    }");
+        }
+        else
+        {
+            // Unknown reference type — expose as address
+            sb.AppendLine($"    public ulong {propName} => _ctx.GetObjectAddress(_objAddress, \"{ownerType.FullName}\", \"{field.Name}\");");
         }
     }
 
@@ -187,15 +290,19 @@ public sealed class ProxyEmitter
                 break;
 
             case FieldKind.ObjectReference:
-                if (elementTypeName is not null && _knownProxyTypes.Contains(elementTypeName))
+                if (IsUsableProxyType(elementTypeName, _knownProxyTypes))
                 {
-                    var qualifiedProxy = GetFullyQualifiedProxyType(elementTypeName);
+                    var qualifiedProxy = GetFullyQualifiedProxyType(elementTypeName!);
                     csElementType = $"{qualifiedProxy}?";
-                    readerLambda = $"i => {{ var ea = _ctx.GetArrayElementAddress(addr, i); return ea == 0 ? null : {qualifiedProxy}.FromAddress(ea, _ctx); }}";
+                    var isBaseType = _baseTypes.Contains(elementTypeName!);
+                    if (isBaseType)
+                        readerLambda = $"i => {{ var ea = _ctx.GetArrayElementAddress(addr, i); return ea == 0 ? null : _ctx.ResolveProxy(ea) as {qualifiedProxy} ?? {qualifiedProxy}.FromAddress(ea, _ctx); }}";
+                    else
+                        readerLambda = $"i => {{ var ea = _ctx.GetArrayElementAddress(addr, i); return ea == 0 ? null : {qualifiedProxy}.FromAddress(ea, _ctx); }}";
                 }
                 else
                 {
-                    // Unknown element type — expose addresses
+                    // Unknown element type — expose as address
                     csElementType = "ulong";
                     readerLambda = "i => _ctx.GetArrayElementAddress(addr, i)";
                 }
@@ -247,6 +354,15 @@ public sealed class ProxyEmitter
     internal static string GetProxyNamespace(string originalNamespace)
     {
         return string.IsNullOrEmpty(originalNamespace) ? "_" : $"_.{originalNamespace}";
+    }
+
+    /// <summary>
+    /// Get the fully qualified proxy type name (for reflection/type lookup).
+    /// E.g., TypeMetadata { Namespace = "MyApp", Name = "Customer" } → "_.MyApp.Customer"
+    /// </summary>
+    public static string GetProxyTypeName(TypeMetadata type)
+    {
+        return $"{GetProxyNamespace(type.Namespace)}.{SanitizeTypeName(type.Name)}";
     }
 
     /// <summary>

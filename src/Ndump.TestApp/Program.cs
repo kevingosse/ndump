@@ -43,8 +43,10 @@ public class Customer
     private Order _lastOrder;
     private Address _address;
     private Order[] _orderHistory;
+    private object[] _mixedItems;
+    private Animal[] _pets;
 
-    public Customer(string name, int age, bool isActive, Order lastOrder, Address address, Order[] orderHistory)
+    public Customer(string name, int age, bool isActive, Order lastOrder, Address address, Order[] orderHistory, object[] mixedItems, Animal[] pets)
     {
         _name = name;
         _age = age;
@@ -52,6 +54,41 @@ public class Customer
         _lastOrder = lastOrder;
         _address = address;
         _orderHistory = orderHistory;
+        _mixedItems = mixedItems;
+        _pets = pets;
+    }
+}
+
+// Test inheritance hierarchy with polymorphic arrays
+public abstract class Animal
+{
+    private string _name;
+    private int _age;
+
+    protected Animal(string name, int age)
+    {
+        _name = name;
+        _age = age;
+    }
+}
+
+public class Cat : Animal
+{
+    private bool _isIndoor;
+
+    public Cat(string name, int age, bool isIndoor) : base(name, age)
+    {
+        _isIndoor = isIndoor;
+    }
+}
+
+public class Dog : Animal
+{
+    private string _breed;
+
+    public Dog(string name, int age, string breed) : base(name, age)
+    {
+        _breed = breed;
     }
 }
 
@@ -88,15 +125,23 @@ class Program
         var order2 = new Order(1002, 149.50, "Gadget bulk order");
         var order3 = new Order(1003, 5.00, "Small item");
 
-        var cust1 = new Customer("Alice", 30, true, order1, addr1, [order1, order2]);
-        var cust2 = new Customer("Bob", 45, false, order2, addr2, [order2]);
-        var cust3 = new Customer("Charlie", 28, true, order3, addr1, [order1, order2, order3]);
-
         var tag1 = new Tag("important", 1);
         var tag2 = new Tag("urgent", 2);
 
+        var cat1 = new Cat("Whiskers", 3, true);
+        var cat2 = new Cat("Mittens", 5, false);
+        var dog1 = new Dog("Rex", 4, "German Shepherd");
+        var dog2 = new Dog("Buddy", 2, "Golden Retriever");
+
+        var cust1 = new Customer("Alice", 30, true, order1, addr1, [order1, order2],
+            [order1, addr1, tag1, "hello"], [cat1, dog1]);
+        var cust2 = new Customer("Bob", 45, false, order2, addr2, [order2],
+            [tag2, order2], [dog2]);
+        var cust3 = new Customer("Charlie", 28, true, order3, addr1, [order1, order2, order3],
+            [addr2, "world", order3, tag1, addr1], [cat2, dog1, cat1]);
+
         // Keep references alive so GC doesn't collect them
-        var allObjects = new object[] { addr1, addr2, order1, order2, order3, cust1, cust2, cust3, tag1, tag2 };
+        var allObjects = new object[] { addr1, addr2, order1, order2, order3, cust1, cust2, cust3, tag1, tag2, cat1, cat2, dog1, dog2 };
 
         // Find createdump from the currently executing runtime
         var createdumpPath = FindCreatedump();
