@@ -1,10 +1,9 @@
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 
 namespace Ndump.IntegrationTests;
 
 /// <summary>
-/// Helper to build TestApp, start it, capture a memory dump, and clean up.
+/// Helper to build TestApp, start it (which self-dumps via createdump), and clean up.
 /// </summary>
 public sealed class DumpFixture : IAsyncLifetime
 {
@@ -41,7 +40,10 @@ public sealed class DumpFixture : IAsyncLifetime
             throw new InvalidOperationException($"Failed to publish TestApp: {stderr}");
         }
 
-        // Start TestApp
+        // Determine dump path
+        DumpPath = Path.Combine(Path.GetTempPath(), $"ndump_test_{Guid.NewGuid():N}.dmp");
+
+        // Start TestApp — it will dump itself and exit
         var testAppExe = Path.Combine(_publishDir, "Ndump.TestApp.exe");
         if (!File.Exists(testAppExe))
             testAppExe = Path.Combine(_publishDir, "Ndump.TestApp.dll");
@@ -52,8 +54,8 @@ public sealed class DumpFixture : IAsyncLifetime
             startInfo = new ProcessStartInfo
             {
                 FileName = testAppExe,
+                Arguments = $"\"{DumpPath}\"",
                 RedirectStandardOutput = true,
-                RedirectStandardInput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
@@ -64,9 +66,8 @@ public sealed class DumpFixture : IAsyncLifetime
             startInfo = new ProcessStartInfo
             {
                 FileName = "dotnet",
-                Arguments = testAppExe,
+                Arguments = $"\"{testAppExe}\" \"{DumpPath}\"",
                 RedirectStandardOutput = true,
-                RedirectStandardInput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
@@ -74,37 +75,18 @@ public sealed class DumpFixture : IAsyncLifetime
         }
 
         var testApp = Process.Start(startInfo)!;
+        await testApp.WaitForExitAsync();
 
-        try
+        if (testApp.ExitCode != 0)
         {
-            // Wait for READY signal
-            var readyLine = await testApp.StandardOutput.ReadLineAsync();
-            if (readyLine is null || !readyLine.StartsWith("READY:"))
-                throw new InvalidOperationException($"TestApp did not signal ready. Got: {readyLine}");
-
-            var pid = testApp.Id;
-
-            // Capture dump using MiniDumpWriteDump Win32 API
-            DumpPath = Path.Combine(Path.GetTempPath(), $"ndump_test_{Guid.NewGuid():N}.dmp");
-            WriteMiniDump(pid, DumpPath);
-
-            if (!File.Exists(DumpPath))
-                throw new FileNotFoundException("Dump file was not created", DumpPath);
+            var stderr = await testApp.StandardError.ReadToEndAsync();
+            var stdout = await testApp.StandardOutput.ReadToEndAsync();
+            throw new InvalidOperationException(
+                $"TestApp failed (exit {testApp.ExitCode}). stderr: {stderr} stdout: {stdout}");
         }
-        finally
-        {
-            // Terminate TestApp
-            try
-            {
-                testApp.StandardInput.WriteLine("quit");
-                if (!testApp.WaitForExit(3000))
-                    testApp.Kill();
-            }
-            catch
-            {
-                try { testApp.Kill(); } catch { }
-            }
-        }
+
+        if (!File.Exists(DumpPath))
+            throw new FileNotFoundException("Dump file was not created", DumpPath);
     }
 
     public Task DisposeAsync()
@@ -113,41 +95,6 @@ public sealed class DumpFixture : IAsyncLifetime
         try { if (Directory.Exists(_publishDir)) Directory.Delete(_publishDir, true); } catch { }
         return Task.CompletedTask;
     }
-
-    private static void WriteMiniDump(int pid, string dumpPath)
-    {
-        using var process = Process.GetProcessById(pid);
-        using var fs = new FileStream(dumpPath, FileMode.Create, FileAccess.ReadWrite, FileShare.None);
-
-        // MiniDumpWithFullMemory = 0x00000002
-        const int MiniDumpWithFullMemory = 0x00000002;
-
-        bool success = MiniDumpWriteDump(
-            process.Handle,
-            (uint)pid,
-            fs.SafeFileHandle.DangerousGetHandle(),
-            MiniDumpWithFullMemory,
-            IntPtr.Zero,
-            IntPtr.Zero,
-            IntPtr.Zero);
-
-        if (!success)
-        {
-            var hr = Marshal.GetLastWin32Error();
-            throw new InvalidOperationException(
-                $"MiniDumpWriteDump failed with error code 0x{hr:X8}");
-        }
-    }
-
-    [DllImport("dbghelp.dll", SetLastError = true)]
-    private static extern bool MiniDumpWriteDump(
-        IntPtr hProcess,
-        uint processId,
-        IntPtr hFile,
-        int dumpType,
-        IntPtr exceptionParam,
-        IntPtr userStreamParam,
-        IntPtr callbackParam);
 
     private static string FindSolutionRoot()
     {

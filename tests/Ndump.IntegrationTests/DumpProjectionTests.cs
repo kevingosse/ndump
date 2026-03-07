@@ -235,9 +235,9 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
         var proxy = fromAddress.Invoke(null, [addresses[0], result.Context]);
         Assert.NotNull(proxy);
 
-        var addrProp = tagType.GetProperty("ObjAddress");
+        var addrProp = tagType.GetMethod("GetObjAddress");
         Assert.NotNull(addrProp);
-        Assert.Equal(addresses[0], (ulong)addrProp.GetValue(proxy)!);
+        Assert.Equal(addresses[0], (ulong)addrProp.Invoke(proxy, null)!);
     }
 
     [Fact]

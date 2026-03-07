@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+
 namespace Ndump.TestApp;
 
 // Simple types with various field kinds for testing proxy generation
@@ -65,8 +68,16 @@ public class Tag
 
 class Program
 {
-    static void Main()
+    static int Main(string[] args)
     {
+        if (args.Length < 1)
+        {
+            Console.Error.WriteLine("Usage: Ndump.TestApp <dump-path>");
+            return 1;
+        }
+
+        var dumpPath = args[0];
+
         // Create objects that will be on the heap when the dump is taken
         var addr1 = new Address("123 Main St", "Springfield", 62701);
         var addr2 = new Address("456 Oak Ave", "Shelbyville", 62702);
@@ -85,13 +96,48 @@ class Program
         // Keep references alive so GC doesn't collect them
         var allObjects = new object[] { addr1, addr2, order1, order2, order3, cust1, cust2, cust3, tag1, tag2 };
 
-        Console.WriteLine($"READY:{Environment.ProcessId}");
-        Console.Out.Flush();
+        // Find createdump from the currently executing runtime
+        var createdumpPath = FindCreatedump();
+        if (createdumpPath is null)
+        {
+            Console.Error.WriteLine("Could not find createdump executable in the .NET runtime directory");
+            return 2;
+        }
 
-        // Block until dump is captured
-        Console.ReadLine();
+        // Dump ourselves — createdump without a PID argument dumps its parent process
+        var psi = new ProcessStartInfo
+        {
+            FileName = createdumpPath,
+            Arguments = $"--full --name \"{dumpPath}\"",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        var proc = Process.Start(psi)!;
+        proc.WaitForExit();
+
+        if (proc.ExitCode != 0)
+        {
+            var stderr = proc.StandardError.ReadToEnd();
+            Console.Error.WriteLine($"createdump failed (exit {proc.ExitCode}): {stderr}");
+            return 3;
+        }
+
+        Console.WriteLine($"DUMP:{dumpPath}");
 
         // Use allObjects to prevent optimization
         GC.KeepAlive(allObjects);
+        return 0;
+    }
+
+    static string? FindCreatedump()
+    {
+        // The runtime directory contains createdump(.exe)
+        var runtimeDir = RuntimeEnvironment.GetRuntimeDirectory();
+        var name = OperatingSystem.IsWindows() ? "createdump.exe" : "createdump";
+        var path = Path.Combine(runtimeDir, name);
+        return File.Exists(path) ? path : null;
     }
 }
