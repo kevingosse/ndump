@@ -93,6 +93,7 @@ public sealed class ProxyEmitter
             return GenerateSystemStringProxy(type);
 
         var sb = new StringBuilder();
+        sb.AppendLine("#nullable enable");
         sb.AppendLine("using Ndump.Core;");
         sb.AppendLine();
 
@@ -169,6 +170,7 @@ public sealed class ProxyEmitter
     private static string GenerateSystemObjectProxy(TypeMetadata type)
     {
         var sb = new StringBuilder();
+        sb.AppendLine("#nullable enable");
         sb.AppendLine("using Ndump.Core;");
         sb.AppendLine();
         sb.AppendLine("namespace _.System;");
@@ -206,6 +208,7 @@ public sealed class ProxyEmitter
     private string GenerateSystemStringProxy(TypeMetadata type)
     {
         var sb = new StringBuilder();
+        sb.AppendLine("#nullable enable");
         sb.AppendLine("using Ndump.Core;");
         sb.AppendLine();
         sb.AppendLine("namespace _.System;");
@@ -455,6 +458,7 @@ public sealed class ProxyEmitter
     internal static string GenerateProxyResolver()
     {
         var sb = new StringBuilder();
+        sb.AppendLine("#nullable enable");
         sb.AppendLine("namespace _;");
         sb.AppendLine();
         sb.AppendLine("internal static class ProxyResolver");

@@ -1,0 +1,50 @@
+#nullable enable
+using Ndump.Core;
+
+namespace _.System.IO.Strategies;
+
+public sealed class BufferedFileStreamStrategy : _.System.IO.Strategies.FileStreamStrategy
+{
+    private BufferedFileStreamStrategy(ulong address, DumpContext ctx) : base(address, ctx) { }
+
+    public _.System.IO.Strategies.FileStreamStrategy? _strategy
+    {
+        get
+        {
+            var addr = _ctx.GetObjectAddress(_objAddress, "_strategy");
+            return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.IO.Strategies.FileStreamStrategy ?? _.System.IO.Strategies.FileStreamStrategy.FromAddress(addr, _ctx);
+        }
+    }
+
+    public int _bufferSize => _ctx.GetFieldValue<int>(_objAddress, "_bufferSize");
+
+    public global::Ndump.Core.DumpArray<byte>? _buffer
+    {
+        get
+        {
+            var addr = _ctx.GetObjectAddress(_objAddress, "_buffer");
+            if (addr == 0) return null;
+            var len = _ctx.GetArrayLength(addr);
+            return new global::Ndump.Core.DumpArray<byte>(addr, len, i => _ctx.GetArrayElementValue<byte>(addr, i));
+        }
+    }
+
+    public int _writePos => _ctx.GetFieldValue<int>(_objAddress, "_writePos");
+
+    public int _readPos => _ctx.GetFieldValue<int>(_objAddress, "_readPos");
+
+    public int _readLen => _ctx.GetFieldValue<int>(_objAddress, "_readLen");
+
+    // ValueType field: _lastSyncCompletedReadTask (object) — not yet supported
+
+    public static new BufferedFileStreamStrategy FromAddress(ulong address, DumpContext ctx)
+        => new BufferedFileStreamStrategy(address, ctx);
+
+    public static new global::System.Collections.Generic.IEnumerable<BufferedFileStreamStrategy> GetInstances(DumpContext ctx)
+    {
+        foreach (var addr in ctx.EnumerateInstances("System.IO.Strategies.BufferedFileStreamStrategy"))
+            yield return new BufferedFileStreamStrategy(addr, ctx);
+    }
+
+    public override string ToString() => $"BufferedFileStreamStrategy@0x{_objAddress:X}";
+}

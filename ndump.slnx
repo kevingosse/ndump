@@ -1,13 +1,20 @@
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="regenerate.ps1" />
+    <File Path="regenerate.sh" />
+  </Folder>
   <Folder Name="/src/">
-    <Project Path="src/Ndump.Core/Ndump.Core.csproj" />
     <Project Path="src/Ndump.Cli/Ndump.Cli.csproj" />
+    <Project Path="src/Ndump.Core/Ndump.Core.csproj" />
     <Project Path="src/Ndump.Gui/Ndump.Gui.csproj" />
     <Project Path="src/Ndump.TestApp/Ndump.TestApp.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Ndump.Core.Tests/Ndump.Core.Tests.csproj" />
     <Project Path="tests/Ndump.IntegrationTests/Ndump.IntegrationTests.csproj" />
+  </Folder>
+  <Folder Name="/generated/">
+    <Project Path="generated/Ndump.Generated/Ndump.Generated.csproj" />
   </Folder>
   <Project Path="scratchpad/Scratchpad/Scratchpad.csproj" Id="bfb3f79d-1fcf-4a1c-a938-7f6b97428ef4" />
 </Solution>

@@ -1,0 +1,24 @@
+#nullable enable
+using Ndump.Core;
+
+namespace _.System.Text;
+
+public class UTF8Encoding : _.System.Text.Encoding
+{
+    protected UTF8Encoding(ulong address, DumpContext ctx) : base(address, ctx) { }
+
+    public bool _emitUTF8Identifier => _ctx.GetFieldValue<bool>(_objAddress, "_emitUTF8Identifier");
+
+    public bool _isThrowException => _ctx.GetFieldValue<bool>(_objAddress, "_isThrowException");
+
+    public static new UTF8Encoding FromAddress(ulong address, DumpContext ctx)
+        => new UTF8Encoding(address, ctx);
+
+    public static new global::System.Collections.Generic.IEnumerable<UTF8Encoding> GetInstances(DumpContext ctx)
+    {
+        foreach (var addr in ctx.EnumerateInstances("System.Text.UTF8Encoding"))
+            yield return new UTF8Encoding(addr, ctx);
+    }
+
+    public override string ToString() => $"UTF8Encoding@0x{_objAddress:X}";
+}
