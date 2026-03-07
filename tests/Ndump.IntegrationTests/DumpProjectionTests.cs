@@ -57,6 +57,7 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
         Assert.Contains("_isActive", fieldNames);
         Assert.Contains("_lastOrder", fieldNames);
         Assert.Contains("_address", fieldNames);
+        Assert.Contains("_orderHistory", fieldNames);
     }
 
     [Fact]
@@ -238,6 +239,89 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
         var addrProp = tagType.GetMethod("GetObjAddress");
         Assert.NotNull(addrProp);
         Assert.Equal(addresses[0], (ulong)addrProp.Invoke(proxy, null)!);
+    }
+
+    [Fact]
+    public void TypeInspector_CustomerOrderHistoryIsArray()
+    {
+        using var ctx = DumpContext.Open(_fixture.DumpPath);
+        var inspector = new TypeInspector();
+        var types = inspector.DiscoverTypes(ctx);
+
+        var customer = types.Single(t => t.FullName == "Ndump.TestApp.Customer");
+        var field = customer.Fields.Single(f => f.Name == "_orderHistory");
+
+        Assert.Equal(FieldKind.Array, field.Kind);
+        Assert.Equal("Ndump.TestApp.Order", field.ArrayElementTypeName);
+        Assert.Equal(FieldKind.ObjectReference, field.ArrayElementKind);
+    }
+
+    [Fact]
+    public void Proxies_CanReadArrayField()
+    {
+        var projector = new DumpProjector();
+        using var result = projector.Project(_fixture.DumpPath);
+
+        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
+        var orderType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Order");
+        Assert.NotNull(customerType);
+        Assert.NotNull(orderType);
+
+        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
+        var instances = (getInstances!.Invoke(null, [result.Context]) as IEnumerable)!.Cast<object>().ToList();
+
+        var nameProp = customerType.GetProperty("_name");
+        var historyProp = customerType.GetProperty("_orderHistory");
+        var orderIdProp = orderType.GetProperty("_orderId");
+        Assert.NotNull(nameProp);
+        Assert.NotNull(historyProp);
+        Assert.NotNull(orderIdProp);
+
+        // Find Alice (has [order1, order2])
+        var alice = instances.Single(c => (string?)nameProp.GetValue(c) == "Alice");
+        var aliceHistory = historyProp.GetValue(alice);
+        Assert.NotNull(aliceHistory);
+
+        // DumpArray implements IEnumerable, use it to get elements
+        var aliceOrders = ((IEnumerable)aliceHistory).Cast<object>().ToList();
+        Assert.Equal(2, aliceOrders.Count);
+
+        var aliceOrderIds = aliceOrders.Select(o => (int)orderIdProp.GetValue(o)!).OrderBy(id => id).ToList();
+        Assert.Equal([1001, 1002], aliceOrderIds);
+
+        // Find Charlie (has [order1, order2, order3])
+        var charlie = instances.Single(c => (string?)nameProp.GetValue(c) == "Charlie");
+        var charlieHistory = historyProp.GetValue(charlie);
+        Assert.NotNull(charlieHistory);
+
+        var charlieOrders = ((IEnumerable)charlieHistory).Cast<object>().ToList();
+        Assert.Equal(3, charlieOrders.Count);
+    }
+
+    [Fact]
+    public void Proxies_ArrayField_HasLength()
+    {
+        var projector = new DumpProjector();
+        using var result = projector.Project(_fixture.DumpPath);
+
+        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
+        Assert.NotNull(customerType);
+
+        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
+        var instances = (getInstances!.Invoke(null, [result.Context]) as IEnumerable)!.Cast<object>().ToList();
+
+        var nameProp = customerType.GetProperty("_name");
+        var historyProp = customerType.GetProperty("_orderHistory");
+        Assert.NotNull(nameProp);
+        Assert.NotNull(historyProp);
+
+        // Bob has [order2] — 1 element
+        var bob = instances.Single(c => (string?)nameProp.GetValue(c) == "Bob");
+        var bobHistory = historyProp.GetValue(bob)!;
+
+        var lengthProp = bobHistory.GetType().GetProperty("Length");
+        Assert.NotNull(lengthProp);
+        Assert.Equal(1, (int)lengthProp.GetValue(bobHistory)!);
     }
 
     [Fact]

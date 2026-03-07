@@ -150,6 +150,10 @@ public sealed class ProxyEmitter
                 }
                 break;
 
+            case FieldKind.Array:
+                EmitArrayProperty(sb, ownerType, field, propName);
+                break;
+
             case FieldKind.ValueType:
                 // Value types are complex; for now expose as object via GetFieldValue with appropriate struct type
                 sb.AppendLine($"    // ValueType field: {field.Name} ({field.TypeName}) — not yet supported");
@@ -159,6 +163,81 @@ public sealed class ProxyEmitter
                 sb.AppendLine($"    // Unknown field: {field.Name} ({field.TypeName})");
                 break;
         }
+    }
+
+    private void EmitArrayProperty(StringBuilder sb, TypeMetadata ownerType, FieldInfo field, string propName)
+    {
+        var elementKind = field.ArrayElementKind ?? FieldKind.Unknown;
+        var elementTypeName = field.ArrayElementTypeName;
+
+        // Determine the C# element type and the reader lambda
+        string csElementType;
+        string readerLambda;
+
+        switch (elementKind)
+        {
+            case FieldKind.String:
+                csElementType = "string?";
+                readerLambda = "i => _ctx.GetArrayElementString(addr, i)";
+                break;
+
+            case FieldKind.Primitive:
+                csElementType = MapClrPrimitiveTypeName(elementTypeName);
+                readerLambda = $"i => _ctx.GetArrayElementValue<{csElementType}>(addr, i)";
+                break;
+
+            case FieldKind.ObjectReference:
+                if (elementTypeName is not null && _knownProxyTypes.Contains(elementTypeName))
+                {
+                    var qualifiedProxy = GetFullyQualifiedProxyType(elementTypeName);
+                    csElementType = $"{qualifiedProxy}?";
+                    readerLambda = $"i => {{ var ea = _ctx.GetArrayElementAddress(addr, i); return ea == 0 ? null : {qualifiedProxy}.FromAddress(ea, _ctx); }}";
+                }
+                else
+                {
+                    // Unknown element type — expose addresses
+                    csElementType = "ulong";
+                    readerLambda = "i => _ctx.GetArrayElementAddress(addr, i)";
+                }
+                break;
+
+            default:
+                sb.AppendLine($"    // Array field: {field.Name} ({field.TypeName}) — element type not supported");
+                return;
+        }
+
+        sb.AppendLine($"    public global::Ndump.Core.DumpArray<{csElementType}>? {propName}");
+        sb.AppendLine("    {");
+        sb.AppendLine("        get");
+        sb.AppendLine("        {");
+        sb.AppendLine($"            var addr = _ctx.GetObjectAddress(_objAddress, \"{ownerType.FullName}\", \"{field.Name}\");");
+        sb.AppendLine("            if (addr == 0) return null;");
+        sb.AppendLine($"            var len = _ctx.GetArrayLength(addr);");
+        sb.AppendLine($"            return new global::Ndump.Core.DumpArray<{csElementType}>(addr, len, {readerLambda});");
+        sb.AppendLine("        }");
+        sb.AppendLine("    }");
+    }
+
+    private static string MapClrPrimitiveTypeName(string? clrTypeName)
+    {
+        return clrTypeName switch
+        {
+            "System.Boolean" => "bool",
+            "System.Char" => "char",
+            "System.SByte" => "sbyte",
+            "System.Byte" => "byte",
+            "System.Int16" => "short",
+            "System.UInt16" => "ushort",
+            "System.Int32" => "int",
+            "System.UInt32" => "uint",
+            "System.Int64" => "long",
+            "System.UInt64" => "ulong",
+            "System.Single" => "float",
+            "System.Double" => "double",
+            "System.IntPtr" => "nint",
+            "System.UIntPtr" => "nuint",
+            _ => "int"
+        };
     }
 
     /// <summary>

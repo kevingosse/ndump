@@ -68,6 +68,20 @@ public sealed class TypeInspector
     private static FieldInfo MapField(ClrInstanceField field)
     {
         var kind = ClassifyField(field);
+
+        if (kind == FieldKind.Array && field.Type?.ComponentType is { } componentType)
+        {
+            var elementKind = ClassifyComponentType(componentType);
+            return new FieldInfo
+            {
+                Name = field.Name ?? "<unknown>",
+                TypeName = field.Type.Name ?? "object[]",
+                Kind = kind,
+                ArrayElementTypeName = componentType.Name,
+                ArrayElementKind = elementKind
+            };
+        }
+
         return new FieldInfo
         {
             Name = field.Name ?? "<unknown>",
@@ -82,6 +96,9 @@ public sealed class TypeInspector
         if (field.Type is null)
             return FieldKind.Unknown;
 
+        if (field.Type.IsArray)
+            return FieldKind.Array;
+
         if (field.Type.Name == "System.String")
             return FieldKind.String;
 
@@ -92,6 +109,23 @@ public sealed class TypeInspector
             return FieldKind.Primitive;
 
         if (field.IsValueType)
+            return FieldKind.ValueType;
+
+        return FieldKind.Unknown;
+    }
+
+    private static FieldKind ClassifyComponentType(ClrType componentType)
+    {
+        if (componentType.Name == "System.String")
+            return FieldKind.String;
+
+        if (componentType.IsObjectReference)
+            return FieldKind.ObjectReference;
+
+        if (componentType.IsPrimitive)
+            return FieldKind.Primitive;
+
+        if (componentType.IsValueType)
             return FieldKind.ValueType;
 
         return FieldKind.Unknown;

@@ -91,6 +91,66 @@ public sealed class DumpContext : IDisposable
     }
 
     /// <summary>
+    /// Get the length of an array object at the given address.
+    /// </summary>
+    public int GetArrayLength(ulong arrayAddress)
+    {
+        var obj = Heap.GetObject(arrayAddress);
+        if (!obj.IsValid)
+            throw new InvalidOperationException($"Invalid object at address 0x{arrayAddress:X}");
+        if (obj.Type is null || !obj.Type.IsArray)
+            throw new InvalidOperationException($"Object at 0x{arrayAddress:X} is not an array");
+
+        return obj.AsArray().Length;
+    }
+
+    /// <summary>
+    /// Read the address of a reference-type element in an array.
+    /// Returns 0 if the element is null.
+    /// </summary>
+    public ulong GetArrayElementAddress(ulong arrayAddress, int index)
+    {
+        var obj = Heap.GetObject(arrayAddress);
+        if (!obj.IsValid)
+            throw new InvalidOperationException($"Invalid object at address 0x{arrayAddress:X}");
+
+        var array = obj.AsArray();
+        return array.GetObjectValue(index);
+    }
+
+    /// <summary>
+    /// Read a primitive/value-type element from an array.
+    /// </summary>
+    public T GetArrayElementValue<T>(ulong arrayAddress, int index) where T : unmanaged
+    {
+        var obj = Heap.GetObject(arrayAddress);
+        if (!obj.IsValid)
+            throw new InvalidOperationException($"Invalid object at address 0x{arrayAddress:X}");
+
+        var array = obj.AsArray();
+        // GetStructValue returns a ClrValueType; read the raw value from memory
+        var elementAddress = array.GetStructValue(index).Address;
+        return Runtime.DataTarget.DataReader.Read<T>(elementAddress);
+    }
+
+    /// <summary>
+    /// Read a string element from an array.
+    /// </summary>
+    public string? GetArrayElementString(ulong arrayAddress, int index)
+    {
+        var obj = Heap.GetObject(arrayAddress);
+        if (!obj.IsValid)
+            throw new InvalidOperationException($"Invalid object at address 0x{arrayAddress:X}");
+
+        var array = obj.AsArray();
+        var elemAddr = array.GetObjectValue(index);
+        if (elemAddr == 0) return null;
+
+        var elemObj = Heap.GetObject(elemAddr);
+        return elemObj.IsValid ? elemObj.AsString() : null;
+    }
+
+    /// <summary>
     /// Enumerate all heap objects whose type name matches exactly.
     /// </summary>
     public IEnumerable<ulong> EnumerateInstances(string typeName)

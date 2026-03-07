@@ -13,6 +13,16 @@ public sealed class FieldInfo
     /// For reference types, the full CLR type name (used to resolve to the generated proxy type).
     /// </summary>
     public string? ReferenceTypeName { get; init; }
+
+    /// <summary>
+    /// For array fields, the full CLR type name of the array element.
+    /// </summary>
+    public string? ArrayElementTypeName { get; init; }
+
+    /// <summary>
+    /// For array fields, the kind of the array element.
+    /// </summary>
+    public FieldKind? ArrayElementKind { get; init; }
 }
 
 public enum FieldKind
@@ -21,6 +31,7 @@ public enum FieldKind
     String,
     ObjectReference,
     ValueType,
+    Array,
     Unknown
 }
 

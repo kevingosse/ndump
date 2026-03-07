@@ -42,14 +42,16 @@ public class Customer
     private bool _isActive;
     private Order _lastOrder;
     private Address _address;
+    private Order[] _orderHistory;
 
-    public Customer(string name, int age, bool isActive, Order lastOrder, Address address)
+    public Customer(string name, int age, bool isActive, Order lastOrder, Address address, Order[] orderHistory)
     {
         _name = name;
         _age = age;
         _isActive = isActive;
         _lastOrder = lastOrder;
         _address = address;
+        _orderHistory = orderHistory;
     }
 }
 
@@ -86,9 +88,9 @@ class Program
         var order2 = new Order(1002, 149.50, "Gadget bulk order");
         var order3 = new Order(1003, 5.00, "Small item");
 
-        var cust1 = new Customer("Alice", 30, true, order1, addr1);
-        var cust2 = new Customer("Bob", 45, false, order2, addr2);
-        var cust3 = new Customer("Charlie", 28, true, order3, addr1);
+        var cust1 = new Customer("Alice", 30, true, order1, addr1, [order1, order2]);
+        var cust2 = new Customer("Bob", 45, false, order2, addr2, [order2]);
+        var cust3 = new Customer("Charlie", 28, true, order3, addr1, [order1, order2, order3]);
 
         var tag1 = new Tag("important", 1);
         var tag2 = new Tag("urgent", 2);

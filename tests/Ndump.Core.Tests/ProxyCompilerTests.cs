@@ -196,6 +196,60 @@ public class ProxyCompilerTests
     }
 
     [Fact]
+    public void Compile_ArrayField_KnownElementType_Succeeds()
+    {
+        var emitter = new ProxyEmitter();
+        var knownTypes = new HashSet<string> { "App.Customer", "App.Order" };
+
+        var orderType = new TypeMetadata
+        {
+            FullName = "App.Order",
+            Namespace = "App",
+            Name = "Order",
+            Fields =
+            [
+                new FieldInfo { Name = "_id", TypeName = "int", Kind = FieldKind.Primitive }
+            ]
+        };
+
+        var customerType = new TypeMetadata
+        {
+            FullName = "App.Customer",
+            Namespace = "App",
+            Name = "Customer",
+            Fields =
+            [
+                new FieldInfo { Name = "_name", TypeName = "string", Kind = FieldKind.String },
+                new FieldInfo
+                {
+                    Name = "_orderHistory",
+                    TypeName = "App.Order[]",
+                    Kind = FieldKind.Array,
+                    ArrayElementTypeName = "App.Order",
+                    ArrayElementKind = FieldKind.ObjectReference
+                }
+            ]
+        };
+
+        var orderCode = emitter.GenerateProxyCode(orderType, knownTypes);
+        var customerCode = emitter.GenerateProxyCode(customerType, knownTypes);
+
+        var result = _compiler.CompileFromSource([orderCode, customerCode]);
+
+        Assert.True(result.IsSuccess, string.Join("\n", result.Errors));
+
+        var genCustomer = result.Assembly!.GetType("_.App.Customer");
+        Assert.NotNull(genCustomer);
+
+        var historyProp = genCustomer.GetProperty("_orderHistory");
+        Assert.NotNull(historyProp);
+
+        // Should be DumpArray<Order?>?
+        Assert.True(historyProp.PropertyType.IsGenericType);
+        Assert.Equal(typeof(DumpArray<>), historyProp.PropertyType.GetGenericTypeDefinition());
+    }
+
+    [Fact]
     public void Compile_ToDisk_ProducesFile()
     {
         var source = """

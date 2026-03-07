@@ -308,6 +308,117 @@ public class ProxyEmitterTests
     }
 
     [Fact]
+    public void GenerateProxy_ArrayField_KnownElementType_EmitsDumpArrayProperty()
+    {
+        var knownTypes = new HashSet<string> { "MyApp.Customer", "MyApp.Order" };
+        var type = new TypeMetadata
+        {
+            FullName = "MyApp.Customer",
+            Namespace = "MyApp",
+            Name = "Customer",
+            Fields =
+            [
+                new FieldInfo
+                {
+                    Name = "_orderHistory",
+                    TypeName = "MyApp.Order[]",
+                    Kind = FieldKind.Array,
+                    ArrayElementTypeName = "MyApp.Order",
+                    ArrayElementKind = FieldKind.ObjectReference
+                }
+            ]
+        };
+
+        var code = _emitter.GenerateProxyCode(type, knownTypes);
+
+        Assert.Contains("public global::Ndump.Core.DumpArray<_.MyApp.Order?>? _orderHistory", code);
+        Assert.Contains("_ctx.GetObjectAddress(_objAddress,", code);
+        Assert.Contains("_ctx.GetArrayLength(addr)", code);
+        Assert.Contains("_.MyApp.Order.FromAddress(ea, _ctx)", code);
+    }
+
+    [Fact]
+    public void GenerateProxy_ArrayField_UnknownElementType_EmitsAddressArray()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "MyApp.Customer",
+            Namespace = "MyApp",
+            Name = "Customer",
+            Fields =
+            [
+                new FieldInfo
+                {
+                    Name = "_items",
+                    TypeName = "SomeLib.Widget[]",
+                    Kind = FieldKind.Array,
+                    ArrayElementTypeName = "SomeLib.Widget",
+                    ArrayElementKind = FieldKind.ObjectReference
+                }
+            ]
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        Assert.Contains("public global::Ndump.Core.DumpArray<ulong>? _items", code);
+        Assert.Contains("_ctx.GetArrayElementAddress(addr, i)", code);
+    }
+
+    [Fact]
+    public void GenerateProxy_ArrayField_StringElements_EmitsStringArray()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "MyApp.Foo",
+            Namespace = "MyApp",
+            Name = "Foo",
+            Fields =
+            [
+                new FieldInfo
+                {
+                    Name = "_names",
+                    TypeName = "System.String[]",
+                    Kind = FieldKind.Array,
+                    ArrayElementTypeName = "System.String",
+                    ArrayElementKind = FieldKind.String
+                }
+            ]
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        Assert.Contains("public global::Ndump.Core.DumpArray<string?>? _names", code);
+        Assert.Contains("_ctx.GetArrayElementString(addr, i)", code);
+    }
+
+    [Fact]
+    public void GenerateProxy_ArrayField_PrimitiveElements_EmitsPrimitiveArray()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "MyApp.Foo",
+            Namespace = "MyApp",
+            Name = "Foo",
+            Fields =
+            [
+                new FieldInfo
+                {
+                    Name = "_scores",
+                    TypeName = "System.Int32[]",
+                    Kind = FieldKind.Array,
+                    ArrayElementTypeName = "System.Int32",
+                    ArrayElementKind = FieldKind.Primitive
+                }
+            ]
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        Assert.Contains("public global::Ndump.Core.DumpArray<int>? _scores", code);
+        Assert.Contains("_ctx.GetArrayElementValue<int>(addr, i)", code);
+    }
+
+    [Fact]
     public void GenerateProxy_DuplicateFieldNames_SkipsDuplicates()
     {
         var type = new TypeMetadata
