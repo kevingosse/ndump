@@ -45,4 +45,27 @@ public sealed class TypeMetadata
     public required string Name { get; init; }
     public required IReadOnlyList<FieldInfo> Fields { get; init; }
     public string? BaseTypeName { get; init; }
+
+    /// <summary>
+    /// For generic types, the definition name without type arguments.
+    /// E.g., "Dictionary" for "Dictionary&lt;System.String, System.Object&gt;".
+    /// Null for non-generic types.
+    /// </summary>
+    public string? GenericDefinitionName { get; init; }
+
+    /// <summary>
+    /// For generic types, the fully-qualified definition name including namespace.
+    /// E.g., "System.Collections.Generic.Dictionary" for "System.Collections.Generic.Dictionary&lt;System.String, System.Object&gt;".
+    /// Null for non-generic types.
+    /// </summary>
+    public string? GenericDefinitionFullName { get; init; }
+
+    /// <summary>
+    /// For generic types, the ordered list of type argument CLR names.
+    /// E.g., ["System.String", "System.Object"] for Dictionary&lt;System.String, System.Object&gt;.
+    /// Empty for non-generic types.
+    /// </summary>
+    public IReadOnlyList<string> GenericTypeArguments { get; init; } = [];
+
+    public bool IsGenericInstance => GenericDefinitionName is not null;
 }

@@ -1029,4 +1029,227 @@ public class ProxyEmitterTests
 
         Assert.Equal("_.Interop+Kernel32+ProcessWaitHandle", ProxyEmitter.GetProxyTypeName(type));
     }
+
+    [Fact]
+    public void GenerateProxy_GenericType_EmitsGenericClass()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "System.Collections.Generic.List<System.String>",
+            Namespace = "System.Collections.Generic",
+            Name = "List<System.String>",
+            Fields =
+            [
+                new FieldInfo { Name = "_size", TypeName = "int", Kind = FieldKind.Primitive }
+            ],
+            GenericDefinitionName = "List",
+            GenericDefinitionFullName = "System.Collections.Generic.List",
+            GenericTypeArguments = ["System.String"]
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        Assert.Contains("namespace _.System.Collections.Generic;", code);
+        Assert.Contains("public sealed class List<T> : global::_.System.Object", code);
+        Assert.Contains("private List(ulong address, DumpContext ctx) : base(address, ctx) { }", code);
+        Assert.Contains("public static new List<T> FromAddress(ulong address, DumpContext ctx)", code);
+        Assert.Contains("public int _size => Field<int>();", code);
+    }
+
+    [Fact]
+    public void GenerateProxy_GenericType_SubstitutesTypeArgForObjectRef()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "MyApp.Wrapper<MyApp.Order>",
+            Namespace = "MyApp",
+            Name = "Wrapper<MyApp.Order>",
+            Fields =
+            [
+                new FieldInfo
+                {
+                    Name = "_value",
+                    TypeName = "MyApp.Order",
+                    Kind = FieldKind.ObjectReference,
+                    ReferenceTypeName = "MyApp.Order"
+                },
+                new FieldInfo { Name = "_count", TypeName = "int", Kind = FieldKind.Primitive }
+            ],
+            GenericDefinitionName = "Wrapper",
+            GenericDefinitionFullName = "MyApp.Wrapper",
+            GenericTypeArguments = ["MyApp.Order"]
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        Assert.Contains("public sealed class Wrapper<T> : global::_.System.Object", code);
+        // _value type matches type arg MyApp.Order → substituted with T
+        Assert.Contains("public T? _value => Field<T>();", code);
+        // _count is not a type arg → stays as int
+        Assert.Contains("public int _count => Field<int>();", code);
+    }
+
+    [Fact]
+    public void GenerateProxy_GenericType_MultipleTypeArgs()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "System.Collections.Generic.Dictionary<System.String, System.Object>",
+            Namespace = "System.Collections.Generic",
+            Name = "Dictionary<System.String, System.Object>",
+            Fields =
+            [
+                new FieldInfo { Name = "_count", TypeName = "int", Kind = FieldKind.Primitive }
+            ],
+            GenericDefinitionName = "Dictionary",
+            GenericDefinitionFullName = "System.Collections.Generic.Dictionary",
+            GenericTypeArguments = ["System.String", "System.Object"]
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        Assert.Contains("public sealed class Dictionary<T1, T2> : global::_.System.Object", code);
+        Assert.Contains("public static new Dictionary<T1, T2> FromAddress", code);
+    }
+
+    [Fact]
+    public void GenerateProxy_GenericType_ArrayFieldSubstitutesTypeArg()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "System.Collections.Generic.List<MyApp.Order>",
+            Namespace = "System.Collections.Generic",
+            Name = "List<MyApp.Order>",
+            Fields =
+            [
+                new FieldInfo
+                {
+                    Name = "_items",
+                    TypeName = "MyApp.Order[]",
+                    Kind = FieldKind.Array,
+                    ArrayElementTypeName = "MyApp.Order",
+                    ArrayElementKind = FieldKind.ObjectReference
+                },
+                new FieldInfo { Name = "_size", TypeName = "int", Kind = FieldKind.Primitive }
+            ],
+            GenericDefinitionName = "List",
+            GenericDefinitionFullName = "System.Collections.Generic.List",
+            GenericTypeArguments = ["MyApp.Order"]
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        Assert.Contains("public sealed class List<T> : global::_.System.Object", code);
+        // Array element type matches type arg → DumpArray<T>
+        Assert.Contains("DumpArray<T>?", code);
+        Assert.Contains("ReadArrayElement<T>(addr, i)", code);
+    }
+
+    [Fact]
+    public void GenerateProxy_GenericType_StringTypeArgSubstituted()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "MyApp.Box<System.String>",
+            Namespace = "MyApp",
+            Name = "Box<System.String>",
+            Fields =
+            [
+                new FieldInfo { Name = "_value", TypeName = "string", Kind = FieldKind.String }
+            ],
+            GenericDefinitionName = "Box",
+            GenericDefinitionFullName = "MyApp.Box",
+            GenericTypeArguments = ["System.String"]
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        Assert.Contains("public sealed class Box<T> : global::_.System.Object", code);
+        // _value is a String field and System.String is the type arg → T
+        Assert.Contains("public T _value => Field<T>();", code);
+    }
+
+    [Fact]
+    public void GetProxyTypeName_GenericType_UsesBacktickNotation()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "System.Collections.Generic.Dictionary<System.String, System.Object>",
+            Namespace = "System.Collections.Generic",
+            Name = "Dictionary<System.String, System.Object>",
+            Fields = [],
+            GenericDefinitionName = "Dictionary",
+            GenericDefinitionFullName = "System.Collections.Generic.Dictionary",
+            GenericTypeArguments = ["System.String", "System.Object"]
+        };
+
+        Assert.Equal("_.System.Collections.Generic.Dictionary`2", ProxyEmitter.GetProxyTypeName(type));
+    }
+
+    [Fact]
+    public void GenerateProxy_ReferenceToGenericType_EmitsGenericProxyType()
+    {
+        var listType = new TypeMetadata
+        {
+            FullName = "System.Collections.Generic.List<MyApp.Order>",
+            Namespace = "System.Collections.Generic",
+            Name = "List<MyApp.Order>",
+            Fields = [],
+            GenericDefinitionName = "List",
+            GenericDefinitionFullName = "System.Collections.Generic.List",
+            GenericTypeArguments = ["MyApp.Order"]
+        };
+        var order = new TypeMetadata
+        {
+            FullName = "MyApp.Order",
+            Namespace = "MyApp",
+            Name = "Order",
+            Fields = []
+        };
+        var owner = new TypeMetadata
+        {
+            FullName = "MyApp.Customer",
+            Namespace = "MyApp",
+            Name = "Customer",
+            Fields =
+            [
+                new FieldInfo
+                {
+                    Name = "_orders",
+                    TypeName = "System.Collections.Generic.List<MyApp.Order>",
+                    Kind = FieldKind.ObjectReference,
+                    ReferenceTypeName = "System.Collections.Generic.List<MyApp.Order>"
+                }
+            ]
+        };
+
+        var code = _emitter.GenerateProxyCode(owner, allTypes: [listType, order, owner]);
+
+        // Reference to a generic proxy should use proper generic syntax
+        Assert.Contains("_.System.Collections.Generic.List<_.MyApp.Order>", code);
+    }
+
+    [Fact]
+    public void ParseGenericName_SimpleGeneric_ExtractsDefinitionAndArgs()
+    {
+        var (def, args) = TypeInspector.ParseGenericName("Dictionary<System.String, System.Object>");
+        Assert.Equal("Dictionary", def);
+        Assert.Equal(["System.String", "System.Object"], args);
+    }
+
+    [Fact]
+    public void ParseGenericName_NestedGeneric_PreservesInnerGeneric()
+    {
+        var (def, args) = TypeInspector.ParseGenericName("List<Func<EventSource>>");
+        Assert.Equal("List", def);
+        Assert.Equal(["Func<EventSource>"], args);
+    }
+
+    [Fact]
+    public void ParseGenericName_NonGeneric_ReturnsNull()
+    {
+        var (def, args) = TypeInspector.ParseGenericName("Customer");
+        Assert.Null(def);
+        Assert.Empty(args);
+    }
 }

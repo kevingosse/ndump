@@ -31,6 +31,17 @@ public sealed class ProxyEmitter
     private HashSet<string> _nestingContainerTypes = [];
 
     /// <summary>
+    /// Fully-qualified generic definition names that have proxy classes.
+    /// E.g., "System.Collections.Generic.Dictionary" for Dictionary&lt;TKey, TValue&gt;.
+    /// </summary>
+    private HashSet<string> _knownGenericDefinitions = [];
+
+    /// <summary>
+    /// Maps generic definition full name to the first specialization (used as template for field layout).
+    /// </summary>
+    private Dictionary<string, TypeMetadata> _genericRepresentatives = [];
+
+    /// <summary>
     /// Emit .cs files for all discovered types into the given output directory.
     /// Returns the list of generated file paths.
     /// </summary>
@@ -39,13 +50,29 @@ public sealed class ProxyEmitter
         Directory.CreateDirectory(outputDirectory);
         SetupContext(types);
         var files = new List<string>();
+        var emittedGenericDefs = new HashSet<string>();
 
         foreach (var type in types)
         {
-            var code = GenerateProxy(type);
+            string code;
+            string safeName;
+
+            if (type.IsGenericInstance)
+            {
+                // Emit one generic proxy per definition, skip subsequent specializations
+                if (!emittedGenericDefs.Add(type.GenericDefinitionFullName!))
+                    continue;
+                code = GenerateGenericProxy(type);
+                safeName = type.GenericDefinitionName! + $"_{type.GenericTypeArguments.Count}";
+            }
+            else
+            {
+                code = GenerateProxy(type);
+                safeName = SanitizeTypeName(type.Name);
+            }
+
             // Include namespace in the filename to avoid collisions
             var nsPrefix = string.IsNullOrEmpty(type.Namespace) ? "" : type.Namespace.Replace('.', '_') + "_";
-            var safeName = SanitizeTypeName(type.Name);
             var filePath = Path.Combine(outputDirectory, $"{nsPrefix}{safeName}.g.cs");
             File.WriteAllText(filePath, code);
             files.Add(filePath);
@@ -72,19 +99,42 @@ public sealed class ProxyEmitter
         else
         {
             _knownProxyTypes = knownTypes is not null
-                ? new HashSet<string>(knownTypes)
-                : new HashSet<string> { type.FullName };
+                ? new HashSet<string>(knownTypes.Where(n => !n.Contains('<')))
+                : type.IsGenericInstance ? [] : new HashSet<string> { type.FullName };
             _typesByName = [];
             _baseTypes = [];
             _nestingContainerTypes = [];
+            _knownGenericDefinitions = [];
+            _genericRepresentatives = [];
+
+            // If the type itself is generic, set up its definition as known
+            if (type.IsGenericInstance)
+            {
+                _knownGenericDefinitions.Add(type.GenericDefinitionFullName!);
+                _genericRepresentatives[type.GenericDefinitionFullName!] = type;
+            }
+
+            // Also check knownTypes for generic definitions
+            if (knownTypes is not null)
+            {
+                foreach (var name in knownTypes)
+                {
+                    var genDef = ExtractGenericDefinitionFullName(name);
+                    if (genDef is not null)
+                        _knownGenericDefinitions.Add(genDef);
+                }
+            }
         }
+
+        if (type.IsGenericInstance)
+            return GenerateGenericProxy(type);
 
         return GenerateProxy(type);
     }
 
     private void SetupContext(IReadOnlyList<TypeMetadata> types)
     {
-        _knownProxyTypes = new HashSet<string>(types.Select(t => t.FullName));
+        _knownProxyTypes = new HashSet<string>(types.Where(t => !t.IsGenericInstance).Select(t => t.FullName));
         _typesByName = types.ToDictionary(t => t.FullName);
         _baseTypes = new HashSet<string>(
             types.Where(t => t.BaseTypeName is not null && _knownProxyTypes.Contains(t.BaseTypeName))
@@ -104,6 +154,15 @@ public sealed class ProxyEmitter
                 if (_knownProxyTypes.Contains(outerFullName))
                     _nestingContainerTypes.Add(outerFullName);
             }
+        }
+
+        // Group generic types by definition and pick a representative for each
+        _knownGenericDefinitions = [];
+        _genericRepresentatives = [];
+        foreach (var group in types.Where(t => t.IsGenericInstance).GroupBy(t => t.GenericDefinitionFullName!))
+        {
+            _knownGenericDefinitions.Add(group.Key);
+            _genericRepresentatives[group.Key] = group.First();
         }
     }
 
@@ -228,6 +287,165 @@ public sealed class ProxyEmitter
     }
 
     /// <summary>
+    /// Generate a generic proxy class for a generic type definition.
+    /// Uses the given specialization as a template for field layout.
+    /// </summary>
+    private string GenerateGenericProxy(TypeMetadata representative)
+    {
+        var typeArgs = representative.GenericTypeArguments;
+        var arity = typeArgs.Count;
+
+        // Build type parameter names and mapping from CLR type arg → param name
+        var typeParamNames = arity == 1
+            ? ["T"]
+            : Enumerable.Range(1, arity).Select(i => $"T{i}").ToArray();
+
+        var typeArgMap = new Dictionary<string, string>();
+        for (int i = 0; i < arity; i++)
+            typeArgMap[typeArgs[i]] = typeParamNames[i];
+
+        var defName = representative.GenericDefinitionName!;
+        var typeParamList = string.Join(", ", typeParamNames);
+        var classNameWithParams = $"{defName}<{typeParamList}>";
+
+        var baseClass = "global::_.System.Object";
+
+        var body = new StringBuilder();
+        body.AppendLine($"public sealed class {classNameWithParams} : {baseClass}");
+        body.AppendLine("{");
+        body.AppendLine($"    private {defName}(ulong address, DumpContext ctx) : base(address, ctx) {{ }}");
+
+        // Properties for each field, substituting type parameters where they match
+        var usedNames = new HashSet<string> { defName, "_objAddress", "_ctx" };
+        foreach (var field in representative.Fields)
+        {
+            var propName = SanitizePropertyName(field.Name);
+            if (!usedNames.Add(propName))
+            {
+                body.AppendLine();
+                body.AppendLine($"    // Duplicate field skipped: {field.Name} ({field.TypeName})");
+                continue;
+            }
+
+            body.AppendLine();
+            EmitGenericProperty(body, field, typeArgMap);
+        }
+
+        // FromAddress factory
+        body.AppendLine();
+        body.AppendLine($"    public static new {classNameWithParams} FromAddress(ulong address, DumpContext ctx)");
+        body.AppendLine($"        => new {classNameWithParams}(address, ctx);");
+
+        // ToString override
+        body.AppendLine();
+        body.AppendLine($"    public override string ToString() => $\"{defName}@0x{{_objAddress:X}}\";");
+
+        body.AppendLine("}");
+
+        // Build the final output
+        var sb = new StringBuilder();
+        sb.AppendLine("#nullable enable");
+        sb.AppendLine("using Ndump.Core;");
+        sb.AppendLine();
+
+        var proxyNamespace = GetProxyNamespace(representative.Namespace);
+        sb.AppendLine($"namespace {proxyNamespace};");
+        sb.AppendLine();
+        sb.Append(body);
+
+        return sb.ToString();
+    }
+
+    private void EmitGenericProperty(StringBuilder sb, FieldInfo field, Dictionary<string, string> typeArgMap)
+    {
+        var propName = SanitizePropertyName(field.Name);
+
+        // Check if the field's type matches a type argument
+        switch (field.Kind)
+        {
+            case FieldKind.String:
+                // Check if System.String is itself a type arg
+                if (typeArgMap.TryGetValue("System.String", out var strParam))
+                {
+                    if (propName == field.Name)
+                        sb.AppendLine($"    public {strParam} {propName} => Field<{strParam}>();");
+                    else
+                        sb.AppendLine($"    public {strParam} {propName} => Field<{strParam}>(\"{field.Name}\");");
+                }
+                else
+                {
+                    if (propName == field.Name)
+                        sb.AppendLine($"    public string? {propName} => Field<string>();");
+                    else
+                        sb.AppendLine($"    public string? {propName} => Field<string>(\"{field.Name}\");");
+                }
+                break;
+
+            case FieldKind.Primitive:
+                var csType = field.TypeName;
+                if (propName == field.Name)
+                    sb.AppendLine($"    public {csType} {propName} => Field<{csType}>();");
+                else
+                    sb.AppendLine($"    public {csType} {propName} => Field<{csType}>(\"{field.Name}\");");
+                break;
+
+            case FieldKind.ObjectReference:
+                if (field.ReferenceTypeName is not null && typeArgMap.TryGetValue(field.ReferenceTypeName, out var refParam))
+                {
+                    // Field type matches a type parameter
+                    if (propName == field.Name)
+                        sb.AppendLine($"    public {refParam}? {propName} => Field<{refParam}>();");
+                    else
+                        sb.AppendLine($"    public {refParam}? {propName} => Field<{refParam}>(\"{field.Name}\");");
+                }
+                else
+                {
+                    EmitObjectReferenceProperty(sb, null!, field, propName);
+                }
+                break;
+
+            case FieldKind.Array:
+                EmitGenericArrayProperty(sb, field, propName, typeArgMap);
+                break;
+
+            case FieldKind.ValueType:
+                sb.AppendLine($"    // ValueType field: {field.Name} ({field.TypeName}) — not yet supported");
+                break;
+
+            default:
+                sb.AppendLine($"    // Unknown field: {field.Name} ({field.TypeName})");
+                break;
+        }
+    }
+
+    private void EmitGenericArrayProperty(StringBuilder sb, FieldInfo field, string propName, Dictionary<string, string> typeArgMap)
+    {
+        var elementKind = field.ArrayElementKind ?? FieldKind.Unknown;
+        var elementTypeName = field.ArrayElementTypeName;
+
+        // Check if the element type matches a type argument
+        if (elementTypeName is not null && typeArgMap.TryGetValue(elementTypeName, out var elemParam))
+        {
+            // Generic array element — use ReadArrayElement<T>
+            var arrayAddrExpr = propName == field.Name ? "RefAddress()" : $"RefAddress(\"{field.Name}\")";
+            sb.AppendLine($"    public global::Ndump.Core.DumpArray<{elemParam}>? {propName}");
+            sb.AppendLine("    {");
+            sb.AppendLine("        get");
+            sb.AppendLine("        {");
+            sb.AppendLine($"            var addr = {arrayAddrExpr};");
+            sb.AppendLine("            if (addr == 0) return null;");
+            sb.AppendLine("            var len = _ctx.GetArrayLength(addr);");
+            sb.AppendLine($"            return new global::Ndump.Core.DumpArray<{elemParam}>(addr, len, i => ReadArrayElement<{elemParam}>(addr, i));");
+            sb.AppendLine("        }");
+            sb.AppendLine("    }");
+            return;
+        }
+
+        // Not a type argument — fall back to normal array emission
+        EmitArrayProperty(sb, null!, field, propName);
+    }
+
+    /// <summary>
     /// Generate the root System.Object proxy that declares _objAddress, _ctx, and GetObjAddress().
     /// All other proxies ultimately inherit from this type.
     /// </summary>
@@ -270,6 +488,20 @@ public sealed class ProxyEmitter
         sb.AppendLine();
         sb.AppendLine("    protected ulong RefAddress([CallerMemberName] string fieldName = \"\")");
         sb.AppendLine("        => _ctx.GetObjectAddress(_objAddress, fieldName);");
+        sb.AppendLine();
+        sb.AppendLine("    protected T ReadArrayElement<T>(ulong arrayAddr, int index)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        if (typeof(T) == typeof(string))");
+        sb.AppendLine("            return (T)(object)_ctx.GetArrayElementString(arrayAddr, index)!;");
+        sb.AppendLine("        if (!typeof(T).IsValueType)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            var addr = _ctx.GetArrayElementAddress(arrayAddr, index);");
+        sb.AppendLine("            if (addr == 0) return default!;");
+        sb.AppendLine("            return (T)CreateProxy(typeof(T), addr, _ctx);");
+        sb.AppendLine("        }");
+        sb.AppendLine("        return _ctx.GetArrayElementValue<T>(arrayAddr, index);");
+        sb.AppendLine("    }");
+
         sb.AppendLine();
         sb.AppendLine("    private static object CreateProxy(global::System.Type proxyType, ulong address, DumpContext ctx)");
         sb.AppendLine("    {");
@@ -386,14 +618,48 @@ public sealed class ProxyEmitter
         }
     }
 
-    private static bool IsUsableProxyType(string? typeName, HashSet<string> knownTypes)
+    private bool IsUsableProxyType(string? typeName)
     {
-        return typeName is not null && knownTypes.Contains(typeName);
+        if (typeName is null) return false;
+        if (_knownProxyTypes.Contains(typeName)) return true;
+        // Check if it's a generic specialization whose definition is known
+        var genDef = ExtractGenericDefinitionFullName(typeName);
+        return genDef is not null && _knownGenericDefinitions.Contains(genDef);
+    }
+
+    /// <summary>
+    /// Extract the fully-qualified generic definition name from a CLR type name.
+    /// E.g., "System.Collections.Generic.List&lt;System.String&gt;" → "System.Collections.Generic.List"
+    /// Returns null for non-generic names or compiler-generated &lt;&gt; patterns.
+    /// </summary>
+    private static string? ExtractGenericDefinitionFullName(string fullTypeName)
+    {
+        // Find the leaf's generic < (same logic as TypeInspector.FindGenericAngleInFullName)
+        int d = 0;
+        int lastPlus = -1;
+        for (int i = 0; i < fullTypeName.Length; i++)
+        {
+            if (fullTypeName[i] == '<') d++;
+            else if (fullTypeName[i] == '>') d--;
+            else if (fullTypeName[i] == '+' && d == 0) lastPlus = i;
+        }
+
+        var searchStart = lastPlus + 1;
+        for (int i = searchStart; i < fullTypeName.Length; i++)
+        {
+            if (fullTypeName[i] == '<')
+            {
+                if (i == searchStart) return null; // compiler name
+                if (i + 1 < fullTypeName.Length && fullTypeName[i + 1] == '>') return null; // <>
+                return fullTypeName[..i];
+            }
+        }
+        return null;
     }
 
     private void EmitObjectReferenceProperty(StringBuilder sb, TypeMetadata ownerType, FieldInfo field, string propName)
     {
-        if (IsUsableProxyType(field.ReferenceTypeName, _knownProxyTypes))
+        if (IsUsableProxyType(field.ReferenceTypeName))
         {
             var qualifiedProxyType = GetFullyQualifiedProxyType(field.ReferenceTypeName!);
             if (propName == field.Name)
@@ -433,7 +699,7 @@ public sealed class ProxyEmitter
                 break;
 
             case FieldKind.ObjectReference:
-                if (IsUsableProxyType(elementTypeName, _knownProxyTypes))
+                if (IsUsableProxyType(elementTypeName))
                 {
                     var qualifiedProxy = GetFullyQualifiedProxyType(elementTypeName!);
                     csElementType = $"{qualifiedProxy}?";
@@ -506,6 +772,14 @@ public sealed class ProxyEmitter
     /// </summary>
     public static string GetProxyTypeName(TypeMetadata type)
     {
+        // For generic types, use backtick notation for CLR reflection
+        // E.g., "Dictionary<System.String, System.Object>" → "_.System.Collections.Generic.Dictionary`2"
+        if (type.IsGenericInstance)
+        {
+            var ns = GetProxyNamespace(type.Namespace);
+            return $"{ns}.{type.GenericDefinitionName}`{type.GenericTypeArguments.Count}";
+        }
+
         // Split on nesting separators (+) outside generics, sanitize each part,
         // and rejoin with + (CLR nested type separator for Assembly.GetType)
         var parts = SplitNestingParts(type.Name);
@@ -516,8 +790,22 @@ public sealed class ProxyEmitter
     /// <summary>
     /// Get the fully qualified proxy type name for a given CLR full type name.
     /// E.g., "MyApp.Customer" → "_.MyApp.Customer"
+    /// For generic types with known definitions: "System.Collections.Generic.List&lt;System.String&gt;"
+    /// → "_.System.Collections.Generic.List&lt;string&gt;"
     /// </summary>
-    private static string GetFullyQualifiedProxyType(string fullTypeName)
+    private string GetFullyQualifiedProxyType(string fullTypeName)
+    {
+        // Check if this is a generic type with a known generic definition
+        var genDef = ExtractGenericDefinitionFullName(fullTypeName);
+        if (genDef is not null && _knownGenericDefinitions.Contains(genDef))
+        {
+            return GetFullyQualifiedGenericProxyType(fullTypeName, genDef);
+        }
+
+        return GetFullyQualifiedNonGenericProxyType(fullTypeName);
+    }
+
+    private static string GetFullyQualifiedNonGenericProxyType(string fullTypeName)
     {
         // Find split point before any generic markers (<, `, [)
         var genericStart = fullTypeName.Length;
@@ -538,6 +826,51 @@ public sealed class ProxyEmitter
             return $"_.{ns}.{SanitizeTypeNameForSource(name)}";
         }
         return $"_.{SanitizeTypeNameForSource(fullTypeName)}";
+    }
+
+    private string GetFullyQualifiedGenericProxyType(string fullTypeName, string genDef)
+    {
+        // Parse the type arguments
+        var (_, typeArgs) = TypeInspector.ParseGenericName(fullTypeName);
+        // Extract the generic def short name (after last dot)
+        var lastDot = genDef.LastIndexOf('.');
+        var ns = lastDot > 0 ? genDef[..lastDot] : "";
+        var defName = lastDot > 0 ? genDef[(lastDot + 1)..] : genDef;
+        var proxyNs = GetProxyNamespace(ns);
+
+        // Map each type argument to its proxy representation
+        var mappedArgs = typeArgs.Select(MapClrTypeToProxyTypeArg);
+        return $"{proxyNs}.{defName}<{string.Join(", ", mappedArgs)}>";
+    }
+
+    /// <summary>
+    /// Map a CLR type argument name to the corresponding C# type for use as a generic argument.
+    /// </summary>
+    private string MapClrTypeToProxyTypeArg(string clrTypeName)
+    {
+        // Check for string
+        if (clrTypeName == "System.String") return "string";
+
+        // Check for known primitive types
+        var primitive = MapClrPrimitiveTypeName(clrTypeName);
+        if (primitive != "int" || clrTypeName == "System.Int32") return primitive;
+
+        // Check if it's a known proxy type (non-generic)
+        if (_knownProxyTypes.Contains(clrTypeName))
+            return GetFullyQualifiedNonGenericProxyType(clrTypeName);
+
+        // Check if it's a generic specialization with a known definition (recursive)
+        var genDef = ExtractGenericDefinitionFullName(clrTypeName);
+        if (genDef is not null && _knownGenericDefinitions.Contains(genDef))
+            return GetFullyQualifiedGenericProxyType(clrTypeName, genDef);
+
+        // If the name has no dot, it's likely an open generic parameter (e.g., "T1", "TKey")
+        // from ClrMD reporting unresolved type params. Fall back to object.
+        if (!clrTypeName.Contains('.'))
+            return "object";
+
+        // Fallback: use the real CLR type with global prefix
+        return $"global::{clrTypeName}";
     }
 
     /// <summary>
@@ -610,8 +943,7 @@ public sealed class ProxyEmitter
         sb.AppendLine();
         sb.AppendLine("        var factory = _cache.GetOrAdd(typeName, static name =>");
         sb.AppendLine("        {");
-        sb.AppendLine("            var proxyTypeName = MapToProxyTypeName(name);");
-        sb.AppendLine("            var proxyType = typeof(ProxyResolver).Assembly.GetType(proxyTypeName);");
+        sb.AppendLine("            var proxyType = ResolveProxyType(name);");
         sb.AppendLine("            if (proxyType is null) return null;");
         sb.AppendLine();
         sb.AppendLine("            var method = proxyType.GetMethod(\"FromAddress\", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static);");
@@ -621,6 +953,96 @@ public sealed class ProxyEmitter
         sb.AppendLine("        });");
         sb.AppendLine();
         sb.AppendLine("        return factory?.Invoke(address, ctx);");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    private static global::System.Type? ResolveProxyType(string clrTypeName)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        var asm = typeof(ProxyResolver).Assembly;");
+        sb.AppendLine();
+        sb.AppendLine("        // Try non-generic lookup first");
+        sb.AppendLine("        var proxyTypeName = MapToProxyTypeName(clrTypeName);");
+        sb.AppendLine("        var proxyType = asm.GetType(proxyTypeName);");
+        sb.AppendLine("        if (proxyType is not null) return proxyType;");
+        sb.AppendLine();
+        sb.AppendLine("        // Try generic lookup: parse type args and construct closed generic");
+        sb.AppendLine("        var firstAngle = clrTypeName.IndexOf('<');");
+        sb.AppendLine("        if (firstAngle < 0) return null;");
+        sb.AppendLine();
+        sb.AppendLine("        var typeArgs = ParseTypeArgs(clrTypeName, firstAngle);");
+        sb.AppendLine("        var defName = clrTypeName[..firstAngle];");
+        sb.AppendLine();
+        sb.AppendLine("        // Find the generic definition using backtick notation");
+        sb.AppendLine("        var lastDot = defName.LastIndexOf('.');");
+        sb.AppendLine("        var ns = lastDot > 0 ? defName[..lastDot] : \"\";");
+        sb.AppendLine("        var shortName = lastDot > 0 ? defName[(lastDot + 1)..] : defName;");
+        sb.AppendLine("        var proxyNs = ns.Length > 0 ? \"_.\" + ns : \"_\";");
+        sb.AppendLine("        var genDefTypeName = proxyNs + \".\" + shortName + \"`\" + typeArgs.Count;");
+        sb.AppendLine();
+        sb.AppendLine("        var genDefType = asm.GetType(genDefTypeName);");
+        sb.AppendLine("        if (genDefType is null) return null;");
+        sb.AppendLine();
+        sb.AppendLine("        // Map each CLR type arg to its proxy type");
+        sb.AppendLine("        var proxyArgTypes = new global::System.Type[typeArgs.Count];");
+        sb.AppendLine("        for (int i = 0; i < typeArgs.Count; i++)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            proxyArgTypes[i] = MapClrTypeArgToProxyType(typeArgs[i]);");
+        sb.AppendLine("        }");
+        sb.AppendLine();
+        sb.AppendLine("        try { return genDefType.MakeGenericType(proxyArgTypes); }");
+        sb.AppendLine("        catch { return null; }");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    private static global::System.Type MapClrTypeArgToProxyType(string clrTypeName)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        // Primitives and well-known types");
+        sb.AppendLine("        var t = clrTypeName switch");
+        sb.AppendLine("        {");
+        sb.AppendLine("            \"System.String\" => typeof(string),");
+        sb.AppendLine("            \"System.Boolean\" => typeof(bool),");
+        sb.AppendLine("            \"System.Byte\" => typeof(byte),");
+        sb.AppendLine("            \"System.SByte\" => typeof(sbyte),");
+        sb.AppendLine("            \"System.Int16\" => typeof(short),");
+        sb.AppendLine("            \"System.UInt16\" => typeof(ushort),");
+        sb.AppendLine("            \"System.Int32\" => typeof(int),");
+        sb.AppendLine("            \"System.UInt32\" => typeof(uint),");
+        sb.AppendLine("            \"System.Int64\" => typeof(long),");
+        sb.AppendLine("            \"System.UInt64\" => typeof(ulong),");
+        sb.AppendLine("            \"System.Single\" => typeof(float),");
+        sb.AppendLine("            \"System.Double\" => typeof(double),");
+        sb.AppendLine("            \"System.Char\" => typeof(char),");
+        sb.AppendLine("            \"System.IntPtr\" => typeof(nint),");
+        sb.AppendLine("            \"System.UIntPtr\" => typeof(nuint),");
+        sb.AppendLine("            _ => null");
+        sb.AppendLine("        };");
+        sb.AppendLine("        if (t is not null) return t;");
+        sb.AppendLine();
+        sb.AppendLine("        // Try resolving as a proxy type (recursive for nested generics)");
+        sb.AppendLine("        var proxyType = ResolveProxyType(clrTypeName);");
+        sb.AppendLine("        if (proxyType is not null) return proxyType;");
+        sb.AppendLine();
+        sb.AppendLine("        // Fallback: try the real CLR type");
+        sb.AppendLine("        return global::System.Type.GetType(clrTypeName) ?? typeof(object);");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    private static global::System.Collections.Generic.List<string> ParseTypeArgs(string name, int firstAngle)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        var args = new global::System.Collections.Generic.List<string>();");
+        sb.AppendLine("        int depth = 0, start = firstAngle + 1;");
+        sb.AppendLine("        for (int i = firstAngle; i < name.Length; i++)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            if (name[i] == '<') depth++;");
+        sb.AppendLine("            else if (name[i] == '>')");
+        sb.AppendLine("            {");
+        sb.AppendLine("                depth--;");
+        sb.AppendLine("                if (depth == 0) { args.Add(name[start..i].Trim()); break; }");
+        sb.AppendLine("            }");
+        sb.AppendLine("            else if (name[i] == ',' && depth == 1)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                args.Add(name[start..i].Trim());");
+        sb.AppendLine("                start = i + 1;");
+        sb.AppendLine("            }");
+        sb.AppendLine("        }");
+        sb.AppendLine("        return args;");
         sb.AppendLine("    }");
         sb.AppendLine();
         sb.AppendLine("    private static string MapToProxyTypeName(string clrTypeName)");

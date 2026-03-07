@@ -46,13 +46,28 @@ public sealed class TypeInspector
                 var ns = ExtractNamespace(clrType.Name);
                 var name = ExtractTypeName(clrType.Name);
 
+                var (genDefName, genArgs) = ParseGenericName(name);
+                // Compute full definition name by stripping type args from FullName
+                string? genDefFullName = null;
+                if (genDefName is not null)
+                {
+                    // Find the position of the generic < that corresponds to the leaf's generic args
+                    // by locating the defName portion within the full CLR name
+                    var anglePos = FindGenericAngleInFullName(clrType.Name);
+                    genDefFullName = anglePos > 0 ? clrType.Name[..anglePos] : null;
+                    if (genDefFullName is null) genDefName = null; // parsing failed, treat as non-generic
+                }
+
                 result.Add(new TypeMetadata
                 {
                     FullName = clrType.Name,
                     Namespace = ns,
                     Name = name,
                     Fields = fields,
-                    BaseTypeName = clrType.BaseType?.Name
+                    BaseTypeName = clrType.BaseType?.Name,
+                    GenericDefinitionName = genDefName,
+                    GenericDefinitionFullName = genDefFullName,
+                    GenericTypeArguments = genArgs
                 });
 
                 clrType = clrType.BaseType;
@@ -203,6 +218,102 @@ public sealed class TypeInspector
         // Find the last dot before generic args
         var lastDot = fullName.LastIndexOf('.', genericStart - 1);
         return lastDot;
+    }
+
+    /// <summary>
+    /// Parse a type name to extract the generic definition and type arguments.
+    /// E.g., "Dictionary&lt;System.String, System.Object&gt;" → ("Dictionary", ["System.String", "System.Object"])
+    /// Non-generic names return (null, []).
+    /// </summary>
+    /// <summary>
+    /// Parse a type name to extract the generic definition and type arguments.
+    /// Only considers the leaf part of nested types (after the last + outside generics).
+    /// Ignores compiler-generated names like &lt;&gt;c.
+    /// </summary>
+    internal static (string? DefinitionName, IReadOnlyList<string> TypeArguments) ParseGenericName(string typeName)
+    {
+        // Find the leaf part of nested types (after last + outside angle brackets)
+        int leafStart = 0;
+        int d = 0;
+        for (int i = 0; i < typeName.Length; i++)
+        {
+            if (typeName[i] == '<') d++;
+            else if (typeName[i] == '>') d--;
+            else if (typeName[i] == '+' && d == 0)
+                leafStart = i + 1;
+        }
+        var leaf = typeName[leafStart..];
+
+        // Find the first < in the leaf
+        var firstAngle = leaf.IndexOf('<');
+        if (firstAngle < 0)
+            return (null, []);
+
+        // Skip compiler-generated names: leaf starts with < (like <>c), or <> empty brackets
+        if (firstAngle == 0)
+            return (null, []);
+        if (firstAngle + 1 < leaf.Length && leaf[firstAngle + 1] == '>')
+            return (null, []);
+
+        var defName = leaf[..firstAngle];
+
+        // Parse type arguments (balanced brackets)
+        var args = new List<string>();
+        var depth = 0;
+        var start = firstAngle + 1;
+        for (int i = firstAngle; i < leaf.Length; i++)
+        {
+            if (leaf[i] == '<') depth++;
+            else if (leaf[i] == '>')
+            {
+                depth--;
+                if (depth == 0)
+                {
+                    args.Add(leaf[start..i].Trim());
+                    break;
+                }
+            }
+            else if (leaf[i] == ',' && depth == 1)
+            {
+                args.Add(leaf[start..i].Trim());
+                start = i + 1;
+            }
+        }
+
+        return (defName, args);
+    }
+
+    /// <summary>
+    /// Find the position of the &lt; that starts the generic type arguments in the leaf part
+    /// of a full CLR type name. Skips compiler-generated &lt;&gt; patterns.
+    /// Returns -1 if not found.
+    /// </summary>
+    private static int FindGenericAngleInFullName(string fullName)
+    {
+        // Walk the string, tracking + nesting depth for angle brackets
+        int d = 0;
+        int lastPlus = -1;
+        for (int i = 0; i < fullName.Length; i++)
+        {
+            if (fullName[i] == '<') d++;
+            else if (fullName[i] == '>') d--;
+            else if (fullName[i] == '+' && d == 0) lastPlus = i;
+        }
+
+        // Find the first < in the leaf part that isn't a <> compiler pattern
+        var searchStart = lastPlus + 1;
+        for (int i = searchStart; i < fullName.Length; i++)
+        {
+            if (fullName[i] == '<')
+            {
+                // Skip if it's at the start of the leaf (compiler name like <>c)
+                if (i == searchStart) return -1;
+                // Skip if it's an empty <> (compiler pattern)
+                if (i + 1 < fullName.Length && fullName[i + 1] == '>') return -1;
+                return i;
+            }
+        }
+        return -1;
     }
 
     private static string ExtractNamespace(string fullName)
