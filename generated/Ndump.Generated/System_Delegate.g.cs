@@ -7,23 +7,9 @@ public class Delegate : _.System.Object
 {
     protected Delegate(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public _.System.Object? _target
-    {
-        get
-        {
-            var addr = RefAddress();
-            return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Object ?? _.System.Object.FromAddress(addr, _ctx);
-        }
-    }
+    public _.System.Object? _target => Field<_.System.Object>();
 
-    public _.System.Object? _methodBase
-    {
-        get
-        {
-            var addr = RefAddress();
-            return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Object ?? _.System.Object.FromAddress(addr, _ctx);
-        }
-    }
+    public _.System.Object? _methodBase => Field<_.System.Object>();
 
     public nint _methodPtr => Field<nint>();
 

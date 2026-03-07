@@ -7,14 +7,7 @@ public class MulticastDelegate : _.System.Delegate
 {
     protected MulticastDelegate(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public _.System.Object? _invocationList
-    {
-        get
-        {
-            var addr = RefAddress();
-            return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Object ?? _.System.Object.FromAddress(addr, _ctx);
-        }
-    }
+    public _.System.Object? _invocationList => Field<_.System.Object>();
 
     public nint _invocationCount => Field<nint>();
 

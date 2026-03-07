@@ -9,35 +9,21 @@ public partial class RuntimeType
     {
         private RuntimeTypeCache(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-        public _.System.RuntimeType? m_runtimeType
-        {
-            get
-            {
-                var addr = RefAddress();
-                return addr == 0 ? null : _.System.RuntimeType.FromAddress(addr, _ctx);
-            }
-        }
+        public _.System.RuntimeType? m_runtimeType => Field<_.System.RuntimeType>();
 
-        public _.System.RuntimeType? m_enclosingType
-        {
-            get
-            {
-                var addr = RefAddress();
-                return addr == 0 ? null : _.System.RuntimeType.FromAddress(addr, _ctx);
-            }
-        }
+        public _.System.RuntimeType? m_enclosingType => Field<_.System.RuntimeType>();
 
         public int m_typeCode => Field<int>();
 
-        public string? m_name => StringField();
+        public string? m_name => Field<string>();
 
-        public string? m_fullName => StringField();
+        public string? m_fullName => Field<string>();
 
-        public string? m_assemblyQualifiedName => StringField();
+        public string? m_assemblyQualifiedName => Field<string>();
 
-        public string? m_toString => StringField();
+        public string? m_toString => Field<string>();
 
-        public string? m_namespace => StringField();
+        public string? m_namespace => Field<string>();
 
         public bool m_isGlobal => Field<bool>();
 
@@ -55,7 +41,7 @@ public partial class RuntimeType
 
         // Unknown field: m_eventInfoCache (object)
 
-        public string? m_defaultMemberName => StringField();
+        public string? m_defaultMemberName => Field<string>();
 
         public ulong m_genericCache => RefAddress();
 
@@ -70,14 +56,7 @@ public partial class RuntimeType
             }
         }
 
-        public _.System.RuntimeType? _genericTypeDefinition
-        {
-            get
-            {
-                var addr = RefAddress();
-                return addr == 0 ? null : _.System.RuntimeType.FromAddress(addr, _ctx);
-            }
-        }
+        public _.System.RuntimeType? _genericTypeDefinition => Field<_.System.RuntimeType>();
 
         public static new RuntimeTypeCache FromAddress(ulong address, DumpContext ctx)
             => new RuntimeTypeCache(address, ctx);

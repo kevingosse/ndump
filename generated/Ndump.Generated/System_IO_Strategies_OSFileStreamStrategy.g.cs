@@ -7,14 +7,7 @@ public class OSFileStreamStrategy : _.System.IO.Strategies.FileStreamStrategy
 {
     protected OSFileStreamStrategy(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public _.Microsoft.Win32.SafeHandles.SafeFileHandle? _fileHandle
-    {
-        get
-        {
-            var addr = RefAddress();
-            return addr == 0 ? null : _.Microsoft.Win32.SafeHandles.SafeFileHandle.FromAddress(addr, _ctx);
-        }
-    }
+    public _.Microsoft.Win32.SafeHandles.SafeFileHandle? _fileHandle => Field<_.Microsoft.Win32.SafeHandles.SafeFileHandle>();
 
     public int _access => Field<int>();
 

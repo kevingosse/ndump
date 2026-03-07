@@ -7,14 +7,7 @@ public sealed class BufferedFileStreamStrategy : _.System.IO.Strategies.FileStre
 {
     private BufferedFileStreamStrategy(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public _.System.IO.Strategies.FileStreamStrategy? _strategy
-    {
-        get
-        {
-            var addr = RefAddress();
-            return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.IO.Strategies.FileStreamStrategy ?? _.System.IO.Strategies.FileStreamStrategy.FromAddress(addr, _ctx);
-        }
-    }
+    public _.System.IO.Strategies.FileStreamStrategy? _strategy => Field<_.System.IO.Strategies.FileStreamStrategy>();
 
     public int _bufferSize => Field<int>();
 

@@ -7,23 +7,9 @@ public sealed class RuntimeModule : _.System.Reflection.Module
 {
     private RuntimeModule(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public _.System.RuntimeType? m_runtimeType
-    {
-        get
-        {
-            var addr = RefAddress();
-            return addr == 0 ? null : _.System.RuntimeType.FromAddress(addr, _ctx);
-        }
-    }
+    public _.System.RuntimeType? m_runtimeType => Field<_.System.RuntimeType>();
 
-    public _.System.Reflection.RuntimeAssembly? m_runtimeAssembly
-    {
-        get
-        {
-            var addr = RefAddress();
-            return addr == 0 ? null : _.System.Reflection.RuntimeAssembly.FromAddress(addr, _ctx);
-        }
-    }
+    public _.System.Reflection.RuntimeAssembly? m_runtimeAssembly => Field<_.System.Reflection.RuntimeAssembly>();
 
     public nint m_pData => Field<nint>();
 

@@ -174,6 +174,39 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     }
 
     [Fact]
+    public void Proxies_CanNavigateObjectReference_AndReadFields()
+    {
+        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
+        var addressType = Assembly.GetType("_.Ndump.TestApp.Address")!;
+
+        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
+        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
+
+        var nameProp = customerType.GetProperty("_name")!;
+        var addressProp = customerType.GetProperty("_address")!;
+        var streetProp = addressType.GetProperty("_street")!;
+        var cityProp = addressType.GetProperty("_city")!;
+        var zipProp = addressType.GetProperty("_zipCode")!;
+
+        // Alice has addr1("123 Main St", "Springfield", 62701)
+        var alice = instances.Single(c => (string?)nameProp.GetValue(c) == "Alice");
+        var aliceAddr = addressProp.GetValue(alice);
+        Assert.NotNull(aliceAddr);
+        Assert.IsType(addressType, aliceAddr);
+        Assert.Equal("123 Main St", streetProp.GetValue(aliceAddr));
+        Assert.Equal("Springfield", cityProp.GetValue(aliceAddr));
+        Assert.Equal(62701, (int)zipProp.GetValue(aliceAddr)!);
+
+        // Bob has addr2("456 Oak Ave", "Shelbyville", 62702)
+        var bob = instances.Single(c => (string?)nameProp.GetValue(c) == "Bob");
+        var bobAddr = addressProp.GetValue(bob);
+        Assert.NotNull(bobAddr);
+        Assert.Equal("456 Oak Ave", streetProp.GetValue(bobAddr));
+        Assert.Equal("Shelbyville", cityProp.GetValue(bobAddr));
+        Assert.Equal(62702, (int)zipProp.GetValue(bobAddr)!);
+    }
+
+    [Fact]
     public void Proxies_CanEnumerateTagInstances()
     {
         var tagType = Assembly.GetType("_.Ndump.TestApp.Tag")!;

@@ -7,14 +7,7 @@ public class WaitHandle : _.System.MarshalByRefObject
 {
     protected WaitHandle(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public _.Microsoft.Win32.SafeHandles.SafeWaitHandle? _waitHandle
-    {
-        get
-        {
-            var addr = RefAddress();
-            return addr == 0 ? null : _.Microsoft.Win32.SafeHandles.SafeWaitHandle.FromAddress(addr, _ctx);
-        }
-    }
+    public _.Microsoft.Win32.SafeHandles.SafeWaitHandle? _waitHandle => Field<_.Microsoft.Win32.SafeHandles.SafeWaitHandle>();
 
     public static new WaitHandle FromAddress(ulong address, DumpContext ctx)
         => new WaitHandle(address, ctx);

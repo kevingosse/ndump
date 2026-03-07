@@ -13,18 +13,11 @@ public sealed class Process : _.System.ComponentModel.Component
 
     public bool _haveProcessHandle => Field<bool>();
 
-    public _.Microsoft.Win32.SafeHandles.SafeProcessHandle? _processHandle
-    {
-        get
-        {
-            var addr = RefAddress();
-            return addr == 0 ? null : _.Microsoft.Win32.SafeHandles.SafeProcessHandle.FromAddress(addr, _ctx);
-        }
-    }
+    public _.Microsoft.Win32.SafeHandles.SafeProcessHandle? _processHandle => Field<_.Microsoft.Win32.SafeHandles.SafeProcessHandle>();
 
     public bool _isRemoteMachine => Field<bool>();
 
-    public string? _machineName => StringField();
+    public string? _machineName => Field<string>();
 
     public ulong _processInfo => RefAddress();
 
@@ -46,14 +39,7 @@ public sealed class Process : _.System.ComponentModel.Component
 
     public int _priorityClass => Field<int>();
 
-    public _.System.Diagnostics.ProcessStartInfo? _startInfo
-    {
-        get
-        {
-            var addr = RefAddress();
-            return addr == 0 ? null : _.System.Diagnostics.ProcessStartInfo.FromAddress(addr, _ctx);
-        }
-    }
+    public _.System.Diagnostics.ProcessStartInfo? _startInfo => Field<_.System.Diagnostics.ProcessStartInfo>();
 
     public bool _watchForExit => Field<bool>();
 
@@ -79,34 +65,13 @@ public sealed class Process : _.System.ComponentModel.Component
 
     // ValueType field: _registeredWaitHandle (object) — not yet supported
 
-    public _.System.Threading.WaitHandle? _waitHandle
-    {
-        get
-        {
-            var addr = RefAddress();
-            return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Threading.WaitHandle ?? _.System.Threading.WaitHandle.FromAddress(addr, _ctx);
-        }
-    }
+    public _.System.Threading.WaitHandle? _waitHandle => Field<_.System.Threading.WaitHandle>();
 
-    public _.System.IO.StreamReader? _standardOutput
-    {
-        get
-        {
-            var addr = RefAddress();
-            return addr == 0 ? null : _.System.IO.StreamReader.FromAddress(addr, _ctx);
-        }
-    }
+    public _.System.IO.StreamReader? _standardOutput => Field<_.System.IO.StreamReader>();
 
     public ulong _standardInput => RefAddress();
 
-    public _.System.IO.StreamReader? _standardError
-    {
-        get
-        {
-            var addr = RefAddress();
-            return addr == 0 ? null : _.System.IO.StreamReader.FromAddress(addr, _ctx);
-        }
-    }
+    public _.System.IO.StreamReader? _standardError => Field<_.System.IO.StreamReader>();
 
     public bool _disposed => Field<bool>();
 
@@ -130,7 +95,7 @@ public sealed class Process : _.System.ComponentModel.Component
 
     // ValueType field: <SynchronizingObject>k__BackingField (object) — not yet supported
 
-    public string? _processName => StringField();
+    public string? _processName => Field<string>();
 
     public bool _signaled => Field<bool>();
 
@@ -138,7 +103,7 @@ public sealed class Process : _.System.ComponentModel.Component
 
     public nint _mainWindowHandle => Field<nint>();
 
-    public string? _mainWindowTitle => StringField();
+    public string? _mainWindowTitle => Field<string>();
 
     public bool _haveResponding => Field<bool>();
 

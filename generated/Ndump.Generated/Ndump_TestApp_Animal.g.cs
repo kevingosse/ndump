@@ -7,7 +7,7 @@ public class Animal : _.System.Object
 {
     protected Animal(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public string? _name => StringField();
+    public string? _name => Field<string>();
 
     public int _age => Field<int>();
 

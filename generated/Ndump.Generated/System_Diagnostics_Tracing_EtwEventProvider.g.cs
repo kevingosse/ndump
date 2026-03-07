@@ -7,14 +7,7 @@ public sealed class EtwEventProvider : _.System.Diagnostics.Tracing.EventProvide
 {
     private EtwEventProvider(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public _.System.WeakReference_System_Diagnostics_Tracing_EventProvider_? _eventProvider
-    {
-        get
-        {
-            var addr = RefAddress();
-            return addr == 0 ? null : _.System.WeakReference_System_Diagnostics_Tracing_EventProvider_.FromAddress(addr, _ctx);
-        }
-    }
+    public _.System.WeakReference_System_Diagnostics_Tracing_EventProvider_? _eventProvider => Field<_.System.WeakReference_System_Diagnostics_Tracing_EventProvider_>();
 
     public long _registrationHandle => Field<long>();
 

@@ -7,9 +7,9 @@ public sealed class Address : _.System.Object
 {
     private Address(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public string? _street => StringField();
+    public string? _street => Field<string>();
 
-    public string? _city => StringField();
+    public string? _city => Field<string>();
 
     public int _zipCode => Field<int>();
 

@@ -7,16 +7,9 @@ public class EventProvider : _.System.Object
 {
     protected EventProvider(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public _.System.Diagnostics.Tracing.EventProviderImpl? _eventProvider
-    {
-        get
-        {
-            var addr = RefAddress();
-            return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Diagnostics.Tracing.EventProviderImpl ?? _.System.Diagnostics.Tracing.EventProviderImpl.FromAddress(addr, _ctx);
-        }
-    }
+    public _.System.Diagnostics.Tracing.EventProviderImpl? _eventProvider => Field<_.System.Diagnostics.Tracing.EventProviderImpl>();
 
-    public string? _providerName => StringField();
+    public string? _providerName => Field<string>();
 
     // ValueType field: _providerId (object) — not yet supported
 

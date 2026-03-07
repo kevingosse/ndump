@@ -245,6 +245,8 @@ public sealed class ProxyEmitter
         sb.AppendLine("    protected readonly ulong _objAddress;");
         sb.AppendLine("    protected readonly DumpContext _ctx;");
         sb.AppendLine();
+        sb.AppendLine("    private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::System.Func<ulong, DumpContext, object>?> _proxyFactories = new();");
+        sb.AppendLine();
         sb.AppendLine("    protected Object(ulong address, DumpContext ctx)");
         sb.AppendLine("    {");
         sb.AppendLine("        _objAddress = address;");
@@ -253,14 +255,32 @@ public sealed class ProxyEmitter
         sb.AppendLine();
         sb.AppendLine("    public ulong GetObjAddress() => _objAddress;");
         sb.AppendLine();
-        sb.AppendLine("    protected T Field<T>([CallerMemberName] string fieldName = \"\") where T : unmanaged");
-        sb.AppendLine("        => _ctx.GetFieldValue<T>(_objAddress, fieldName);");
-        sb.AppendLine();
-        sb.AppendLine("    protected string? StringField([CallerMemberName] string fieldName = \"\")");
-        sb.AppendLine("        => _ctx.GetStringField(_objAddress, fieldName);");
+        sb.AppendLine("    protected T Field<T>([CallerMemberName] string fieldName = \"\")");
+        sb.AppendLine("    {");
+        sb.AppendLine("        if (typeof(T) == typeof(string))");
+        sb.AppendLine("            return (T)(object)_ctx.GetStringField(_objAddress, fieldName)!;");
+        sb.AppendLine("        if (!typeof(T).IsValueType)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            var addr = _ctx.GetObjectAddress(_objAddress, fieldName);");
+        sb.AppendLine("            if (addr == 0) return default!;");
+        sb.AppendLine("            return (T)CreateProxy(typeof(T), addr, _ctx);");
+        sb.AppendLine("        }");
+        sb.AppendLine("        return _ctx.GetFieldValue<T>(_objAddress, fieldName);");
+        sb.AppendLine("    }");
         sb.AppendLine();
         sb.AppendLine("    protected ulong RefAddress([CallerMemberName] string fieldName = \"\")");
         sb.AppendLine("        => _ctx.GetObjectAddress(_objAddress, fieldName);");
+        sb.AppendLine();
+        sb.AppendLine("    private static object CreateProxy(global::System.Type proxyType, ulong address, DumpContext ctx)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        var factory = _proxyFactories.GetOrAdd(proxyType, static t =>");
+        sb.AppendLine("        {");
+        sb.AppendLine("            var method = t.GetMethod(\"FromAddress\", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static);");
+        sb.AppendLine("            if (method is null) return null;");
+        sb.AppendLine("            return (global::System.Func<ulong, DumpContext, object>)((a, c) => method.Invoke(null, [a, c])!);");
+        sb.AppendLine("        });");
+        sb.AppendLine("        return factory?.Invoke(address, ctx) ?? throw new global::System.InvalidOperationException($\"No FromAddress factory on {proxyType}\");");
+        sb.AppendLine("    }");
         sb.AppendLine();
         sb.AppendLine("    public static Object FromAddress(ulong address, DumpContext ctx)");
         sb.AppendLine("        => new Object(address, ctx);");
@@ -335,9 +355,9 @@ public sealed class ProxyEmitter
         {
             case FieldKind.String:
                 if (propName == field.Name)
-                    sb.AppendLine($"    public string? {propName} => StringField();");
+                    sb.AppendLine($"    public string? {propName} => Field<string>();");
                 else
-                    sb.AppendLine($"    public string? {propName} => StringField(\"{field.Name}\");");
+                    sb.AppendLine($"    public string? {propName} => Field<string>(\"{field.Name}\");");
                 break;
 
             case FieldKind.Primitive:
@@ -376,19 +396,10 @@ public sealed class ProxyEmitter
         if (IsUsableProxyType(field.ReferenceTypeName, _knownProxyTypes))
         {
             var qualifiedProxyType = GetFullyQualifiedProxyType(field.ReferenceTypeName!);
-            var isBaseType = _baseTypes.Contains(field.ReferenceTypeName!);
-            var addrExpr = propName == field.Name ? "RefAddress()" : $"RefAddress(\"{field.Name}\")";
-            sb.AppendLine($"    public {qualifiedProxyType}? {propName}");
-            sb.AppendLine("    {");
-            sb.AppendLine("        get");
-            sb.AppendLine("        {");
-            sb.AppendLine($"            var addr = {addrExpr};");
-            if (isBaseType)
-                sb.AppendLine($"            return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as {qualifiedProxyType} ?? {qualifiedProxyType}.FromAddress(addr, _ctx);");
+            if (propName == field.Name)
+                sb.AppendLine($"    public {qualifiedProxyType}? {propName} => Field<{qualifiedProxyType}>();");
             else
-                sb.AppendLine($"            return addr == 0 ? null : {qualifiedProxyType}.FromAddress(addr, _ctx);");
-            sb.AppendLine("        }");
-            sb.AppendLine("    }");
+                sb.AppendLine($"    public {qualifiedProxyType}? {propName} => Field<{qualifiedProxyType}>(\"{field.Name}\");");
         }
         else
         {

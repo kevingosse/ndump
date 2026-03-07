@@ -7,15 +7,15 @@ public sealed class ProcessStartInfo : _.System.Object
 {
     private ProcessStartInfo(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public string? _fileName => StringField();
+    public string? _fileName => Field<string>();
 
-    public string? _arguments => StringField();
+    public string? _arguments => Field<string>();
 
-    public string? _directory => StringField();
+    public string? _directory => Field<string>();
 
-    public string? _userName => StringField();
+    public string? _userName => Field<string>();
 
-    public string? _verb => StringField();
+    public string? _verb => Field<string>();
 
     // Unknown field: _argumentList (object)
 
@@ -31,40 +31,19 @@ public sealed class ProcessStartInfo : _.System.Object
 
     public bool RedirectStandardError => Field<bool>("<RedirectStandardError>k__BackingField");
 
-    public _.System.Text.Encoding? StandardInputEncoding
-    {
-        get
-        {
-            var addr = RefAddress("<StandardInputEncoding>k__BackingField");
-            return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Text.Encoding ?? _.System.Text.Encoding.FromAddress(addr, _ctx);
-        }
-    }
+    public _.System.Text.Encoding? StandardInputEncoding => Field<_.System.Text.Encoding>("<StandardInputEncoding>k__BackingField");
 
-    public _.System.Text.Encoding? StandardErrorEncoding
-    {
-        get
-        {
-            var addr = RefAddress("<StandardErrorEncoding>k__BackingField");
-            return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Text.Encoding ?? _.System.Text.Encoding.FromAddress(addr, _ctx);
-        }
-    }
+    public _.System.Text.Encoding? StandardErrorEncoding => Field<_.System.Text.Encoding>("<StandardErrorEncoding>k__BackingField");
 
-    public _.System.Text.Encoding? StandardOutputEncoding
-    {
-        get
-        {
-            var addr = RefAddress("<StandardOutputEncoding>k__BackingField");
-            return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Text.Encoding ?? _.System.Text.Encoding.FromAddress(addr, _ctx);
-        }
-    }
+    public _.System.Text.Encoding? StandardOutputEncoding => Field<_.System.Text.Encoding>("<StandardOutputEncoding>k__BackingField");
 
     public bool ErrorDialog => Field<bool>("<ErrorDialog>k__BackingField");
 
     public nint ErrorDialogParentHandle => Field<nint>("<ErrorDialogParentHandle>k__BackingField");
 
-    public string? _domain => StringField();
+    public string? _domain => Field<string>();
 
-    public string? PasswordInClearText => StringField("<PasswordInClearText>k__BackingField");
+    public string? PasswordInClearText => Field<string>("<PasswordInClearText>k__BackingField");
 
     public bool LoadUserProfile => Field<bool>("<LoadUserProfile>k__BackingField");
 

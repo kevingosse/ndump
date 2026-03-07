@@ -7,32 +7,11 @@ public sealed class StreamReader : _.System.IO.TextReader
 {
     private StreamReader(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public _.System.IO.Stream? _stream
-    {
-        get
-        {
-            var addr = RefAddress();
-            return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.IO.Stream ?? _.System.IO.Stream.FromAddress(addr, _ctx);
-        }
-    }
+    public _.System.IO.Stream? _stream => Field<_.System.IO.Stream>();
 
-    public _.System.Text.Encoding? _encoding
-    {
-        get
-        {
-            var addr = RefAddress();
-            return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Text.Encoding ?? _.System.Text.Encoding.FromAddress(addr, _ctx);
-        }
-    }
+    public _.System.Text.Encoding? _encoding => Field<_.System.Text.Encoding>();
 
-    public _.System.Text.Decoder? _decoder
-    {
-        get
-        {
-            var addr = RefAddress();
-            return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Text.Decoder ?? _.System.Text.Decoder.FromAddress(addr, _ctx);
-        }
-    }
+    public _.System.Text.Decoder? _decoder => Field<_.System.Text.Decoder>();
 
     public global::Ndump.Core.DumpArray<byte>? _byteBuffer
     {
@@ -76,14 +55,7 @@ public sealed class StreamReader : _.System.IO.TextReader
 
     public bool _closable => Field<bool>();
 
-    public _.System.Threading.Tasks.Task? _asyncReadTask
-    {
-        get
-        {
-            var addr = RefAddress();
-            return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Threading.Tasks.Task ?? _.System.Threading.Tasks.Task.FromAddress(addr, _ctx);
-        }
-    }
+    public _.System.Threading.Tasks.Task? _asyncReadTask => Field<_.System.Threading.Tasks.Task>();
 
     public static new StreamReader FromAddress(ulong address, DumpContext ctx)
         => new StreamReader(address, ctx);

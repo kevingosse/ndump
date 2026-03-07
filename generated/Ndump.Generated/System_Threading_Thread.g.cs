@@ -11,7 +11,7 @@ public sealed class Thread : _.System.Runtime.ConstrainedExecution.CriticalFinal
 
     public ulong _synchronizationContext => RefAddress();
 
-    public string? _name => StringField();
+    public string? _name => Field<string>();
 
     public ulong _startHelper => RefAddress();
 

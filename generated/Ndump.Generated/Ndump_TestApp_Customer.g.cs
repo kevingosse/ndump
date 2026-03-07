@@ -7,29 +7,15 @@ public sealed class Customer : _.System.Object
 {
     private Customer(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public string? _name => StringField();
+    public string? _name => Field<string>();
 
     public int _age => Field<int>();
 
     public bool _isActive => Field<bool>();
 
-    public _.Ndump.TestApp.Order? _lastOrder
-    {
-        get
-        {
-            var addr = RefAddress();
-            return addr == 0 ? null : _.Ndump.TestApp.Order.FromAddress(addr, _ctx);
-        }
-    }
+    public _.Ndump.TestApp.Order? _lastOrder => Field<_.Ndump.TestApp.Order>();
 
-    public _.Ndump.TestApp.Address? _address
-    {
-        get
-        {
-            var addr = RefAddress();
-            return addr == 0 ? null : _.Ndump.TestApp.Address.FromAddress(addr, _ctx);
-        }
-    }
+    public _.Ndump.TestApp.Address? _address => Field<_.Ndump.TestApp.Address>();
 
     public global::Ndump.Core.DumpArray<_.Ndump.TestApp.Order?>? _orderHistory
     {

@@ -7,7 +7,7 @@ public sealed class Tag : _.System.Object
 {
     private Tag(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public string? _label => StringField();
+    public string? _label => Field<string>();
 
     public long _id => Field<long>();
 

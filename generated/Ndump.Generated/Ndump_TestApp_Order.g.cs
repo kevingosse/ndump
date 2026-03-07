@@ -11,7 +11,7 @@ public sealed class Order : _.System.Object
 
     public double _total => Field<double>();
 
-    public string? _description => StringField();
+    public string? _description => Field<string>();
 
     // ValueType field: _createdAt (object) — not yet supported
 

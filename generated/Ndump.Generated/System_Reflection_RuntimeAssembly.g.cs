@@ -9,16 +9,9 @@ public sealed class RuntimeAssembly : _.System.Reflection.Assembly
 
     public ulong _ModuleResolve => RefAddress();
 
-    public string? m_fullname => StringField();
+    public string? m_fullname => Field<string>();
 
-    public _.System.Object? m_syncRoot
-    {
-        get
-        {
-            var addr = RefAddress();
-            return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Object ?? _.System.Object.FromAddress(addr, _ctx);
-        }
-    }
+    public _.System.Object? m_syncRoot => Field<_.System.Object>();
 
     public nint m_assembly => Field<nint>();
 

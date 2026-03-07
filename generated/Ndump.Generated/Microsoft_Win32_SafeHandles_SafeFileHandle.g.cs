@@ -7,7 +7,7 @@ public sealed class SafeFileHandle : _.Microsoft.Win32.SafeHandles.SafeHandleZer
 {
     private SafeFileHandle(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public string? _path => StringField();
+    public string? _path => Field<string>();
 
     public long _length => Field<long>();
 

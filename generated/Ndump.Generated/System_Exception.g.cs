@@ -9,46 +9,23 @@ public class Exception : _.System.Object
 
     public ulong _exceptionMethod => RefAddress();
 
-    public string? _message => StringField();
+    public string? _message => Field<string>();
 
     public ulong _data => RefAddress();
 
-    public _.System.Exception? _innerException
-    {
-        get
-        {
-            var addr = RefAddress();
-            return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Exception ?? _.System.Exception.FromAddress(addr, _ctx);
-        }
-    }
+    public _.System.Exception? _innerException => Field<_.System.Exception>();
 
-    public string? _helpURL => StringField();
+    public string? _helpURL => Field<string>();
 
-    public _.System.Object? _stackTrace
-    {
-        get
-        {
-            var addr = RefAddress();
-            return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Object ?? _.System.Object.FromAddress(addr, _ctx);
-        }
-    }
+    public _.System.Object? _stackTrace => Field<_.System.Object>();
 
-    public global::Ndump.Core.DumpArray<byte>? _watsonBuckets
-    {
-        get
-        {
-            var addr = RefAddress();
-            if (addr == 0) return null;
-            var len = _ctx.GetArrayLength(addr);
-            return new global::Ndump.Core.DumpArray<byte>(addr, len, i => _ctx.GetArrayElementValue<byte>(addr, i));
-        }
-    }
+    // Array field: _watsonBuckets (object) — element type not supported
 
-    public string? _stackTraceString => StringField();
+    public string? _stackTraceString => Field<string>();
 
-    public string? _remoteStackTraceString => StringField();
+    public string? _remoteStackTraceString => Field<string>();
 
-    public string? _source => StringField();
+    public string? _source => Field<string>();
 
     public nuint _ipForWatsonBuckets => Field<nuint>();
 

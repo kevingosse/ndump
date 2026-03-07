@@ -9,14 +9,7 @@ public partial class Encoding
     {
         private DefaultDecoder(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-        public _.System.Text.Encoding? _encoding
-        {
-            get
-            {
-                var addr = RefAddress();
-                return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as _.System.Text.Encoding ?? _.System.Text.Encoding.FromAddress(addr, _ctx);
-            }
-        }
+        public _.System.Text.Encoding? _encoding => Field<_.System.Text.Encoding>();
 
         public static new DefaultDecoder FromAddress(ulong address, DumpContext ctx)
             => new DefaultDecoder(address, ctx);

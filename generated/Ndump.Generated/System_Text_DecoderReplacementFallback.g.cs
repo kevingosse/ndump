@@ -7,7 +7,7 @@ public sealed class DecoderReplacementFallback : _.System.Text.DecoderFallback
 {
     private DecoderReplacementFallback(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public string? _strDefault => StringField();
+    public string? _strDefault => Field<string>();
 
     public static new DecoderReplacementFallback FromAddress(ulong address, DumpContext ctx)
         => new DecoderReplacementFallback(address, ctx);

@@ -41,7 +41,7 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public string? _name => StringField();", code);
+        Assert.Contains("public string? _name => Field<string>();", code);
     }
 
     [Fact]
@@ -86,9 +86,58 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type, knownTypes);
 
-        Assert.Contains("public _.MyApp.Order? _lastOrder", code);
-        // Order is a leaf type (no subtypes), so uses direct FromAddress
-        Assert.Contains("_.MyApp.Order.FromAddress(addr, _ctx)", code);
+        Assert.Contains("public _.MyApp.Order? _lastOrder => Field<_.MyApp.Order>();", code);
+    }
+
+    [Fact]
+    public void GenerateProxy_TypeWithMixedFields_UsesUnifiedFieldOfT()
+    {
+        var address = new TypeMetadata
+        {
+            FullName = "MyApp.Address",
+            Namespace = "MyApp",
+            Name = "Address",
+            Fields = []
+        };
+        var customer = new TypeMetadata
+        {
+            FullName = "MyApp.Customer",
+            Namespace = "MyApp",
+            Name = "Customer",
+            Fields =
+            [
+                new FieldInfo { Name = "_name", TypeName = "string", Kind = FieldKind.String },
+                new FieldInfo { Name = "_age", TypeName = "int", Kind = FieldKind.Primitive },
+                new FieldInfo { Name = "<IsActive>k__BackingField", TypeName = "bool", Kind = FieldKind.Primitive },
+                new FieldInfo
+                {
+                    Name = "_address",
+                    TypeName = "MyApp.Address",
+                    Kind = FieldKind.ObjectReference,
+                    ReferenceTypeName = "MyApp.Address"
+                },
+                new FieldInfo
+                {
+                    Name = "_widget",
+                    TypeName = "SomeLib.Widget",
+                    Kind = FieldKind.ObjectReference,
+                    ReferenceTypeName = "SomeLib.Widget"
+                }
+            ]
+        };
+
+        var code = _emitter.GenerateProxyCode(customer, allTypes: [address, customer]);
+
+        // String uses Field<string>
+        Assert.Contains("public string? _name => Field<string>();", code);
+        // Primitive uses Field<T>
+        Assert.Contains("public int _age => Field<int>();", code);
+        // Backing field uses Field<T> with explicit name
+        Assert.Contains("public bool IsActive => Field<bool>(\"<IsActive>k__BackingField\");", code);
+        // Known reference type uses Field<ProxyType>
+        Assert.Contains("public _.MyApp.Address? _address => Field<_.MyApp.Address>();", code);
+        // Unknown reference type falls back to RefAddress
+        Assert.Contains("public ulong _widget => RefAddress();", code);
     }
 
     [Fact]
@@ -335,7 +384,6 @@ public class ProxyEmitterTests
         Assert.Contains("public global::Ndump.Core.DumpArray<_.MyApp.Order?>? _orderHistory", code);
         Assert.Contains("RefAddress()", code);
         Assert.Contains("_ctx.GetArrayLength(addr)", code);
-        // Order is a leaf type (no subtypes), so uses direct FromAddress
         Assert.Contains("_.MyApp.Order.FromAddress(ea, _ctx)", code);
     }
 
@@ -728,7 +776,7 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(owner, allTypes: [animal, cat, owner]);
 
-        Assert.Contains("global::_.ProxyResolver.Resolve(addr, _ctx) as _.MyApp.Animal ?? _.MyApp.Animal.FromAddress(addr, _ctx)", code);
+        Assert.Contains("public _.MyApp.Animal? _pet => Field<_.MyApp.Animal>();", code);
     }
 
     [Fact]

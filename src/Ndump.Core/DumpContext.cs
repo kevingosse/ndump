@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.Diagnostics.Runtime;
 
 namespace Ndump.Core;
@@ -47,7 +48,7 @@ public sealed class DumpContext : IDisposable
     /// <summary>
     /// Read a primitive/value-type field from an object at the given address.
     /// </summary>
-    public T GetFieldValue<T>(ulong objAddress, string fieldName) where T : unmanaged
+    public T GetFieldValue<T>(ulong objAddress, string fieldName)
     {
         var obj = Heap.GetObject(objAddress);
         if (!obj.IsValid)
@@ -60,7 +61,10 @@ public sealed class DumpContext : IDisposable
         var field = type.GetFieldByName(fieldName)
             ?? throw new InvalidOperationException($"Field '{fieldName}' not found on type '{type.Name}'");
 
-        return field.Read<T>(objAddress, interior: false);
+        var addr = field.GetAddress(objAddress, interior: false);
+        Span<byte> buffer = stackalloc byte[Unsafe.SizeOf<T>()];
+        Runtime.DataTarget.DataReader.Read(addr, buffer);
+        return Unsafe.ReadUnaligned<T>(ref buffer[0]);
     }
 
     /// <summary>
@@ -133,16 +137,17 @@ public sealed class DumpContext : IDisposable
     /// <summary>
     /// Read a primitive/value-type element from an array.
     /// </summary>
-    public T GetArrayElementValue<T>(ulong arrayAddress, int index) where T : unmanaged
+    public T GetArrayElementValue<T>(ulong arrayAddress, int index)
     {
         var obj = Heap.GetObject(arrayAddress);
         if (!obj.IsValid)
             throw new InvalidOperationException($"Invalid object at address 0x{arrayAddress:X}");
 
         var array = obj.AsArray();
-        // GetStructValue returns a ClrValueType; read the raw value from memory
         var elementAddress = array.GetStructValue(index).Address;
-        return Runtime.DataTarget.DataReader.Read<T>(elementAddress);
+        Span<byte> buffer = stackalloc byte[Unsafe.SizeOf<T>()];
+        Runtime.DataTarget.DataReader.Read(elementAddress, buffer);
+        return Unsafe.ReadUnaligned<T>(ref buffer[0]);
     }
 
     /// <summary>
