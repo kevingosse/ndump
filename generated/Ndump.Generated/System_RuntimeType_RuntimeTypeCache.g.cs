@@ -27,19 +27,19 @@ public partial class RuntimeType
 
         public bool m_isGlobal => Field<bool>();
 
-        // Unknown field: m_methodInfoCache (object)
+        public global::_.System.Object? m_methodInfoCache => Field<global::_.System.Object>();
 
-        // Unknown field: m_constructorInfoCache (object)
+        public global::_.System.Object? m_constructorInfoCache => Field<global::_.System.Object>();
 
-        // Unknown field: m_fieldInfoCache (object)
+        public global::_.System.Object? m_fieldInfoCache => Field<global::_.System.Object>();
 
-        // Unknown field: m_interfaceCache (object)
+        public global::_.System.Object? m_interfaceCache => Field<global::_.System.Object>();
 
-        // Unknown field: m_nestedClassesCache (object)
+        public global::_.System.Object? m_nestedClassesCache => Field<global::_.System.Object>();
 
-        // Unknown field: m_propertyInfoCache (object)
+        public global::_.System.Object? m_propertyInfoCache => Field<global::_.System.Object>();
 
-        // Unknown field: m_eventInfoCache (object)
+        public global::_.System.Object? m_eventInfoCache => Field<global::_.System.Object>();
 
         public string? m_defaultMemberName => Field<string>();
 

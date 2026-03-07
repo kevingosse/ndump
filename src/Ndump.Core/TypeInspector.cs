@@ -134,7 +134,18 @@ public sealed class TypeInspector
     private static FieldKind ClassifyField(ClrInstanceField field)
     {
         if (field.Type is null)
-            return FieldKind.Unknown;
+        {
+
+            // ClrMD couldn't resolve the type (e.g., field was null and the type
+            // was never instantiated on the heap). Use ElementType to classify.
+            return field.ElementType switch
+            {
+                ClrElementType.Class or ClrElementType.Object => FieldKind.ObjectReference,
+                ClrElementType.String => FieldKind.String,
+                ClrElementType.SZArray or ClrElementType.Array => FieldKind.Array,
+                _ => FieldKind.Unknown
+            };
+        }
 
         if (field.Type.IsArray)
             return FieldKind.Array;

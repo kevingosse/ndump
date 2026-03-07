@@ -141,6 +141,9 @@ class Program
         var scores2 = new Dictionary<string, int> { ["art"] = 72 };
         var scores3 = new Dictionary<string, int> { ["math"] = 100, ["art"] = 88, ["science"] = 91 };
 
+        // Force the KeyCollection type to be loaded
+        _ = scores1.Keys.ToArray();
+
         var cust1 = new Customer("Alice", 30, true, order1, addr1, [order1, order2],
             [order1, addr1, tag1, "hello"], [cat1, dog1], ["vip", "early-adopter"], scores1);
         var cust2 = new Customer("Bob", 45, false, order2, addr2, [order2],

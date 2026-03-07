@@ -7,7 +7,7 @@ public sealed class AsyncLocal<T> : global::_.System.Object
 {
     private AsyncLocal(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    // Unknown field: _valueChangedHandler (object)
+    public global::_.System.Object? _valueChangedHandler => Field<global::_.System.Object>();
 
     public static new AsyncLocal<T> FromAddress(ulong address, DumpContext ctx)
         => new AsyncLocal<T>(address, ctx);

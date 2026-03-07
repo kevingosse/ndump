@@ -17,7 +17,7 @@ public sealed class ProcessStartInfo : _.System.Object
 
     public string? _verb => Field<string>();
 
-    // Unknown field: _argumentList (object)
+    public global::_.System.Object? _argumentList => Field<global::_.System.Object>();
 
     public int _windowStyle => Field<int>();
 

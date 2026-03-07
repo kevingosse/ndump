@@ -17,7 +17,7 @@ public partial class EventSource : _.System.Object
 
     // Array field: m_rawManifest (object) — element type not supported
 
-    // Unknown field: m_eventCommandExecuted (object)
+    public global::_.System.Object? m_eventCommandExecuted => Field<global::_.System.Object>();
 
     public int m_config => Field<int>();
 

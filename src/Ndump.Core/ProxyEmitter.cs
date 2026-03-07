@@ -59,17 +59,24 @@ public sealed class ProxyEmitter
         var files = new List<string>();
         var emittedGenericDefs = new HashSet<string>();
 
+        var emittedNestedGeneric = new HashSet<string>();
+
         foreach (var type in types)
         {
-            // Skip value types nested inside generic parents — they're emitted
-            // as nested classes inside the generic proxy
-            if (type.IsValueType && IsNestedInsideGenericParent(type))
-                continue;
-
             string code;
             string safeName;
 
-            if (type.IsGenericInstance)
+            if (IsNestedInsideGenericParent(type))
+            {
+                // Emit in own file with partial generic outer class wrapper.
+                // Deduplicate by backtick-form suffix (e.g., only one "Entry" across specializations).
+                var bt = ConvertToBacktickForm(type.FullName);
+                if (!emittedNestedGeneric.Add(bt))
+                    continue;
+                code = GenerateNestedGenericTypeProxy(type);
+                safeName = SanitizeTypeName(type.Name);
+            }
+            else if (type.IsGenericInstance)
             {
                 // Emit one generic proxy per definition, skip subsequent specializations
                 if (!emittedGenericDefs.Add(type.GenericDefinitionFullName!))
@@ -404,8 +411,18 @@ public sealed class ProxyEmitter
 
         var baseClass = "global::_.System.Object";
 
+        // Check if any nested types exist for this generic definition
+        var ownerBacktick = ConvertToBacktickForm(representative.FullName);
+        var hasNestedTypes = _typesByName.Values.Any(t =>
+        {
+            var bt = ConvertToBacktickForm(t.FullName);
+            var plusIdx = bt.IndexOf('+');
+            return plusIdx > 0 && bt[..plusIdx] == ownerBacktick;
+        });
+        var classModifiers = hasNestedTypes ? "partial" : "sealed";
+
         var body = new StringBuilder();
-        body.AppendLine($"public sealed class {classNameWithParams} : {baseClass}");
+        body.AppendLine($"public {classModifiers} class {classNameWithParams} : {baseClass}");
         body.AppendLine("{");
         body.AppendLine($"    private {defName}(ulong address, DumpContext ctx) : base(address, ctx) {{ }}");
 
@@ -434,10 +451,6 @@ public sealed class ProxyEmitter
         body.AppendLine();
         body.AppendLine($"    public override string ToString() => $\"{defName}@0x{{_objAddress:X}}\";");
 
-        // Emit nested value types (e.g., Entry inside Dictionary) as nested classes
-        // with the parent's type parameters substituted for __Canon / concrete args
-        EmitNestedValueTypes(body, representative, typeArgMap);
-
         body.AppendLine("}");
 
         // Build the final output
@@ -450,6 +463,123 @@ public sealed class ProxyEmitter
         sb.AppendLine($"namespace {proxyNamespace};");
         sb.AppendLine();
         sb.Append(body);
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Generate a proxy for a type nested inside a generic parent (e.g., Dictionary+KeyCollection, Dictionary+Entry).
+    /// Emits the nested class in its own file, wrapped in a partial generic outer class.
+    /// </summary>
+    private string GenerateNestedGenericTypeProxy(TypeMetadata nestedType)
+    {
+        // Find the + separator between parent and nested name (outside angle brackets)
+        int depth = 0, origPlusIdx = -1;
+        for (int i = 0; i < nestedType.FullName.Length; i++)
+        {
+            if (nestedType.FullName[i] == '<') depth++;
+            else if (nestedType.FullName[i] == '>') depth--;
+            else if (nestedType.FullName[i] == '+' && depth == 0) { origPlusIdx = i; break; }
+        }
+        if (origPlusIdx < 0)
+            return $"// ERROR: No nesting separator found in {nestedType.FullName}";
+
+        var parentFullName = nestedType.FullName[..origPlusIdx];
+        var nestedSuffix = nestedType.FullName[(origPlusIdx + 1)..];
+        var sanitizedNestedName = SanitizeTypeName(nestedSuffix);
+
+        // _genericRepresentatives keys are GenericDefinitionFullName (e.g., "System.Collections.Generic.Dictionary")
+        var parentGenDef = ExtractGenericDefinitionFullName(parentFullName);
+        if (parentGenDef is null || !_genericRepresentatives.TryGetValue(parentGenDef, out var parentRep))
+            return $"// ERROR: Could not find parent generic definition for {nestedType.FullName}";
+
+        // Build type arg map from the nested type's own parent specialization, not the representative.
+        // E.g., for Dictionary<String, Int32>+KeyCollection, use [String, Int32] not [String, Object].
+        var (_, parentTypeArgs) = TypeInspector.ParseGenericName(parentFullName);
+        var arity = parentTypeArgs.Count;
+        var typeParamNames = arity == 1
+            ? ["T"]
+            : Enumerable.Range(1, arity).Select(i => $"T{i}").ToArray();
+        var typeArgMap = new Dictionary<string, string>();
+        for (int i = 0; i < arity; i++)
+            typeArgMap[parentTypeArgs[i]] = typeParamNames[i];
+
+        var parentDefName = parentRep.GenericDefinitionName!;
+        var typeParamList = string.Join(", ", typeParamNames);
+
+        // Build the nested class body
+        var body = new StringBuilder();
+        body.AppendLine($"    public sealed class {sanitizedNestedName} : global::_.System.Object");
+        body.AppendLine("    {");
+
+        if (nestedType.IsValueType)
+        {
+            body.AppendLine($"        private {sanitizedNestedName}(ulong address, DumpContext ctx, ulong arrayAddr, int arrayIndex) : base(address, ctx, arrayAddr, arrayIndex) {{ }}");
+        }
+        else
+        {
+            body.AppendLine($"        private {sanitizedNestedName}(ulong address, DumpContext ctx) : base(address, ctx) {{ }}");
+        }
+
+        // Emit fields with type param substitution
+        var usedNames = new HashSet<string> { sanitizedNestedName, "_objAddress", "_ctx" };
+        foreach (var field in nestedType.Fields)
+        {
+            var propName = SanitizePropertyName(field.Name);
+            if (!usedNames.Add(propName)) continue;
+
+            body.AppendLine();
+
+            // Check if this field's type matches a parent type arg (via __Canon or concrete types)
+            if (field.Kind == FieldKind.ObjectReference && field.ReferenceTypeName is not null
+                && typeArgMap.TryGetValue(field.ReferenceTypeName, out var typeParam))
+            {
+                EmitNestedFieldWithTypeParam(body, field, propName, typeParam);
+            }
+            else if (field.Kind == FieldKind.ObjectReference && field.ReferenceTypeName == "System.__Canon")
+            {
+                var canonParam = ResolveCanonTypeParam(nestedType, field, typeArgMap);
+                if (canonParam is not null)
+                    EmitNestedFieldWithTypeParam(body, field, propName, canonParam);
+                else
+                    EmitNestedField(body, nestedType, field, propName, typeArgMap);
+            }
+            else
+            {
+                EmitNestedField(body, nestedType, field, propName, typeArgMap);
+            }
+        }
+
+        if (nestedType.IsValueType)
+        {
+            body.AppendLine();
+            body.AppendLine($"        public static {sanitizedNestedName} FromArrayElement(ulong address, DumpContext ctx, ulong arrayAddr, int arrayIndex)");
+            body.AppendLine($"            => new {sanitizedNestedName}(address, ctx, arrayAddr, arrayIndex);");
+        }
+        else
+        {
+            body.AppendLine();
+            body.AppendLine($"        public static new {sanitizedNestedName} FromAddress(ulong address, DumpContext ctx)");
+            body.AppendLine($"            => new {sanitizedNestedName}(address, ctx);");
+        }
+
+        body.AppendLine();
+        body.AppendLine($"        public override string ToString() => $\"{sanitizedNestedName}@0x{{_objAddress:X}}\";");
+        body.AppendLine("    }");
+
+        // Build the final output: partial outer class wrapper
+        var sb = new StringBuilder();
+        sb.AppendLine("#nullable enable");
+        sb.AppendLine("using Ndump.Core;");
+        sb.AppendLine();
+
+        var proxyNamespace = GetProxyNamespace(parentRep.Namespace);
+        sb.AppendLine($"namespace {proxyNamespace};");
+        sb.AppendLine();
+        sb.AppendLine($"public partial class {parentDefName}<{typeParamList}>");
+        sb.AppendLine("{");
+        sb.Append(body);
+        sb.AppendLine("}");
 
         return sb.ToString();
     }
@@ -498,7 +628,7 @@ public sealed class ProxyEmitter
                 }
                 else
                 {
-                    EmitObjectReferenceProperty(sb, ownerType, field, propName);
+                    EmitGenericObjectReferenceProperty(sb, ownerType, field, propName, typeArgMap);
                 }
                 break;
 
@@ -516,75 +646,7 @@ public sealed class ProxyEmitter
         }
     }
 
-    /// <summary>
-    /// Emit nested value type classes inside a generic proxy.
-    /// E.g., Dictionary&lt;T1, T2&gt; gets a nested Entry class with key:T1, value:T2.
-    /// </summary>
-    private void EmitNestedValueTypes(StringBuilder body, TypeMetadata representative, Dictionary<string, string> typeArgMap)
-    {
-        // Find value types nested inside this generic parent
-        // Their full name starts with the representative's full name + "+"
-        var prefix = representative.FullName + "+";
-        var nestedValueTypes = _typesByName.Values
-            .Where(t => t.IsValueType && t.FullName.StartsWith(prefix))
-            .ToList();
-
-        foreach (var vt in nestedValueTypes)
-        {
-            var nestedName = vt.Name[(vt.Name.LastIndexOf('+') + 1)..];
-            var sanitizedNestedName = SanitizeTypeName(nestedName);
-
-            body.AppendLine();
-            body.AppendLine($"    public sealed class {sanitizedNestedName} : global::_.System.Object");
-            body.AppendLine("    {");
-            body.AppendLine($"        private {sanitizedNestedName}(ulong address, DumpContext ctx, ulong arrayAddr, int arrayIndex) : base(address, ctx, arrayAddr, arrayIndex) {{ }}");
-
-            // Emit fields with type param substitution
-            // __Canon fields in the nested type correspond to the parent's type args
-            // We match them positionally based on the representative's Entry fields
-            var usedNames = new HashSet<string> { sanitizedNestedName, "_objAddress", "_ctx" };
-            foreach (var field in vt.Fields)
-            {
-                var propName = SanitizePropertyName(field.Name);
-                if (!usedNames.Add(propName)) continue;
-
-                body.AppendLine();
-
-                // Check if this field's type matches a parent type arg (via __Canon or concrete types)
-                if (field.Kind == FieldKind.ObjectReference && field.ReferenceTypeName is not null
-                    && typeArgMap.TryGetValue(field.ReferenceTypeName, out var typeParam))
-                {
-                    // Direct match (concrete type arg like System.String)
-                    EmitStructFieldWithTypeParam(body, field, propName, typeParam);
-                }
-                else if (field.Kind == FieldKind.ObjectReference && field.ReferenceTypeName == "System.__Canon")
-                {
-                    // __Canon: find which type param this corresponds to
-                    // Use positional matching — count __Canon fields up to this one
-                    var canonParam = ResolveCanonTypeParam(vt, field, typeArgMap);
-                    if (canonParam is not null)
-                        EmitStructFieldWithTypeParam(body, field, propName, canonParam);
-                    else
-                        EmitStructField(body, field, propName);
-                }
-                else
-                {
-                    EmitStructField(body, field, propName);
-                }
-            }
-
-            body.AppendLine();
-            body.AppendLine($"        public static {sanitizedNestedName} FromArrayElement(ulong address, DumpContext ctx, ulong arrayAddr, int arrayIndex)");
-            body.AppendLine($"            => new {sanitizedNestedName}(address, ctx, arrayAddr, arrayIndex);");
-
-            body.AppendLine();
-            body.AppendLine($"        public override string ToString() => $\"{sanitizedNestedName}@0x{{_objAddress:X}}\";");
-
-            body.AppendLine("    }");
-        }
-    }
-
-    private static void EmitStructFieldWithTypeParam(StringBuilder sb, FieldInfo field, string propName, string typeParam)
+    private static void EmitNestedFieldWithTypeParam(StringBuilder sb, FieldInfo field, string propName, string typeParam)
     {
         if (propName == field.Name)
             sb.AppendLine($"        public {typeParam}? {propName} => Field<{typeParam}>();");
@@ -592,7 +654,75 @@ public sealed class ProxyEmitter
             sb.AppendLine($"        public {typeParam}? {propName} => Field<{typeParam}>(\"{field.Name}\");");
     }
 
-    private static void EmitStructField(StringBuilder sb, FieldInfo field, string propName)
+    /// <summary>
+    /// Emit a field property inside a nested type of a generic proxy.
+    /// Handles __Canon and backtick references by resolving them relative to the parent generic.
+    /// </summary>
+    private void EmitNestedField(StringBuilder sb, TypeMetadata nestedType, FieldInfo field, string propName, Dictionary<string, string> typeArgMap)
+    {
+        if (field.Kind == FieldKind.ObjectReference && field.ReferenceTypeName is not null)
+        {
+            // Replace __Canon with type params and concrete type args with type params
+            var resolved = ResolveNestedFieldType(field.ReferenceTypeName, typeArgMap);
+            if (resolved is not null)
+            {
+                if (propName == field.Name)
+                    sb.AppendLine($"        public {resolved}? {propName} => Field<{resolved}>();");
+                else
+                    sb.AppendLine($"        public {resolved}? {propName} => Field<{resolved}>(\"{field.Name}\");");
+                return;
+            }
+        }
+
+        EmitNestedFieldSimple(sb, field, propName);
+    }
+
+    /// <summary>
+    /// Resolve an object reference type name inside a nested generic type.
+    /// Replaces __Canon with type params, and maps concrete type args back to type params.
+    /// Returns the C# type expression (e.g., "Dictionary&lt;T1, T2&gt;") or null if unresolvable.
+    /// </summary>
+    private string? ResolveNestedFieldType(string refTypeName, Dictionary<string, string> typeArgMap)
+    {
+        // First replace __Canon with type params
+        var typeName = refTypeName.Contains("__Canon")
+            ? ReplaceCanonWithTypeParams(refTypeName, typeArgMap)
+            : refTypeName;
+
+        // Also replace concrete type args with type params (e.g., System.String → T1)
+        foreach (var (concreteArg, typeParam) in typeArgMap)
+            typeName = typeName.Replace(concreteArg, typeParam);
+
+        // Check if the resolved type is a known generic definition
+        var genDef = ExtractGenericDefinitionFullName(typeName);
+        if (genDef is not null && _knownGenericDefinitions.Contains(genDef))
+        {
+            // Build the proxy type reference with type params preserved
+            var lastDot = genDef.LastIndexOf('.');
+            var ns = lastDot > 0 ? genDef[..lastDot] : "";
+            var defName = lastDot > 0 ? genDef[(lastDot + 1)..] : genDef;
+            var proxyNs = GetProxyNamespace(ns);
+
+            // Extract and map type arguments, keeping type params as-is
+            var (_, typeArgs) = TypeInspector.ParseGenericName(typeName);
+            var mappedArgs = typeArgs.Select(arg =>
+            {
+                // If it's a type param (no dot, like "T1"), keep it
+                if (!arg.Contains('.')) return arg;
+                // Otherwise map CLR type to C# type
+                return MapClrTypeToProxyTypeArg(arg);
+            });
+            return $"{proxyNs}.{defName}<{string.Join(", ", mappedArgs)}>";
+        }
+
+        // Check if it's a known non-generic proxy type
+        if (_knownProxyTypes.Contains(typeName))
+            return GetFullyQualifiedNonGenericProxyType(typeName);
+
+        return null;
+    }
+
+    private static void EmitNestedFieldSimple(StringBuilder sb, FieldInfo field, string propName)
     {
         switch (field.Kind)
         {
@@ -610,11 +740,16 @@ public sealed class ProxyEmitter
                     sb.AppendLine($"        public string? {propName} => Field<string>(\"{field.Name}\");");
                 break;
 
-            default:
+            case FieldKind.ObjectReference:
+                // Object reference in nested type — map to _.System.Object
                 if (propName == field.Name)
-                    sb.AppendLine($"        public ulong {propName} => RefAddress();");
+                    sb.AppendLine($"        public global::_.System.Object? {propName} => Field<global::_.System.Object>();");
                 else
-                    sb.AppendLine($"        public ulong {propName} => RefAddress(\"{field.Name}\");");
+                    sb.AppendLine($"        public global::_.System.Object? {propName} => Field<global::_.System.Object>(\"{field.Name}\");");
+                break;
+
+            default:
+                sb.AppendLine($"        // Unknown field: {field.Name} ({field.TypeName})");
                 break;
         }
     }
@@ -645,6 +780,40 @@ public sealed class ProxyEmitter
             }
         }
         return null;
+    }
+
+    /// <summary>
+    /// Replace __Canon type arguments inside a generic type name with the parent's type parameters.
+    /// E.g., "System.Collections.Generic.Dictionary&lt;System.__Canon, System.Int32&gt;"
+    /// with typeArgMap {System.String→T1, System.Int32→T2}
+    /// → "System.Collections.Generic.Dictionary&lt;T1, System.Int32&gt;"
+    /// Uses positional matching: first __Canon → first ref-type param, etc.
+    /// </summary>
+    private static string ReplaceCanonWithTypeParams(string typeName, Dictionary<string, string> typeArgMap)
+    {
+        // Simple approach: replace each __Canon occurrence with the next type param
+        var typeParams = typeArgMap.Values.ToList();
+        int canonIndex = 0;
+        var result = new StringBuilder();
+        int i = 0;
+        const string canon = "System.__Canon";
+        while (i < typeName.Length)
+        {
+            if (i + canon.Length <= typeName.Length && typeName[i..(i + canon.Length)] == canon)
+            {
+                if (canonIndex < typeParams.Count)
+                    result.Append(typeParams[canonIndex++]);
+                else
+                    result.Append(canon);
+                i += canon.Length;
+            }
+            else
+            {
+                result.Append(typeName[i]);
+                i++;
+            }
+        }
+        return result.ToString();
     }
 
     private void EmitGenericArrayProperty(StringBuilder sb, TypeMetadata ownerType, FieldInfo field, string propName, Dictionary<string, string> typeArgMap)
@@ -988,6 +1157,73 @@ public sealed class ProxyEmitter
             else
                 sb.AppendLine($"    public global::_.System.Object? {propName} => Field<global::_.System.Object>(\"{field.Name}\");");
         }
+    }
+
+    /// <summary>
+    /// Emit an object reference property inside a generic proxy, handling:
+    /// 1. Nested types of the same generic parent (e.g., KeyCollection → just "KeyCollection")
+    /// 2. __Canon references that need substitution with type params
+    /// Falls back to the standard EmitObjectReferenceProperty for other cases.
+    /// </summary>
+    /// <summary>
+    /// Check if a field's reference type is nested inside the same generic parent,
+    /// handling all CLR name forms: concrete (Dictionary&lt;String,Int32&gt;+KeyCollection),
+    /// backtick (Dictionary`2+KeyCollection), and __Canon (Dictionary&lt;__Canon,Int32&gt;+KeyCollection).
+    /// Returns the nested suffix (e.g., "KeyCollection") or null if not nested.
+    /// </summary>
+    private string? TryGetNestedSuffix(string refTypeName, TypeMetadata ownerType)
+    {
+        // Check concrete form: "Dictionary<String, Object>+KeyCollection"
+        var prefix = ownerType.FullName + "+";
+        if (refTypeName.StartsWith(prefix))
+            return refTypeName[prefix.Length..];
+
+        // Convert both to backtick form and compare the parent portion
+        var refBacktick = ConvertToBacktickForm(refTypeName);
+        var plusIdx = refBacktick.IndexOf('+');
+        if (plusIdx <= 0) return null;
+
+        var refParent = refBacktick[..plusIdx];
+        var ownerBacktick = ConvertToBacktickForm(ownerType.FullName);
+        // Strip nested part from owner if present
+        var ownerPlusIdx = ownerBacktick.IndexOf('+');
+        if (ownerPlusIdx > 0) ownerBacktick = ownerBacktick[..ownerPlusIdx];
+
+        if (refParent == ownerBacktick)
+            return refBacktick[(plusIdx + 1)..];
+
+        return null;
+    }
+
+    private void EmitGenericObjectReferenceProperty(StringBuilder sb, TypeMetadata ownerType, FieldInfo field, string propName, Dictionary<string, string> typeArgMap)
+    {
+        if (field.ReferenceTypeName is not null)
+        {
+            // Check if field type is nested inside this generic parent
+            var nestedSuffix = TryGetNestedSuffix(field.ReferenceTypeName, ownerType);
+            if (nestedSuffix is not null)
+            {
+                var sanitizedNested = SanitizeTypeName(nestedSuffix);
+                if (propName == field.Name)
+                    sb.AppendLine($"    public {sanitizedNested}? {propName} => Field<{sanitizedNested}>();");
+                else
+                    sb.AppendLine($"    public {sanitizedNested}? {propName} => Field<{sanitizedNested}>(\"{field.Name}\");");
+                return;
+            }
+
+            // __Canon references that aren't nested — fall back to _.System.Object
+            if (field.ReferenceTypeName.Contains("__Canon"))
+            {
+                if (propName == field.Name)
+                    sb.AppendLine($"    public global::_.System.Object? {propName} => Field<global::_.System.Object>();");
+                else
+                    sb.AppendLine($"    public global::_.System.Object? {propName} => Field<global::_.System.Object>(\"{field.Name}\");");
+                return;
+            }
+        }
+
+        // Standard handling for non-__Canon, non-nested references
+        EmitObjectReferenceProperty(sb, ownerType, field, propName);
     }
 
     /// <summary>

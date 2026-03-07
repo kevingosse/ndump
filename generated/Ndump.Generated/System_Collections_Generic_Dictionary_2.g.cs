@@ -3,7 +3,7 @@ using Ndump.Core;
 
 namespace _.System.Collections.Generic;
 
-public sealed class Dictionary<T1, T2> : global::_.System.Object
+public partial class Dictionary<T1, T2> : global::_.System.Object
 {
     private Dictionary(ulong address, DumpContext ctx) : base(address, ctx) { }
 
@@ -23,30 +23,12 @@ public sealed class Dictionary<T1, T2> : global::_.System.Object
 
     public global::_.System.Object? _comparer => Field<global::_.System.Object>();
 
-    // Unknown field: _keys (object)
+    public KeyCollection? _keys => Field<KeyCollection>();
 
-    // Unknown field: _values (object)
+    public global::_.System.Object? _values => Field<global::_.System.Object>();
 
     public static new Dictionary<T1, T2> FromAddress(ulong address, DumpContext ctx)
         => new Dictionary<T1, T2>(address, ctx);
 
     public override string ToString() => $"Dictionary@0x{_objAddress:X}";
-
-    public sealed class Entry : global::_.System.Object
-    {
-        private Entry(ulong address, DumpContext ctx, ulong arrayAddr, int arrayIndex) : base(address, ctx, arrayAddr, arrayIndex) { }
-
-        public uint hashCode => Field<uint>();
-
-        public int next => Field<int>();
-
-        public T1? key => Field<T1>();
-
-        public T2? value => Field<T2>();
-
-        public static Entry FromArrayElement(ulong address, DumpContext ctx, ulong arrayAddr, int arrayIndex)
-            => new Entry(address, ctx, arrayAddr, arrayIndex);
-
-        public override string ToString() => $"Entry@0x{_objAddress:X}";
-    }
 }
