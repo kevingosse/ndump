@@ -19,7 +19,7 @@ public sealed class BufferedFileStreamStrategy : _.System.IO.Strategies.FileStre
 
     public int _readLen => Field<int>();
 
-    // ValueType field: _lastSyncCompletedReadTask (object) — not yet supported
+    public _.System.Threading.Tasks.CachedCompletedInt32Task _lastSyncCompletedReadTask => StructField<_.System.Threading.Tasks.CachedCompletedInt32Task>("System.Threading.Tasks.CachedCompletedInt32Task");
 
     public static new BufferedFileStreamStrategy FromAddress(ulong address, DumpContext ctx)
         => new BufferedFileStreamStrategy(address, ctx);

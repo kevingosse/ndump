@@ -21,7 +21,7 @@ public sealed class Task<T> : global::_.System.Object
 
     public global::_.System.Object? m_contingentProperties => Field<global::_.System.Object>();
 
-    // ValueType field: m_result (object) — not yet supported
+    public _.System.Threading.Tasks.VoidTaskResult m_result => StructField<_.System.Threading.Tasks.VoidTaskResult>("System.Threading.Tasks.VoidTaskResult");
 
     public static new Task<T> FromAddress(ulong address, DumpContext ctx)
         => new Task<T>(address, ctx);

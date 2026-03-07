@@ -12,9 +12,12 @@ public class Object
     protected readonly ulong _arrayAddr;
     protected readonly int _arrayIndex;
     protected readonly bool _isStructElement;
+    // For interior struct fields: the CLR type name of this struct
+    protected readonly string? _interiorTypeName;
 
     private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::System.Func<ulong, DumpContext, object>?> _proxyFactories = new();
     private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::System.Func<ulong, DumpContext, ulong, int, object>?> _structProxyFactories = new();
+    private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::System.Func<ulong, DumpContext, string, object>?> _interiorProxyFactories = new();
     private static readonly global::System.Func<ulong, DumpContext, object?>? _proxyResolver = ResolveProxyResolverMethod();
 
     private static global::System.Func<ulong, DumpContext, object?>? ResolveProxyResolverMethod()
@@ -41,12 +44,21 @@ public class Object
         _isStructElement = true;
     }
 
+    protected Object(ulong address, DumpContext ctx, string interiorTypeName)
+    {
+        _objAddress = address;
+        _ctx = ctx;
+        _interiorTypeName = interiorTypeName;
+    }
+
     public ulong GetObjAddress() => _objAddress;
 
     protected T Field<T>([CallerMemberName] string fieldName = "")
     {
         if (_isStructElement)
             return FieldStructElement<T>(fieldName);
+        if (_interiorTypeName is not null)
+            return FieldInterior<T>(fieldName);
         if (typeof(T) == typeof(string))
             return (T)(object)_ctx.GetStringField(_objAddress, fieldName)!;
         if (!typeof(T).IsValueType)
@@ -69,6 +81,42 @@ public class Object
             return (T)CreateProxy(typeof(T), addr, _ctx);
         }
         return _ctx.GetStructArrayElementFieldValue<T>(_arrayAddr, _arrayIndex, fieldName);
+    }
+
+    private T FieldInterior<T>(string fieldName)
+    {
+        if (typeof(T) == typeof(string))
+            return (T)(object)_ctx.GetStringField(_objAddress, _interiorTypeName!, fieldName)!;
+        if (!typeof(T).IsValueType)
+        {
+            var addr = _ctx.GetObjectAddress(_objAddress, _interiorTypeName!, fieldName);
+            if (addr == 0) return default!;
+            return (T)CreateProxy(typeof(T), addr, _ctx);
+        }
+        return _ctx.GetFieldValue<T>(_objAddress, _interiorTypeName!, fieldName);
+    }
+
+    protected T StructField<T>(string structTypeName, [CallerMemberName] string fieldName = "")
+    {
+        ulong addr;
+        if (_isStructElement)
+            addr = _ctx.GetStructArrayElementValueTypeFieldAddress(_arrayAddr, _arrayIndex, fieldName);
+        else if (_interiorTypeName is not null)
+            addr = _ctx.GetInteriorValueTypeFieldAddress(_objAddress, _interiorTypeName, fieldName);
+        else
+            addr = _ctx.GetValueTypeFieldAddress(_objAddress, fieldName);
+        return (T)CreateInteriorProxy(typeof(T), addr, _ctx, structTypeName);
+    }
+
+    private static object CreateInteriorProxy(global::System.Type proxyType, ulong address, DumpContext ctx, string structTypeName)
+    {
+        var factory = _interiorProxyFactories.GetOrAdd(proxyType, static t =>
+        {
+            var method = t.GetMethod("FromInterior", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static);
+            if (method is null) return null;
+            return (global::System.Func<ulong, DumpContext, string, object>)((a, c, tn) => method.Invoke(null, [a, c, tn])!);
+        });
+        return factory?.Invoke(address, ctx, structTypeName) ?? throw new global::System.InvalidOperationException($"No FromInterior factory on {proxyType}");
     }
 
     protected ulong RefAddress([CallerMemberName] string fieldName = "")

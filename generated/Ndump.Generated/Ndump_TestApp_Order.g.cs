@@ -13,7 +13,7 @@ public sealed class Order : _.System.Object
 
     public string? _description => Field<string>();
 
-    // ValueType field: _createdAt (object) — not yet supported
+    public _.System.DateTime _createdAt => StructField<_.System.DateTime>("System.DateTime");
 
     public static new Order FromAddress(ulong address, DumpContext ctx)
         => new Order(address, ctx);

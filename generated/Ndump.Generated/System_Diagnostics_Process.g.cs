@@ -45,15 +45,15 @@ public sealed class Process : _.System.ComponentModel.Component
 
     public bool _watchingForExit => Field<bool>();
 
-    // ValueType field: _onExited (object) — not yet supported
+    // ValueType field: _onExited (System.Void) — no proxy available
 
     public bool _exited => Field<bool>();
 
     public int _exitCode => Field<int>();
 
-    // ValueType field: _startTime (object) — not yet supported
+    // ValueType field: _startTime (System.Nullable<T1>) — no proxy available
 
-    // ValueType field: _exitTime (object) — not yet supported
+    public _.System.DateTime _exitTime => StructField<_.System.DateTime>("System.DateTime");
 
     public bool _haveExitTime => Field<bool>();
 
@@ -63,7 +63,7 @@ public sealed class Process : _.System.ComponentModel.Component
 
     public bool _raisedOnExited => Field<bool>();
 
-    // ValueType field: _registeredWaitHandle (object) — not yet supported
+    // ValueType field: _registeredWaitHandle (System.Void) — no proxy available
 
     public _.System.Threading.WaitHandle? _waitHandle => Field<_.System.Threading.WaitHandle>();
 
@@ -93,7 +93,7 @@ public sealed class Process : _.System.ComponentModel.Component
 
     public bool _pendingErrorRead => Field<bool>();
 
-    // ValueType field: <SynchronizingObject>k__BackingField (object) — not yet supported
+    // ValueType field: <SynchronizingObject>k__BackingField (System.Void) — no proxy available
 
     public string? _processName => Field<string>();
 

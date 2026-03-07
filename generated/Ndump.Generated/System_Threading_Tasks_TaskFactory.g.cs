@@ -7,7 +7,7 @@ public sealed class TaskFactory : _.System.Object
 {
     private TaskFactory(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    // ValueType field: m_defaultCancellationToken (object) — not yet supported
+    public _.System.Threading.CancellationToken m_defaultCancellationToken => StructField<_.System.Threading.CancellationToken>("System.Threading.CancellationToken");
 
     public global::_.System.Object? m_defaultScheduler => Field<global::_.System.Object>();
 

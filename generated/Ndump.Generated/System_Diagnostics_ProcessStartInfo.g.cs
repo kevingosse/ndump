@@ -49,7 +49,7 @@ public sealed class ProcessStartInfo : _.System.Object
 
     public bool UseCredentialsForNetworkingOnly => Field<bool>("<UseCredentialsForNetworkingOnly>k__BackingField");
 
-    // ValueType field: <Password>k__BackingField (object) — not yet supported
+    // ValueType field: <Password>k__BackingField (System.Void) — no proxy available
 
     public bool CreateNewProcessGroup => Field<bool>("<CreateNewProcessGroup>k__BackingField");
 

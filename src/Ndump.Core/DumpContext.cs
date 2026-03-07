@@ -139,6 +139,51 @@ public sealed class DumpContext : IDisposable
     }
 
     /// <summary>
+    /// Get the interior address of a value type field embedded in a heap object.
+    /// </summary>
+    public ulong GetValueTypeFieldAddress(ulong objAddress, string fieldName)
+    {
+        var obj = Heap.GetObject(objAddress);
+        if (!obj.IsValid)
+            throw new InvalidOperationException($"Invalid object at address 0x{objAddress:X}");
+
+        var type = obj.Type
+            ?? throw new InvalidOperationException($"Cannot resolve type for object at 0x{objAddress:X}");
+
+        var field = type.GetFieldByName(fieldName)
+            ?? throw new InvalidOperationException($"Field '{fieldName}' not found on type '{type.Name}'");
+
+        return field.GetAddress(objAddress, interior: false);
+    }
+
+    /// <summary>
+    /// Get the interior address of a value type field embedded in another struct (at an interior address).
+    /// </summary>
+    public ulong GetInteriorValueTypeFieldAddress(ulong interiorAddress, string typeName, string fieldName)
+    {
+        var field = FindFieldByTypeName(typeName, fieldName);
+        return field.GetAddress(interiorAddress, interior: true);
+    }
+
+    /// <summary>
+    /// Get the interior address of a value type field embedded in a struct array element.
+    /// </summary>
+    public ulong GetStructArrayElementValueTypeFieldAddress(ulong arrayAddress, int index, string fieldName)
+    {
+        var obj = Heap.GetObject(arrayAddress);
+        if (!obj.IsValid)
+            throw new InvalidOperationException($"Invalid object at address 0x{arrayAddress:X}");
+
+        var array = obj.AsArray();
+        var elementAddr = array.GetStructValue(index).Address;
+        var componentType = obj.Type!.ComponentType!;
+        var field = componentType.GetFieldByName(fieldName)
+            ?? throw new InvalidOperationException($"Field '{fieldName}' not found on component type '{componentType.Name}'");
+
+        return field.GetAddress(elementAddr, interior: true);
+    }
+
+    /// <summary>
     /// Get the address of a struct array element.
     /// </summary>
     public ulong GetArrayStructElementAddress(ulong arrayAddress, int index)

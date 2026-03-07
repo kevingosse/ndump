@@ -11,7 +11,7 @@ public partial class EventSource : _.System.Object
 
     public int m_id => Field<int>();
 
-    // ValueType field: m_guid (object) — not yet supported
+    public _.System.Guid m_guid => StructField<_.System.Guid>("System.Guid");
 
     public _.System.Collections.Generic.Dictionary<object, object>? m_eventData => Field<_.System.Collections.Generic.Dictionary<object, object>>();
 

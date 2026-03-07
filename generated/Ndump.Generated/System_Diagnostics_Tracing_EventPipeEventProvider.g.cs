@@ -11,7 +11,7 @@ public sealed class EventPipeEventProvider : _.System.Diagnostics.Tracing.EventP
 
     public nint _provHandle => Field<nint>();
 
-    // ValueType field: _gcHandle (object) — not yet supported
+    public _.System.Runtime.InteropServices.GCHandle<_.System.Diagnostics.Tracing.EventPipeEventProvider> _gcHandle => StructField<_.System.Runtime.InteropServices.GCHandle<_.System.Diagnostics.Tracing.EventPipeEventProvider>>("System.Runtime.InteropServices.GCHandle<System.Diagnostics.Tracing.EventPipeEventProvider>");
 
     public static new EventPipeEventProvider FromAddress(ulong address, DumpContext ctx)
         => new EventPipeEventProvider(address, ctx);

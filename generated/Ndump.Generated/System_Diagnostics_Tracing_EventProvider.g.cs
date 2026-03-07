@@ -11,7 +11,7 @@ public class EventProvider : _.System.Object
 
     public string? _providerName => Field<string>();
 
-    // ValueType field: _providerId (object) — not yet supported
+    public _.System.Guid _providerId => StructField<_.System.Guid>("System.Guid");
 
     public bool _disposed => Field<bool>();
 

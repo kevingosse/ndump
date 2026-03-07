@@ -47,6 +47,18 @@ public sealed class TypeInspector
                 }
 
                 result.Add(BuildTypeMetadata(clrType, isValueType: false));
+
+                // Discover value types used as fields
+                foreach (var field in clrType.Fields)
+                {
+                    if (field.IsValueType && field.Type is { IsValueType: true, IsPrimitive: false, Name: not null }
+                        && field.Type.Name != "System.String" && !ShouldExclude(field.Type.Name)
+                        && !IsExcludedValueType(field.Type.Name))
+                    {
+                        pendingValueTypes.Add(field.Type);
+                    }
+                }
+
                 clrType = clrType.BaseType;
             }
         }
@@ -95,6 +107,20 @@ public sealed class TypeInspector
         };
     }
 
+    /// <summary>
+    /// Value types that should not be discovered as struct proxies from field types.
+    /// These are either meaningless (Void, ValueType) or already handled as primitives.
+    /// </summary>
+    private static bool IsExcludedValueType(string typeName) => typeName is
+        "System.Void" or "System.ValueType" or
+        "System.Boolean" or "System.Char" or
+        "System.SByte" or "System.Byte" or
+        "System.Int16" or "System.UInt16" or
+        "System.Int32" or "System.UInt32" or
+        "System.Int64" or "System.UInt64" or
+        "System.Single" or "System.Double" or
+        "System.IntPtr" or "System.UIntPtr";
+
     private static bool ShouldExclude(string typeName)
     {
         foreach (var prefix in ExcludedPrefixes)
@@ -127,7 +153,7 @@ public sealed class TypeInspector
             Name = field.Name ?? "<unknown>",
             TypeName = MapClrTypeToCs(field, kind),
             Kind = kind,
-            ReferenceTypeName = kind == FieldKind.ObjectReference ? field.Type?.Name : null
+            ReferenceTypeName = kind is FieldKind.ObjectReference or FieldKind.ValueType ? field.Type?.Name : null
         };
     }
 

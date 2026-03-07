@@ -285,6 +285,8 @@ public sealed class ProxyEmitter
         {
             // Value type proxy: additional constructor for array struct elements
             body.AppendLine($"    {ctorAccess} {sanitizedName}(ulong address, DumpContext ctx, ulong arrayAddr, int arrayIndex) : base(address, ctx, arrayAddr, arrayIndex) {{ }}");
+            // Value type proxy: additional constructor for interior (embedded) struct fields
+            body.AppendLine($"    {ctorAccess} {sanitizedName}(ulong address, DumpContext ctx, string interiorTypeName) : base(address, ctx, interiorTypeName) {{ }}");
         }
 
         // Collect field names from the base type to skip inherited fields
@@ -311,7 +313,8 @@ public sealed class ProxyEmitter
         }
 
         // FromAddress factory — use 'new' keyword if base also has FromAddress
-        var newKeyword = hasKnownBase ? "new " : "";
+        // Value type proxies always need 'new' because they shadow _.System.Object's FromAddress
+        var newKeyword = hasKnownBase || type.IsValueType ? "new " : "";
         body.AppendLine();
         body.AppendLine($"    public static {newKeyword}{sanitizedName} FromAddress(ulong address, DumpContext ctx)");
         body.AppendLine($"        => new {sanitizedName}(address, ctx);");
@@ -322,6 +325,10 @@ public sealed class ProxyEmitter
             body.AppendLine();
             body.AppendLine($"    public static {sanitizedName} FromArrayElement(ulong address, DumpContext ctx, ulong arrayAddr, int arrayIndex)");
             body.AppendLine($"        => new {sanitizedName}(address, ctx, arrayAddr, arrayIndex);");
+            // Factory for interior (embedded) struct fields
+            body.AppendLine();
+            body.AppendLine($"    public static {sanitizedName} FromInterior(ulong address, DumpContext ctx, string interiorTypeName)");
+            body.AppendLine($"        => new {sanitizedName}(address, ctx, interiorTypeName);");
         }
 
         if (!type.IsValueType)
@@ -637,7 +644,7 @@ public sealed class ProxyEmitter
                 break;
 
             case FieldKind.ValueType:
-                sb.AppendLine($"    // ValueType field: {field.Name} ({field.TypeName}) — not yet supported");
+                EmitValueTypeProperty(sb, field, propName);
                 break;
 
             default:
@@ -873,9 +880,12 @@ public sealed class ProxyEmitter
         sb.AppendLine("    protected readonly ulong _arrayAddr;");
         sb.AppendLine("    protected readonly int _arrayIndex;");
         sb.AppendLine("    protected readonly bool _isStructElement;");
+        sb.AppendLine("    // For interior struct fields: the CLR type name of this struct");
+        sb.AppendLine("    protected readonly string? _interiorTypeName;");
         sb.AppendLine();
         sb.AppendLine("    private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::System.Func<ulong, DumpContext, object>?> _proxyFactories = new();");
         sb.AppendLine("    private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::System.Func<ulong, DumpContext, ulong, int, object>?> _structProxyFactories = new();");
+        sb.AppendLine("    private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::System.Func<ulong, DumpContext, string, object>?> _interiorProxyFactories = new();");
         sb.AppendLine("    private static readonly global::System.Func<ulong, DumpContext, object?>? _proxyResolver = ResolveProxyResolverMethod();");
         sb.AppendLine();
         sb.AppendLine("    private static global::System.Func<ulong, DumpContext, object?>? ResolveProxyResolverMethod()");
@@ -902,12 +912,21 @@ public sealed class ProxyEmitter
         sb.AppendLine("        _isStructElement = true;");
         sb.AppendLine("    }");
         sb.AppendLine();
+        sb.AppendLine("    protected Object(ulong address, DumpContext ctx, string interiorTypeName)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        _objAddress = address;");
+        sb.AppendLine("        _ctx = ctx;");
+        sb.AppendLine("        _interiorTypeName = interiorTypeName;");
+        sb.AppendLine("    }");
+        sb.AppendLine();
         sb.AppendLine("    public ulong GetObjAddress() => _objAddress;");
         sb.AppendLine();
         sb.AppendLine("    protected T Field<T>([CallerMemberName] string fieldName = \"\")");
         sb.AppendLine("    {");
         sb.AppendLine("        if (_isStructElement)");
         sb.AppendLine("            return FieldStructElement<T>(fieldName);");
+        sb.AppendLine("        if (_interiorTypeName is not null)");
+        sb.AppendLine("            return FieldInterior<T>(fieldName);");
         sb.AppendLine("        if (typeof(T) == typeof(string))");
         sb.AppendLine("            return (T)(object)_ctx.GetStringField(_objAddress, fieldName)!;");
         sb.AppendLine("        if (!typeof(T).IsValueType)");
@@ -930,6 +949,42 @@ public sealed class ProxyEmitter
         sb.AppendLine("            return (T)CreateProxy(typeof(T), addr, _ctx);");
         sb.AppendLine("        }");
         sb.AppendLine("        return _ctx.GetStructArrayElementFieldValue<T>(_arrayAddr, _arrayIndex, fieldName);");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    private T FieldInterior<T>(string fieldName)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        if (typeof(T) == typeof(string))");
+        sb.AppendLine("            return (T)(object)_ctx.GetStringField(_objAddress, _interiorTypeName!, fieldName)!;");
+        sb.AppendLine("        if (!typeof(T).IsValueType)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            var addr = _ctx.GetObjectAddress(_objAddress, _interiorTypeName!, fieldName);");
+        sb.AppendLine("            if (addr == 0) return default!;");
+        sb.AppendLine("            return (T)CreateProxy(typeof(T), addr, _ctx);");
+        sb.AppendLine("        }");
+        sb.AppendLine("        return _ctx.GetFieldValue<T>(_objAddress, _interiorTypeName!, fieldName);");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    protected T StructField<T>(string structTypeName, [CallerMemberName] string fieldName = \"\")");
+        sb.AppendLine("    {");
+        sb.AppendLine("        ulong addr;");
+        sb.AppendLine("        if (_isStructElement)");
+        sb.AppendLine("            addr = _ctx.GetStructArrayElementValueTypeFieldAddress(_arrayAddr, _arrayIndex, fieldName);");
+        sb.AppendLine("        else if (_interiorTypeName is not null)");
+        sb.AppendLine("            addr = _ctx.GetInteriorValueTypeFieldAddress(_objAddress, _interiorTypeName, fieldName);");
+        sb.AppendLine("        else");
+        sb.AppendLine("            addr = _ctx.GetValueTypeFieldAddress(_objAddress, fieldName);");
+        sb.AppendLine("        return (T)CreateInteriorProxy(typeof(T), addr, _ctx, structTypeName);");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    private static object CreateInteriorProxy(global::System.Type proxyType, ulong address, DumpContext ctx, string structTypeName)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        var factory = _interiorProxyFactories.GetOrAdd(proxyType, static t =>");
+        sb.AppendLine("        {");
+        sb.AppendLine("            var method = t.GetMethod(\"FromInterior\", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static);");
+        sb.AppendLine("            if (method is null) return null;");
+        sb.AppendLine("            return (global::System.Func<ulong, DumpContext, string, object>)((a, c, tn) => method.Invoke(null, [a, c, tn])!);");
+        sb.AppendLine("        });");
+        sb.AppendLine("        return factory?.Invoke(address, ctx, structTypeName) ?? throw new global::System.InvalidOperationException($\"No FromInterior factory on {proxyType}\");");
         sb.AppendLine("    }");
         sb.AppendLine();
         sb.AppendLine("    protected ulong RefAddress([CallerMemberName] string fieldName = \"\")");
@@ -1089,12 +1144,46 @@ public sealed class ProxyEmitter
                 break;
 
             case FieldKind.ValueType:
-                sb.AppendLine($"    // ValueType field: {field.Name} ({field.TypeName}) — not yet supported");
+                EmitValueTypeProperty(sb, field, propName);
                 break;
 
             default:
                 sb.AppendLine($"    // Unknown field: {field.Name} ({field.TypeName})");
                 break;
+        }
+    }
+
+    private static bool IsUselessValueType(string? typeName) => typeName is
+        null or "System.Void" or "System.ValueType";
+
+    /// <summary>
+    /// Check if a value type name has unresolved generic type parameters (e.g., "System.Nullable&lt;T1&gt;").
+    /// ClrMD reports these when it can't resolve the concrete specialization.
+    /// </summary>
+    private static bool HasUnresolvedTypeParams(string typeName)
+    {
+        var angleIdx = typeName.IndexOf('<');
+        if (angleIdx < 0) return false;
+        // Parse type args and check if any look like open params (no dots, short names like T, T1, TKey)
+        var (_, args) = TypeInspector.ParseGenericName(typeName);
+        return args.Any(a => !a.Contains('.'));
+    }
+
+    private void EmitValueTypeProperty(StringBuilder sb, FieldInfo field, string propName)
+    {
+        if (!IsUselessValueType(field.ReferenceTypeName)
+            && !HasUnresolvedTypeParams(field.ReferenceTypeName!)
+            && IsUsableProxyType(field.ReferenceTypeName))
+        {
+            var qualifiedProxyType = GetFullyQualifiedProxyType(field.ReferenceTypeName!);
+            if (propName == field.Name)
+                sb.AppendLine($"    public {qualifiedProxyType} {propName} => StructField<{qualifiedProxyType}>(\"{field.ReferenceTypeName}\");");
+            else
+                sb.AppendLine($"    public {qualifiedProxyType} {propName} => StructField<{qualifiedProxyType}>(\"{field.ReferenceTypeName}\", \"{field.Name}\");");
+        }
+        else
+        {
+            sb.AppendLine($"    // ValueType field: {field.Name} ({field.ReferenceTypeName ?? field.TypeName}) — no proxy available");
         }
     }
 

@@ -11,11 +11,11 @@ public sealed class EtwEventProvider : _.System.Diagnostics.Tracing.EventProvide
 
     public long _registrationHandle => Field<long>();
 
-    // ValueType field: _gcHandle (object) — not yet supported
+    public _.System.Runtime.InteropServices.GCHandle<_.System.Diagnostics.Tracing.EtwEventProvider> _gcHandle => StructField<_.System.Runtime.InteropServices.GCHandle<_.System.Diagnostics.Tracing.EtwEventProvider>>("System.Runtime.InteropServices.GCHandle<System.Diagnostics.Tracing.EtwEventProvider>");
 
     public _.System.Collections.Generic.List<object>? _liveSessions => Field<_.System.Collections.Generic.List<object>>();
 
-    // ValueType field: _providerId (object) — not yet supported
+    public _.System.Guid _providerId => StructField<_.System.Guid>("System.Guid");
 
     public static new EtwEventProvider FromAddress(ulong address, DumpContext ctx)
         => new EtwEventProvider(address, ctx);
