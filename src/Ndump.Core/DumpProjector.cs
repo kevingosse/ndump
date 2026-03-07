@@ -61,25 +61,10 @@ public sealed class DumpProjector
                     "Failed to compile generated proxies:\n" + string.Join("\n", result.Errors));
             }
 
-            // Register proxy factories for runtime type resolution (polymorphic arrays, etc.)
-            var assembly = result.Assembly!;
-            foreach (var typeMeta in types)
-            {
-                var proxyTypeName = ProxyEmitter.GetProxyTypeName(typeMeta);
-                var proxyType = assembly.GetType(proxyTypeName);
-                if (proxyType is null) continue;
-
-                var fromAddress = proxyType.GetMethod("FromAddress", BindingFlags.Public | BindingFlags.Static);
-                if (fromAddress is null) continue;
-
-                context.RegisterProxyFactory(typeMeta.FullName,
-                    (addr, ctx) => fromAddress.Invoke(null, [addr, ctx])!);
-            }
-
             return new ProjectionResult
             {
                 Context = context,
-                GeneratedAssembly = assembly,
+                GeneratedAssembly = result.Assembly!,
                 DiscoveredTypes = types,
                 GeneratedFiles = generatedFiles,
                 TempDirectory = tempDir

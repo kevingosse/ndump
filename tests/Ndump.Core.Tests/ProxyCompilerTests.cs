@@ -301,7 +301,8 @@ public class ProxyCompilerTests
         var orderCode = _emitter.GenerateProxyCode(orderType, allTypes: allTypes);
         var containerCode = _emitter.GenerateProxyCode(containerType, allTypes: allTypes);
 
-        var result = _compiler.CompileFromSource([sysObjCode, orderCode, containerCode]);
+        var resolverCode = ProxyEmitter.GenerateProxyResolver();
+        var result = _compiler.CompileFromSource([sysObjCode, orderCode, containerCode, resolverCode]);
 
         Assert.True(result.IsSuccess, string.Join("\n", result.Errors));
 

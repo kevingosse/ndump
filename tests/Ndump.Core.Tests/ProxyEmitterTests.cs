@@ -449,7 +449,7 @@ public class ProxyEmitterTests
 
         // System.Object is a known proxy type and a base type, so should use resolver with fallback
         Assert.Contains("public global::Ndump.Core.DumpArray<_.System.Object?>? _mixedItems", code);
-        Assert.Contains("_ctx.ResolveProxy(ea) as _.System.Object ?? _.System.Object.FromAddress(ea, _ctx)", code);
+        Assert.Contains("global::_.ProxyResolver.Resolve(ea, _ctx) as _.System.Object ?? _.System.Object.FromAddress(ea, _ctx)", code);
     }
 
     [Fact]
@@ -652,7 +652,7 @@ public class ProxyEmitterTests
 
         Assert.Contains("DumpArray<_.MyApp.Animal?>?", code);
         // Uses resolver with fallback for base types
-        Assert.Contains("_ctx.ResolveProxy(ea) as _.MyApp.Animal ?? _.MyApp.Animal.FromAddress(ea, _ctx)", code);
+        Assert.Contains("global::_.ProxyResolver.Resolve(ea, _ctx) as _.MyApp.Animal ?? _.MyApp.Animal.FromAddress(ea, _ctx)", code);
     }
 
     [Fact]
@@ -688,7 +688,7 @@ public class ProxyEmitterTests
         Assert.Contains("DumpArray<_.MyApp.Order?>?", code);
         // Leaf types use direct FromAddress (no resolver)
         Assert.Contains("_.MyApp.Order.FromAddress(ea, _ctx)", code);
-        Assert.DoesNotContain("ResolveProxy", code);
+        Assert.DoesNotContain("ProxyResolver", code);
     }
 
     [Fact]
@@ -728,7 +728,7 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(owner, allTypes: [animal, cat, owner]);
 
-        Assert.Contains("_ctx.ResolveProxy(addr) as _.MyApp.Animal ?? _.MyApp.Animal.FromAddress(addr, _ctx)", code);
+        Assert.Contains("global::_.ProxyResolver.Resolve(addr, _ctx) as _.MyApp.Animal ?? _.MyApp.Animal.FromAddress(addr, _ctx)", code);
     }
 
     [Fact]

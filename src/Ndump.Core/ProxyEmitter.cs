@@ -45,6 +45,11 @@ public sealed class ProxyEmitter
             files.Add(filePath);
         }
 
+        // Emit the resolver that enables polymorphic field/array resolution
+        var resolverPath = Path.Combine(outputDirectory, "ProxyResolver.g.cs");
+        File.WriteAllText(resolverPath, GenerateProxyResolver());
+        files.Add(resolverPath);
+
         return files;
     }
 
@@ -295,7 +300,7 @@ public sealed class ProxyEmitter
             sb.AppendLine("        {");
             sb.AppendLine($"            var addr = _ctx.GetObjectAddress(_objAddress, \"{field.Name}\");");
             if (isBaseType)
-                sb.AppendLine($"            return addr == 0 ? null : _ctx.ResolveProxy(addr) as {qualifiedProxyType} ?? {qualifiedProxyType}.FromAddress(addr, _ctx);");
+                sb.AppendLine($"            return addr == 0 ? null : global::_.ProxyResolver.Resolve(addr, _ctx) as {qualifiedProxyType} ?? {qualifiedProxyType}.FromAddress(addr, _ctx);");
             else
                 sb.AppendLine($"            return addr == 0 ? null : {qualifiedProxyType}.FromAddress(addr, _ctx);");
             sb.AppendLine("        }");
@@ -336,7 +341,7 @@ public sealed class ProxyEmitter
                     csElementType = $"{qualifiedProxy}?";
                     var isBaseType = _baseTypes.Contains(elementTypeName!);
                     if (isBaseType)
-                        readerLambda = $"i => {{ var ea = _ctx.GetArrayElementAddress(addr, i); return ea == 0 ? null : _ctx.ResolveProxy(ea) as {qualifiedProxy} ?? {qualifiedProxy}.FromAddress(ea, _ctx); }}";
+                        readerLambda = $"i => {{ var ea = _ctx.GetArrayElementAddress(addr, i); return ea == 0 ? null : global::_.ProxyResolver.Resolve(ea, _ctx) as {qualifiedProxy} ?? {qualifiedProxy}.FromAddress(ea, _ctx); }}";
                     else
                         readerLambda = $"i => {{ var ea = _ctx.GetArrayElementAddress(addr, i); return ea == 0 ? null : {qualifiedProxy}.FromAddress(ea, _ctx); }}";
                 }
@@ -445,6 +450,70 @@ public sealed class ProxyEmitter
             .Replace('`', '_')
             .Replace('[', '_')
             .Replace(']', '_');
+    }
+
+    internal static string GenerateProxyResolver()
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("namespace _;");
+        sb.AppendLine();
+        sb.AppendLine("internal static class ProxyResolver");
+        sb.AppendLine("{");
+        sb.AppendLine("    private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<string, global::System.Func<ulong, global::Ndump.Core.DumpContext, object>?> _cache = new();");
+        sb.AppendLine();
+        sb.AppendLine("    public static object? Resolve(ulong address, global::Ndump.Core.DumpContext ctx)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        var typeName = ctx.GetTypeName(address);");
+        sb.AppendLine("        if (typeName is null) return null;");
+        sb.AppendLine();
+        sb.AppendLine("        var factory = _cache.GetOrAdd(typeName, static name =>");
+        sb.AppendLine("        {");
+        sb.AppendLine("            var proxyTypeName = MapToProxyTypeName(name);");
+        sb.AppendLine("            var proxyType = typeof(ProxyResolver).Assembly.GetType(proxyTypeName);");
+        sb.AppendLine("            if (proxyType is null) return null;");
+        sb.AppendLine();
+        sb.AppendLine("            var method = proxyType.GetMethod(\"FromAddress\", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static);");
+        sb.AppendLine("            if (method is null) return null;");
+        sb.AppendLine();
+        sb.AppendLine("            return (global::System.Func<ulong, global::Ndump.Core.DumpContext, object>)((addr, c) => method.Invoke(null, [addr, c])!);");
+        sb.AppendLine("        });");
+        sb.AppendLine();
+        sb.AppendLine("        return factory?.Invoke(address, ctx);");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    private static string MapToProxyTypeName(string clrTypeName)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        var genericStart = clrTypeName.Length;");
+        sb.AppendLine("        for (int i = 0; i < clrTypeName.Length; i++)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            if (clrTypeName[i] is '<' or '`' or '[')");
+        sb.AppendLine("            {");
+        sb.AppendLine("                genericStart = i;");
+        sb.AppendLine("                break;");
+        sb.AppendLine("            }");
+        sb.AppendLine("        }");
+        sb.AppendLine();
+        sb.AppendLine("        var lastDot = clrTypeName.LastIndexOf('.', genericStart - 1);");
+        sb.AppendLine("        if (lastDot > 0)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            var ns = clrTypeName[..lastDot];");
+        sb.AppendLine("            var name = clrTypeName[(lastDot + 1)..];");
+        sb.AppendLine("            return \"_.\" + ns + \".\" + Sanitize(name);");
+        sb.AppendLine("        }");
+        sb.AppendLine("        return \"_.\" + Sanitize(clrTypeName);");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    private static string Sanitize(string name)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        return name");
+        sb.AppendLine("            .Replace('<', '_').Replace('>', '_')");
+        sb.AppendLine("            .Replace(',', '_').Replace(' ', '_')");
+        sb.AppendLine("            .Replace('+', '_').Replace('.', '_')");
+        sb.AppendLine("            .Replace('`', '_').Replace('[', '_')");
+        sb.AppendLine("            .Replace(']', '_');");
+        sb.AppendLine("    }");
+        sb.AppendLine("}");
+        return sb.ToString();
     }
 
     private static string SanitizePropertyName(string fieldName)
