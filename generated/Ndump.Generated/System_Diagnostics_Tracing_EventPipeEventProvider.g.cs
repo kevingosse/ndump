@@ -7,7 +7,7 @@ public sealed class EventPipeEventProvider : _.System.Diagnostics.Tracing.EventP
 {
     private EventPipeEventProvider(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public _.System.WeakReference_System_Diagnostics_Tracing_EventProvider_? _eventProvider => Field<_.System.WeakReference_System_Diagnostics_Tracing_EventProvider_>();
+    public _.System.WeakReference<_.System.Diagnostics.Tracing.EventProvider>? _eventProvider => Field<_.System.WeakReference<_.System.Diagnostics.Tracing.EventProvider>>();
 
     public nint _provHandle => Field<nint>();
 

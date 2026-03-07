@@ -7,7 +7,7 @@ public sealed class ActivityTracker : _.System.Object
 {
     private ActivityTracker(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public ulong m_current => RefAddress();
+    public _.System.Threading.AsyncLocal<object>? m_current => Field<_.System.Threading.AsyncLocal<object>>();
 
     public bool m_checkedForEnable => Field<bool>();
 

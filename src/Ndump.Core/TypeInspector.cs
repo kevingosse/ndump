@@ -22,10 +22,19 @@ public sealed class TypeInspector
     {
         var seen = new HashSet<string>();
         var result = new List<TypeMetadata>();
+        // Value types discovered from array element types — process after heap walk
+        var pendingValueTypes = new List<ClrType>();
 
         foreach (var obj in context.Heap.EnumerateObjects())
         {
             if (!obj.IsValid || obj.Type is null) continue;
+
+            // Discover value types from array component types
+            if (obj.Type.IsArray && obj.Type.ComponentType is { IsValueType: true } compType
+                && compType.Name is not null && !ShouldExclude(compType.Name))
+            {
+                pendingValueTypes.Add(compType);
+            }
 
             // Walk the type and its base types to discover abstract/base types too
             var clrType = obj.Type;
@@ -37,44 +46,53 @@ public sealed class TypeInspector
                     continue;
                 }
 
-                var fields = new List<FieldInfo>();
-                foreach (var f in clrType.Fields)
-                {
-                    fields.Add(MapField(f));
-                }
-
-                var ns = ExtractNamespace(clrType.Name);
-                var name = ExtractTypeName(clrType.Name);
-
-                var (genDefName, genArgs) = ParseGenericName(name);
-                // Compute full definition name by stripping type args from FullName
-                string? genDefFullName = null;
-                if (genDefName is not null)
-                {
-                    // Find the position of the generic < that corresponds to the leaf's generic args
-                    // by locating the defName portion within the full CLR name
-                    var anglePos = FindGenericAngleInFullName(clrType.Name);
-                    genDefFullName = anglePos > 0 ? clrType.Name[..anglePos] : null;
-                    if (genDefFullName is null) genDefName = null; // parsing failed, treat as non-generic
-                }
-
-                result.Add(new TypeMetadata
-                {
-                    FullName = clrType.Name,
-                    Namespace = ns,
-                    Name = name,
-                    Fields = fields,
-                    BaseTypeName = clrType.BaseType?.Name,
-                    GenericDefinitionName = genDefName,
-                    GenericDefinitionFullName = genDefFullName,
-                    GenericTypeArguments = genArgs
-                });
-
+                result.Add(BuildTypeMetadata(clrType, isValueType: false));
                 clrType = clrType.BaseType;
             }
         }
 
+        // Now process discovered value types
+        foreach (var vt in pendingValueTypes)
+        {
+            if (!seen.Add(vt.Name!)) continue;
+            result.Add(BuildTypeMetadata(vt, isValueType: true));
+        }
+
         return result;
+    }
+
+    private static TypeMetadata BuildTypeMetadata(ClrType clrType, bool isValueType)
+    {
+        var fields = new List<FieldInfo>();
+        foreach (var f in clrType.Fields)
+        {
+            fields.Add(MapField(f));
+        }
+
+        var ns = ExtractNamespace(clrType.Name!);
+        var name = ExtractTypeName(clrType.Name!);
+
+        var (genDefName, genArgs) = ParseGenericName(name);
+        string? genDefFullName = null;
+        if (genDefName is not null)
+        {
+            var anglePos = FindGenericAngleInFullName(clrType.Name!);
+            genDefFullName = anglePos > 0 ? clrType.Name![..anglePos] : null;
+            if (genDefFullName is null) genDefName = null;
+        }
+
+        return new TypeMetadata
+        {
+            FullName = clrType.Name!,
+            Namespace = ns,
+            Name = name,
+            Fields = fields,
+            BaseTypeName = clrType.BaseType?.Name,
+            GenericDefinitionName = genDefName,
+            GenericDefinitionFullName = genDefFullName,
+            GenericTypeArguments = genArgs,
+            IsValueType = isValueType
+        };
     }
 
     private static bool ShouldExclude(string typeName)

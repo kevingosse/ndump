@@ -61,6 +61,8 @@ public sealed class Customer : _.System.Object
         }
     }
 
+    public _.System.Collections.Generic.Dictionary<string, int>? _scores => Field<_.System.Collections.Generic.Dictionary<string, int>>();
+
     public static new Customer FromAddress(ulong address, DumpContext ctx)
         => new Customer(address, ctx);
 

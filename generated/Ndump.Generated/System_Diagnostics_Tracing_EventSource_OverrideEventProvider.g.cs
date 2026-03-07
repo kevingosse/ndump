@@ -9,7 +9,7 @@ public partial class EventSource
     {
         private OverrideEventProvider(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-        public _.System.Func_System_Diagnostics_Tracing_EventSource_? _eventSourceFactory => Field<_.System.Func_System_Diagnostics_Tracing_EventSource_>();
+        public _.System.Func<_.System.Diagnostics.Tracing.EventSource>? _eventSourceFactory => Field<_.System.Func<_.System.Diagnostics.Tracing.EventSource>>();
 
         public int _eventProviderType => Field<int>();
 

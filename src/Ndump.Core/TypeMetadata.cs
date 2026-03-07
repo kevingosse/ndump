@@ -68,4 +68,9 @@ public sealed class TypeMetadata
     public IReadOnlyList<string> GenericTypeArguments { get; init; } = [];
 
     public bool IsGenericInstance => GenericDefinitionName is not null;
+
+    /// <summary>
+    /// True if this type is a value type (struct). Struct proxies use interior addressing.
+    /// </summary>
+    public bool IsValueType { get; init; }
 }

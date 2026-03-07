@@ -7,13 +7,13 @@ public sealed class EtwEventProvider : _.System.Diagnostics.Tracing.EventProvide
 {
     private EtwEventProvider(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public _.System.WeakReference_System_Diagnostics_Tracing_EventProvider_? _eventProvider => Field<_.System.WeakReference_System_Diagnostics_Tracing_EventProvider_>();
+    public _.System.WeakReference<_.System.Diagnostics.Tracing.EventProvider>? _eventProvider => Field<_.System.WeakReference<_.System.Diagnostics.Tracing.EventProvider>>();
 
     public long _registrationHandle => Field<long>();
 
     // ValueType field: _gcHandle (object) — not yet supported
 
-    public ulong _liveSessions => RefAddress();
+    public _.System.Collections.Generic.List<object>? _liveSessions => Field<_.System.Collections.Generic.List<object>>();
 
     // ValueType field: _providerId (object) — not yet supported
 

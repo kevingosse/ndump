@@ -13,7 +13,7 @@ public partial class EventSource : _.System.Object
 
     // ValueType field: m_guid (object) — not yet supported
 
-    public ulong m_eventData => RefAddress();
+    public _.System.Collections.Generic.Dictionary<object, object>? m_eventData => Field<_.System.Collections.Generic.Dictionary<object, object>>();
 
     // Array field: m_rawManifest (object) — element type not supported
 

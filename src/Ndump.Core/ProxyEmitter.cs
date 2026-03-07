@@ -42,6 +42,13 @@ public sealed class ProxyEmitter
     private Dictionary<string, TypeMetadata> _genericRepresentatives = [];
 
     /// <summary>
+    /// Maps backtick-form type names to concrete full names.
+    /// E.g., "System.Collections.Generic.Dictionary`2+Entry" → "System.Collections.Generic.Dictionary&lt;System.String, System.Int32&gt;+Entry"
+    /// Used when ClrMD reports array component types in backtick notation.
+    /// </summary>
+    private Dictionary<string, string> _backtickToFullName = [];
+
+    /// <summary>
     /// Emit .cs files for all discovered types into the given output directory.
     /// Returns the list of generated file paths.
     /// </summary>
@@ -54,6 +61,11 @@ public sealed class ProxyEmitter
 
         foreach (var type in types)
         {
+            // Skip value types nested inside generic parents — they're emitted
+            // as nested classes inside the generic proxy
+            if (type.IsValueType && IsNestedInsideGenericParent(type))
+                continue;
+
             string code;
             string safeName;
 
@@ -164,6 +176,71 @@ public sealed class ProxyEmitter
             _knownGenericDefinitions.Add(group.Key);
             _genericRepresentatives[group.Key] = group.First();
         }
+
+        // Build backtick-to-concrete mapping for value types nested inside generic parents.
+        // ClrMD reports array component types using backtick notation (e.g., Dictionary`2+Entry)
+        // but the discovered types use angle-bracket names (e.g., Dictionary<String, Int32>+Entry).
+        _backtickToFullName = [];
+        foreach (var type in types)
+        {
+            if (!type.FullName.Contains('<')) continue;
+            var backtickForm = ConvertToBacktickForm(type.FullName);
+            if (backtickForm != type.FullName)
+                _backtickToFullName.TryAdd(backtickForm, type.FullName);
+        }
+    }
+
+    /// <summary>
+    /// Convert a CLR type name with angle brackets to backtick arity form.
+    /// E.g., "System.Collections.Generic.Dictionary&lt;System.String, System.Int32&gt;+Entry"
+    /// → "System.Collections.Generic.Dictionary`2+Entry"
+    /// </summary>
+    private bool IsNestedInsideGenericParent(TypeMetadata type)
+    {
+        // Find the + that separates parent from nested name (outside angle brackets)
+        int depth = 0, plusIdx = -1;
+        for (int i = 0; i < type.FullName.Length; i++)
+        {
+            if (type.FullName[i] == '<') depth++;
+            else if (type.FullName[i] == '>') depth--;
+            else if (type.FullName[i] == '+' && depth == 0) { plusIdx = i; break; }
+        }
+        if (plusIdx < 0) return false;
+        var parentFullName = type.FullName[..plusIdx];
+        // Check if the parent is a generic type by looking for its definition in known generic definitions
+        var parentGenDef = ExtractGenericDefinitionFullName(parentFullName);
+        return parentGenDef is not null && _knownGenericDefinitions.Contains(parentGenDef);
+    }
+
+    private static string ConvertToBacktickForm(string fullName)
+    {
+        var sb = new StringBuilder();
+        int i = 0;
+        while (i < fullName.Length)
+        {
+            if (fullName[i] == '<')
+            {
+                // Count type args and skip to matching >
+                int depth = 1, argCount = 1;
+                int j = i + 1;
+                while (j < fullName.Length && depth > 0)
+                {
+                    if (fullName[j] == '<') depth++;
+                    else if (fullName[j] == '>') depth--;
+                    else if (fullName[j] == ',' && depth == 1) argCount++;
+                    j++;
+                }
+                sb.Append('`');
+                sb.Append(argCount);
+                i = j;
+            }
+            else
+            {
+                sb.Append(fullName[i]);
+                i++;
+            }
+        }
+        return sb.ToString();
     }
 
     private string GenerateProxy(TypeMetadata type)
@@ -180,7 +257,8 @@ public sealed class ProxyEmitter
         var nestingDepth = nestingParts.Length - 1;
 
         // Determine base class: use proxy of CLR base type if known, otherwise _.System.Object
-        var hasKnownBase = type.BaseTypeName is not null && _knownProxyTypes.Contains(type.BaseTypeName);
+        // Value types always extend _.System.Object directly (they use interior addressing, not CLR hierarchy)
+        var hasKnownBase = !type.IsValueType && type.BaseTypeName is not null && _knownProxyTypes.Contains(type.BaseTypeName);
         var baseClass = hasKnownBase
             ? GetFullyQualifiedProxyType(type.BaseTypeName!)
             : "global::_.System.Object";
@@ -196,6 +274,11 @@ public sealed class ProxyEmitter
         body.AppendLine("{");
         var ctorAccess = isSealed ? "private" : "protected";
         body.AppendLine($"    {ctorAccess} {sanitizedName}(ulong address, DumpContext ctx) : base(address, ctx) {{ }}");
+        if (type.IsValueType)
+        {
+            // Value type proxy: additional constructor for array struct elements
+            body.AppendLine($"    {ctorAccess} {sanitizedName}(ulong address, DumpContext ctx, ulong arrayAddr, int arrayIndex) : base(address, ctx, arrayAddr, arrayIndex) {{ }}");
+        }
 
         // Collect field names from the base type to skip inherited fields
         var baseFieldNames = CollectBaseFieldNames(type);
@@ -226,13 +309,24 @@ public sealed class ProxyEmitter
         body.AppendLine($"    public static {newKeyword}{sanitizedName} FromAddress(ulong address, DumpContext ctx)");
         body.AppendLine($"        => new {sanitizedName}(address, ctx);");
 
-        // GetInstances
-        body.AppendLine();
-        body.AppendLine($"    public static {newKeyword}global::System.Collections.Generic.IEnumerable<{sanitizedName}> GetInstances(DumpContext ctx)");
-        body.AppendLine("    {");
-        body.AppendLine($"        foreach (var addr in ctx.EnumerateInstances(\"{type.FullName}\"))");
-        body.AppendLine($"            yield return new {sanitizedName}(addr, ctx);");
-        body.AppendLine("    }");
+        if (type.IsValueType)
+        {
+            // Factory for struct array elements — uses array context for correct type resolution
+            body.AppendLine();
+            body.AppendLine($"    public static {sanitizedName} FromArrayElement(ulong address, DumpContext ctx, ulong arrayAddr, int arrayIndex)");
+            body.AppendLine($"        => new {sanitizedName}(address, ctx, arrayAddr, arrayIndex);");
+        }
+
+        if (!type.IsValueType)
+        {
+            // GetInstances — only for reference types (heap objects)
+            body.AppendLine();
+            body.AppendLine($"    public static {newKeyword}global::System.Collections.Generic.IEnumerable<{sanitizedName}> GetInstances(DumpContext ctx)");
+            body.AppendLine("    {");
+            body.AppendLine($"        foreach (var addr in ctx.EnumerateInstances(\"{type.FullName}\"))");
+            body.AppendLine($"            yield return new {sanitizedName}(addr, ctx);");
+            body.AppendLine("    }");
+        }
 
         // ToString override
         body.AppendLine();
@@ -328,7 +422,7 @@ public sealed class ProxyEmitter
             }
 
             body.AppendLine();
-            EmitGenericProperty(body, field, typeArgMap);
+            EmitGenericProperty(body, representative, field, typeArgMap);
         }
 
         // FromAddress factory
@@ -339,6 +433,10 @@ public sealed class ProxyEmitter
         // ToString override
         body.AppendLine();
         body.AppendLine($"    public override string ToString() => $\"{defName}@0x{{_objAddress:X}}\";");
+
+        // Emit nested value types (e.g., Entry inside Dictionary) as nested classes
+        // with the parent's type parameters substituted for __Canon / concrete args
+        EmitNestedValueTypes(body, representative, typeArgMap);
 
         body.AppendLine("}");
 
@@ -356,7 +454,7 @@ public sealed class ProxyEmitter
         return sb.ToString();
     }
 
-    private void EmitGenericProperty(StringBuilder sb, FieldInfo field, Dictionary<string, string> typeArgMap)
+    private void EmitGenericProperty(StringBuilder sb, TypeMetadata ownerType, FieldInfo field, Dictionary<string, string> typeArgMap)
     {
         var propName = SanitizePropertyName(field.Name);
 
@@ -400,12 +498,12 @@ public sealed class ProxyEmitter
                 }
                 else
                 {
-                    EmitObjectReferenceProperty(sb, null!, field, propName);
+                    EmitObjectReferenceProperty(sb, ownerType, field, propName);
                 }
                 break;
 
             case FieldKind.Array:
-                EmitGenericArrayProperty(sb, field, propName, typeArgMap);
+                EmitGenericArrayProperty(sb, ownerType, field, propName, typeArgMap);
                 break;
 
             case FieldKind.ValueType:
@@ -418,7 +516,138 @@ public sealed class ProxyEmitter
         }
     }
 
-    private void EmitGenericArrayProperty(StringBuilder sb, FieldInfo field, string propName, Dictionary<string, string> typeArgMap)
+    /// <summary>
+    /// Emit nested value type classes inside a generic proxy.
+    /// E.g., Dictionary&lt;T1, T2&gt; gets a nested Entry class with key:T1, value:T2.
+    /// </summary>
+    private void EmitNestedValueTypes(StringBuilder body, TypeMetadata representative, Dictionary<string, string> typeArgMap)
+    {
+        // Find value types nested inside this generic parent
+        // Their full name starts with the representative's full name + "+"
+        var prefix = representative.FullName + "+";
+        var nestedValueTypes = _typesByName.Values
+            .Where(t => t.IsValueType && t.FullName.StartsWith(prefix))
+            .ToList();
+
+        foreach (var vt in nestedValueTypes)
+        {
+            var nestedName = vt.Name[(vt.Name.LastIndexOf('+') + 1)..];
+            var sanitizedNestedName = SanitizeTypeName(nestedName);
+
+            body.AppendLine();
+            body.AppendLine($"    public sealed class {sanitizedNestedName} : global::_.System.Object");
+            body.AppendLine("    {");
+            body.AppendLine($"        private {sanitizedNestedName}(ulong address, DumpContext ctx, ulong arrayAddr, int arrayIndex) : base(address, ctx, arrayAddr, arrayIndex) {{ }}");
+
+            // Emit fields with type param substitution
+            // __Canon fields in the nested type correspond to the parent's type args
+            // We match them positionally based on the representative's Entry fields
+            var usedNames = new HashSet<string> { sanitizedNestedName, "_objAddress", "_ctx" };
+            foreach (var field in vt.Fields)
+            {
+                var propName = SanitizePropertyName(field.Name);
+                if (!usedNames.Add(propName)) continue;
+
+                body.AppendLine();
+
+                // Check if this field's type matches a parent type arg (via __Canon or concrete types)
+                if (field.Kind == FieldKind.ObjectReference && field.ReferenceTypeName is not null
+                    && typeArgMap.TryGetValue(field.ReferenceTypeName, out var typeParam))
+                {
+                    // Direct match (concrete type arg like System.String)
+                    EmitStructFieldWithTypeParam(body, field, propName, typeParam);
+                }
+                else if (field.Kind == FieldKind.ObjectReference && field.ReferenceTypeName == "System.__Canon")
+                {
+                    // __Canon: find which type param this corresponds to
+                    // Use positional matching — count __Canon fields up to this one
+                    var canonParam = ResolveCanonTypeParam(vt, field, typeArgMap);
+                    if (canonParam is not null)
+                        EmitStructFieldWithTypeParam(body, field, propName, canonParam);
+                    else
+                        EmitStructField(body, field, propName);
+                }
+                else
+                {
+                    EmitStructField(body, field, propName);
+                }
+            }
+
+            body.AppendLine();
+            body.AppendLine($"        public static {sanitizedNestedName} FromArrayElement(ulong address, DumpContext ctx, ulong arrayAddr, int arrayIndex)");
+            body.AppendLine($"            => new {sanitizedNestedName}(address, ctx, arrayAddr, arrayIndex);");
+
+            body.AppendLine();
+            body.AppendLine($"        public override string ToString() => $\"{sanitizedNestedName}@0x{{_objAddress:X}}\";");
+
+            body.AppendLine("    }");
+        }
+    }
+
+    private static void EmitStructFieldWithTypeParam(StringBuilder sb, FieldInfo field, string propName, string typeParam)
+    {
+        if (propName == field.Name)
+            sb.AppendLine($"        public {typeParam}? {propName} => Field<{typeParam}>();");
+        else
+            sb.AppendLine($"        public {typeParam}? {propName} => Field<{typeParam}>(\"{field.Name}\");");
+    }
+
+    private static void EmitStructField(StringBuilder sb, FieldInfo field, string propName)
+    {
+        switch (field.Kind)
+        {
+            case FieldKind.Primitive:
+                if (propName == field.Name)
+                    sb.AppendLine($"        public {field.TypeName} {propName} => Field<{field.TypeName}>();");
+                else
+                    sb.AppendLine($"        public {field.TypeName} {propName} => Field<{field.TypeName}>(\"{field.Name}\");");
+                break;
+
+            case FieldKind.String:
+                if (propName == field.Name)
+                    sb.AppendLine($"        public string? {propName} => Field<string>();");
+                else
+                    sb.AppendLine($"        public string? {propName} => Field<string>(\"{field.Name}\");");
+                break;
+
+            default:
+                if (propName == field.Name)
+                    sb.AppendLine($"        public ulong {propName} => RefAddress();");
+                else
+                    sb.AppendLine($"        public ulong {propName} => RefAddress(\"{field.Name}\");");
+                break;
+        }
+    }
+
+    /// <summary>
+    /// For a __Canon field on a nested value type, determine which parent type param it corresponds to.
+    /// Uses positional matching: first __Canon → first ref-type param, second __Canon → second ref-type param.
+    /// </summary>
+    private static string? ResolveCanonTypeParam(TypeMetadata vt, FieldInfo targetField, Dictionary<string, string> typeArgMap)
+    {
+        // Collect all type params that map to reference types (i.e., would appear as __Canon)
+        var refTypeParams = typeArgMap
+            .Where(kv => kv.Key != "System.String" || kv.Key.Contains('.'))
+            .Select(kv => kv.Value)
+            .ToList();
+
+        // Actually, a simpler approach: count __Canon fields and map by order to the parent's type params
+        // This works because CLR lays out shared generic fields in order of the type params
+        int canonIndex = 0;
+        var typeParamValues = typeArgMap.Values.ToList();
+        foreach (var f in vt.Fields)
+        {
+            if (f.Kind == FieldKind.ObjectReference && f.ReferenceTypeName == "System.__Canon")
+            {
+                if (f == targetField)
+                    return canonIndex < typeParamValues.Count ? typeParamValues[canonIndex] : null;
+                canonIndex++;
+            }
+        }
+        return null;
+    }
+
+    private void EmitGenericArrayProperty(StringBuilder sb, TypeMetadata ownerType, FieldInfo field, string propName, Dictionary<string, string> typeArgMap)
     {
         var elementKind = field.ArrayElementKind ?? FieldKind.Unknown;
         var elementTypeName = field.ArrayElementTypeName;
@@ -441,8 +670,36 @@ public sealed class ProxyEmitter
             return;
         }
 
-        // Not a type argument — fall back to normal array emission
-        EmitArrayProperty(sb, null!, field, propName);
+        // Check if this is a value-type array element nested inside this generic parent
+        if (elementKind == FieldKind.ValueType && elementTypeName is not null && elementTypeName.Contains('`'))
+        {
+            var plusIdx = elementTypeName.IndexOf('+');
+            if (plusIdx > 0)
+            {
+                var backtickPrefix = elementTypeName[..plusIdx];
+                var ownerBacktick = ConvertToBacktickForm(ownerType.FullName);
+                if (ownerBacktick == backtickPrefix)
+                {
+                    var nestedSuffix = elementTypeName[(plusIdx + 1)..];
+                    var sanitizedNested = SanitizeTypeName(nestedSuffix);
+                    var arrayAddrExpr2 = propName == field.Name ? "RefAddress()" : $"RefAddress(\"{field.Name}\")";
+                    sb.AppendLine($"    public global::Ndump.Core.DumpArray<{sanitizedNested}>? {propName}");
+                    sb.AppendLine("    {");
+                    sb.AppendLine("        get");
+                    sb.AppendLine("        {");
+                    sb.AppendLine($"            var addr = {arrayAddrExpr2};");
+                    sb.AppendLine("            if (addr == 0) return null;");
+                    sb.AppendLine("            var len = _ctx.GetArrayLength(addr);");
+                    sb.AppendLine($"            return new global::Ndump.Core.DumpArray<{sanitizedNested}>(addr, len, i => {sanitizedNested}.FromArrayElement(_ctx.GetArrayStructElementAddress(addr, i), _ctx, addr, i));");
+                    sb.AppendLine("        }");
+                    sb.AppendLine("    }");
+                    return;
+                }
+            }
+        }
+
+        // Not a type argument — fall back to normal array emission (resolves backtick names via ownerType)
+        EmitArrayProperty(sb, ownerType, field, propName);
     }
 
     /// <summary>
@@ -462,6 +719,10 @@ public sealed class ProxyEmitter
         sb.AppendLine("{");
         sb.AppendLine("    protected readonly ulong _objAddress;");
         sb.AppendLine("    protected readonly DumpContext _ctx;");
+        sb.AppendLine("    // For struct proxies: array address + index for correct component type resolution");
+        sb.AppendLine("    protected readonly ulong _arrayAddr;");
+        sb.AppendLine("    protected readonly int _arrayIndex;");
+        sb.AppendLine("    protected readonly bool _isStructElement;");
         sb.AppendLine();
         sb.AppendLine("    private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::System.Func<ulong, DumpContext, object>?> _proxyFactories = new();");
         sb.AppendLine();
@@ -471,10 +732,21 @@ public sealed class ProxyEmitter
         sb.AppendLine("        _ctx = ctx;");
         sb.AppendLine("    }");
         sb.AppendLine();
+        sb.AppendLine("    protected Object(ulong address, DumpContext ctx, ulong arrayAddr, int arrayIndex)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        _objAddress = address;");
+        sb.AppendLine("        _ctx = ctx;");
+        sb.AppendLine("        _arrayAddr = arrayAddr;");
+        sb.AppendLine("        _arrayIndex = arrayIndex;");
+        sb.AppendLine("        _isStructElement = true;");
+        sb.AppendLine("    }");
+        sb.AppendLine();
         sb.AppendLine("    public ulong GetObjAddress() => _objAddress;");
         sb.AppendLine();
         sb.AppendLine("    protected T Field<T>([CallerMemberName] string fieldName = \"\")");
         sb.AppendLine("    {");
+        sb.AppendLine("        if (_isStructElement)");
+        sb.AppendLine("            return FieldStructElement<T>(fieldName);");
         sb.AppendLine("        if (typeof(T) == typeof(string))");
         sb.AppendLine("            return (T)(object)_ctx.GetStringField(_objAddress, fieldName)!;");
         sb.AppendLine("        if (!typeof(T).IsValueType)");
@@ -486,8 +758,23 @@ public sealed class ProxyEmitter
         sb.AppendLine("        return _ctx.GetFieldValue<T>(_objAddress, fieldName);");
         sb.AppendLine("    }");
         sb.AppendLine();
+        sb.AppendLine("    private T FieldStructElement<T>(string fieldName)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        if (typeof(T) == typeof(string))");
+        sb.AppendLine("            return (T)(object)_ctx.GetStructArrayElementStringField(_arrayAddr, _arrayIndex, fieldName)!;");
+        sb.AppendLine("        if (!typeof(T).IsValueType)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            var addr = _ctx.GetStructArrayElementObjectAddress(_arrayAddr, _arrayIndex, fieldName);");
+        sb.AppendLine("            if (addr == 0) return default!;");
+        sb.AppendLine("            return (T)CreateProxy(typeof(T), addr, _ctx);");
+        sb.AppendLine("        }");
+        sb.AppendLine("        return _ctx.GetStructArrayElementFieldValue<T>(_arrayAddr, _arrayIndex, fieldName);");
+        sb.AppendLine("    }");
+        sb.AppendLine();
         sb.AppendLine("    protected ulong RefAddress([CallerMemberName] string fieldName = \"\")");
-        sb.AppendLine("        => _ctx.GetObjectAddress(_objAddress, fieldName);");
+        sb.AppendLine("        => _isStructElement");
+        sb.AppendLine("            ? _ctx.GetStructArrayElementObjectAddress(_arrayAddr, _arrayIndex, fieldName)");
+        sb.AppendLine("            : _ctx.GetObjectAddress(_objAddress, fieldName);");
         sb.AppendLine();
         sb.AppendLine("    protected T ReadArrayElement<T>(ulong arrayAddr, int index)");
         sb.AppendLine("    {");
@@ -622,6 +909,8 @@ public sealed class ProxyEmitter
     {
         if (typeName is null) return false;
         if (_knownProxyTypes.Contains(typeName)) return true;
+        // Check backtick-form mapping (e.g., Dictionary`2+Entry → Dictionary<String, Int32>+Entry)
+        if (_backtickToFullName.ContainsKey(typeName)) return true;
         // Check if it's a generic specialization whose definition is known
         var genDef = ExtractGenericDefinitionFullName(typeName);
         return genDef is not null && _knownGenericDefinitions.Contains(genDef);
@@ -677,10 +966,50 @@ public sealed class ProxyEmitter
         }
     }
 
+    /// <summary>
+    /// Resolve an array element type name that may use backtick notation for nested types
+    /// inside generics. Uses the owning type to reconstruct the concrete name.
+    /// E.g., for owner "Dictionary&lt;String, Int32&gt;", element "Dictionary`2+Entry"
+    /// → "Dictionary&lt;String, Int32&gt;+Entry"
+    /// </summary>
+    private string? ResolveArrayElementTypeName(string? elementTypeName, TypeMetadata ownerType)
+    {
+        if (elementTypeName is null) return null;
+
+        // If the element type is already a known proxy, use it as-is
+        if (_knownProxyTypes.Contains(elementTypeName)) return elementTypeName;
+
+        // Check if this is a backtick-form nested type (e.g., Dictionary`2+Entry)
+        if (!elementTypeName.Contains('`') || !elementTypeName.Contains('+'))
+            return elementTypeName;
+
+        // Extract the nested suffix after the last + that's after the backtick
+        var plusIdx = elementTypeName.IndexOf('+');
+        if (plusIdx < 0) return elementTypeName;
+        var nestedSuffix = elementTypeName[(plusIdx + 1)..]; // e.g., "Entry"
+        var backtickPrefix = elementTypeName[..plusIdx]; // e.g., "System.Collections.Generic.Dictionary`2"
+
+        // Try to match against the owning type's full name
+        var ownerBacktick = ConvertToBacktickForm(ownerType.FullName);
+        if (ownerBacktick == backtickPrefix)
+        {
+            // The nested type belongs to the owner — reconstruct with owner's concrete name
+            var concreteName = ownerType.FullName + "+" + nestedSuffix;
+            if (_knownProxyTypes.Contains(concreteName))
+                return concreteName;
+        }
+
+        // Fallback: try the global backtick mapping
+        if (_backtickToFullName.TryGetValue(elementTypeName, out var resolved))
+            return resolved;
+
+        return elementTypeName;
+    }
+
     private void EmitArrayProperty(StringBuilder sb, TypeMetadata ownerType, FieldInfo field, string propName)
     {
         var elementKind = field.ArrayElementKind ?? FieldKind.Unknown;
-        var elementTypeName = field.ArrayElementTypeName;
+        var elementTypeName = ResolveArrayElementTypeName(field.ArrayElementTypeName, ownerType);
 
         // Determine the C# element type and the reader lambda
         string csElementType;
@@ -714,6 +1043,20 @@ public sealed class ProxyEmitter
                     // Unknown element type — expose as address
                     csElementType = "ulong";
                     readerLambda = "i => _ctx.GetArrayElementAddress(addr, i)";
+                }
+                break;
+
+            case FieldKind.ValueType:
+                if (IsUsableProxyType(elementTypeName))
+                {
+                    var qualifiedProxy = GetFullyQualifiedProxyType(elementTypeName!);
+                    csElementType = qualifiedProxy;
+                    readerLambda = $"i => {{ var ea = _ctx.GetArrayStructElementAddress(addr, i); return {qualifiedProxy}.FromArrayElement(ea, _ctx, addr, i); }}";
+                }
+                else
+                {
+                    csElementType = "ulong";
+                    readerLambda = "i => _ctx.GetArrayStructElementAddress(addr, i)";
                 }
                 break;
 
@@ -795,6 +1138,10 @@ public sealed class ProxyEmitter
     /// </summary>
     private string GetFullyQualifiedProxyType(string fullTypeName)
     {
+        // Resolve backtick-form names to their concrete angle-bracket form
+        if (_backtickToFullName.TryGetValue(fullTypeName, out var concreteFullName))
+            fullTypeName = concreteFullName;
+
         // Check if this is a generic type with a known generic definition
         var genDef = ExtractGenericDefinitionFullName(fullTypeName);
         if (genDef is not null && _knownGenericDefinitions.Contains(genDef))

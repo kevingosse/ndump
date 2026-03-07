@@ -661,6 +661,87 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     }
 
     [Fact]
+    public void Proxies_CustomerHasDictionaryField()
+    {
+        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
+
+        var scoresProp = customerType.GetProperty("_scores");
+        Assert.NotNull(scoresProp);
+
+        // The property type should be a closed generic proxy type
+        var scoresType = scoresProp.PropertyType;
+        Assert.True(scoresType.IsGenericType);
+        Assert.Equal("Dictionary`2", scoresType.Name);
+        Assert.Equal("_.System.Collections.Generic", scoresType.Namespace);
+    }
+
+    [Fact]
+    public void Proxies_DictionaryProxy_CanReadCount()
+    {
+        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
+
+        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
+        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
+
+        var nameProp = customerType.GetProperty("_name")!;
+        var scoresProp = customerType.GetProperty("_scores")!;
+
+        // Alice has {"math": 95, "science": 87} — count = 2
+        var alice = instances.Single(c => (string?)nameProp.GetValue(c) == "Alice");
+        var aliceScores = scoresProp.GetValue(alice)!;
+        var countProp = aliceScores.GetType().GetProperty("_count")!;
+        Assert.Equal(2, (int)countProp.GetValue(aliceScores)!);
+
+        // Bob has {"art": 72} — count = 1
+        var bob = instances.Single(c => (string?)nameProp.GetValue(c) == "Bob");
+        var bobScores = scoresProp.GetValue(bob)!;
+        Assert.Equal(1, (int)countProp.GetValue(bobScores)!);
+
+        // Charlie has {"math": 100, "art": 88, "science": 91} — count = 3
+        var charlie = instances.Single(c => (string?)nameProp.GetValue(c) == "Charlie");
+        var charlieScores = scoresProp.GetValue(charlie)!;
+        Assert.Equal(3, (int)countProp.GetValue(charlieScores)!);
+    }
+
+    [Fact]
+    public void Proxies_DictionaryProxy_HasEntriesAndBuckets()
+    {
+        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
+
+        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
+        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
+
+        var nameProp = customerType.GetProperty("_name")!;
+        var scoresProp = customerType.GetProperty("_scores")!;
+
+        // Bob has {"art": 72} — 1 entry
+        var bob = instances.Single(c => (string?)nameProp.GetValue(c) == "Bob");
+        var bobScores = scoresProp.GetValue(bob)!;
+
+        // _entries returns a DumpArray<Entry> of struct element proxies
+        var entriesProp = bobScores.GetType().GetProperty("_entries");
+        Assert.NotNull(entriesProp);
+        var entries = ((IEnumerable)entriesProp.GetValue(bobScores)!).Cast<object>().ToList();
+        Assert.True(entries.Count >= 1);
+
+        // Each entry is a proper Entry proxy with fields
+        var firstEntry = entries[0];
+        var entryType = firstEntry.GetType();
+        Assert.NotNull(entryType.GetProperty("hashCode"));
+        Assert.NotNull(entryType.GetProperty("next"));
+        Assert.NotNull(entryType.GetProperty("value"));
+
+        // Read the value from the first entry (Bob has {"art": 72}, count=1)
+        var valueProp = entryType.GetProperty("value")!;
+        var value = (int)valueProp.GetValue(firstEntry)!;
+        Assert.Equal(72, value);
+
+        // _buckets should also exist (int[] array)
+        var bucketsProp = bobScores.GetType().GetProperty("_buckets");
+        Assert.NotNull(bucketsProp);
+    }
+
+    [Fact]
     public void Proxies_StringArrayField_ReturnsStringValues()
     {
         var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;

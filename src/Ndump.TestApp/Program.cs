@@ -46,8 +46,9 @@ public class Customer
     private object[] _mixedItems;
     private Animal[] _pets;
     private string[] _tags;
+    private Dictionary<string, int> _scores;
 
-    public Customer(string name, int age, bool isActive, Order lastOrder, Address address, Order[] orderHistory, object[] mixedItems, Animal[] pets, string[] tags)
+    public Customer(string name, int age, bool isActive, Order lastOrder, Address address, Order[] orderHistory, object[] mixedItems, Animal[] pets, string[] tags, Dictionary<string, int> scores)
     {
         _name = name;
         _age = age;
@@ -58,6 +59,7 @@ public class Customer
         _mixedItems = mixedItems;
         _pets = pets;
         _tags = tags;
+        _scores = scores;
     }
 }
 
@@ -135,12 +137,16 @@ class Program
         var dog1 = new Dog("Rex", 4, "German Shepherd");
         var dog2 = new Dog("Buddy", 2, "Golden Retriever");
 
+        var scores1 = new Dictionary<string, int> { ["math"] = 95, ["science"] = 87 };
+        var scores2 = new Dictionary<string, int> { ["art"] = 72 };
+        var scores3 = new Dictionary<string, int> { ["math"] = 100, ["art"] = 88, ["science"] = 91 };
+
         var cust1 = new Customer("Alice", 30, true, order1, addr1, [order1, order2],
-            [order1, addr1, tag1, "hello"], [cat1, dog1], ["vip", "early-adopter"]);
+            [order1, addr1, tag1, "hello"], [cat1, dog1], ["vip", "early-adopter"], scores1);
         var cust2 = new Customer("Bob", 45, false, order2, addr2, [order2],
-            [tag2, order2], [dog2], ["regular"]);
+            [tag2, order2], [dog2], ["regular"], scores2);
         var cust3 = new Customer("Charlie", 28, true, order3, addr1, [order1, order2, order3],
-            [addr2, "world", order3, tag1, addr1], [cat2, dog1, cat1], ["vip", "premium", "newsletter"]);
+            [addr2, "world", order3, tag1, addr1], [cat2, dog1, cat1], ["vip", "premium", "newsletter"], scores3);
 
         // Keep references alive so GC doesn't collect them
         var allObjects = new object[] { addr1, addr2, order1, order2, order3, cust1, cust2, cust3, tag1, tag2, cat1, cat2, dog1, dog2 };

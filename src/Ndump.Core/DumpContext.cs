@@ -11,6 +11,7 @@ public sealed class DumpContext : IDisposable
 {
     private readonly DataTarget _dataTarget;
     private readonly ClrRuntime _runtime;
+    private readonly Dictionary<string, ClrType?> _typeCache = [];
     private bool _disposed;
 
     public ClrRuntime Runtime => _runtime;
@@ -104,6 +105,171 @@ public sealed class DumpContext : IDisposable
             ?? throw new InvalidOperationException($"Field '{fieldName}' not found on type '{type.Name}'");
 
         return field.ReadObject(objAddress, interior: false);
+    }
+
+    /// <summary>
+    /// Read a primitive/value-type field from a struct at the given interior address.
+    /// Requires the CLR type name to resolve the field layout.
+    /// </summary>
+    public T GetFieldValue<T>(ulong address, string typeName, string fieldName)
+    {
+        var field = FindFieldByTypeName(typeName, fieldName);
+        var addr = field.GetAddress(address, interior: true);
+        Span<byte> buffer = stackalloc byte[Unsafe.SizeOf<T>()];
+        Runtime.DataTarget.DataReader.Read(addr, buffer);
+        return Unsafe.ReadUnaligned<T>(ref buffer[0]);
+    }
+
+    /// <summary>
+    /// Read a string field from a struct at the given interior address.
+    /// </summary>
+    public string? GetStringField(ulong address, string typeName, string fieldName)
+    {
+        var field = FindFieldByTypeName(typeName, fieldName);
+        return field.ReadString(address, interior: true);
+    }
+
+    /// <summary>
+    /// Read the address of a reference-type field from a struct at the given interior address.
+    /// </summary>
+    public ulong GetObjectAddress(ulong address, string typeName, string fieldName)
+    {
+        var field = FindFieldByTypeName(typeName, fieldName);
+        return field.ReadObject(address, interior: true);
+    }
+
+    /// <summary>
+    /// Get the address of a struct array element.
+    /// </summary>
+    public ulong GetArrayStructElementAddress(ulong arrayAddress, int index)
+    {
+        var obj = Heap.GetObject(arrayAddress);
+        if (!obj.IsValid)
+            throw new InvalidOperationException($"Invalid object at address 0x{arrayAddress:X}");
+
+        return obj.AsArray().GetStructValue(index).Address;
+    }
+
+    /// <summary>
+    /// Read a primitive/value-type field from a struct array element.
+    /// Uses the array's component type for correct field resolution.
+    /// </summary>
+    public T GetStructArrayElementFieldValue<T>(ulong arrayAddress, int index, string fieldName)
+    {
+        var obj = Heap.GetObject(arrayAddress);
+        if (!obj.IsValid)
+            throw new InvalidOperationException($"Invalid object at address 0x{arrayAddress:X}");
+
+        var array = obj.AsArray();
+        var elementAddr = array.GetStructValue(index).Address;
+        var componentType = obj.Type!.ComponentType!;
+        var field = componentType.GetFieldByName(fieldName)
+            ?? throw new InvalidOperationException($"Field '{fieldName}' not found on component type '{componentType.Name}'");
+
+        var addr = field.GetAddress(elementAddr, interior: true);
+        Span<byte> buffer = stackalloc byte[Unsafe.SizeOf<T>()];
+        Runtime.DataTarget.DataReader.Read(addr, buffer);
+        return Unsafe.ReadUnaligned<T>(ref buffer[0]);
+    }
+
+    /// <summary>
+    /// Read a string field from a struct array element.
+    /// </summary>
+    public string? GetStructArrayElementStringField(ulong arrayAddress, int index, string fieldName)
+    {
+        var obj = Heap.GetObject(arrayAddress);
+        if (!obj.IsValid)
+            throw new InvalidOperationException($"Invalid object at address 0x{arrayAddress:X}");
+
+        var array = obj.AsArray();
+        var elementAddr = array.GetStructValue(index).Address;
+        var componentType = obj.Type!.ComponentType!;
+        var field = componentType.GetFieldByName(fieldName)
+            ?? throw new InvalidOperationException($"Field '{fieldName}' not found on component type '{componentType.Name}'");
+
+        return field.ReadString(elementAddr, interior: true);
+    }
+
+    /// <summary>
+    /// Read a reference field from a struct array element.
+    /// </summary>
+    public ulong GetStructArrayElementObjectAddress(ulong arrayAddress, int index, string fieldName)
+    {
+        var obj = Heap.GetObject(arrayAddress);
+        if (!obj.IsValid)
+            throw new InvalidOperationException($"Invalid object at address 0x{arrayAddress:X}");
+
+        var array = obj.AsArray();
+        var elementAddr = array.GetStructValue(index).Address;
+        var componentType = obj.Type!.ComponentType!;
+        var field = componentType.GetFieldByName(fieldName)
+            ?? throw new InvalidOperationException($"Field '{fieldName}' not found on component type '{componentType.Name}'");
+
+        return field.ReadObject(elementAddr, interior: true);
+    }
+
+    /// <summary>
+    /// Resolve a CLR type by name, searching all loaded modules. Results are cached.
+    /// </summary>
+    public ClrType? FindTypeByName(string typeName)
+    {
+        if (_typeCache.TryGetValue(typeName, out var cached))
+            return cached;
+
+        // ClrMD modules use backtick-arity notation, not angle brackets.
+        // Convert "Dictionary<String, Int32>+Entry" to "Dictionary`2+Entry" for lookup.
+        var lookupName = ConvertToBacktickForm(typeName);
+
+        ClrType? found = null;
+        foreach (var module in Runtime.EnumerateModules())
+        {
+            found = module.GetTypeByName(lookupName);
+            if (found is not null) break;
+        }
+
+        _typeCache[typeName] = found;
+        return found;
+    }
+
+    private static string ConvertToBacktickForm(string name)
+    {
+        if (!name.Contains('<')) return name;
+
+        var sb = new System.Text.StringBuilder();
+        int i = 0;
+        while (i < name.Length)
+        {
+            if (name[i] == '<')
+            {
+                int depth = 1, argCount = 1;
+                int j = i + 1;
+                while (j < name.Length && depth > 0)
+                {
+                    if (name[j] == '<') depth++;
+                    else if (name[j] == '>') depth--;
+                    else if (name[j] == ',' && depth == 1) argCount++;
+                    j++;
+                }
+                sb.Append('`');
+                sb.Append(argCount);
+                i = j;
+            }
+            else
+            {
+                sb.Append(name[i]);
+                i++;
+            }
+        }
+        return sb.ToString();
+    }
+
+    private ClrInstanceField FindFieldByTypeName(string typeName, string fieldName)
+    {
+        var type = FindTypeByName(typeName)
+            ?? throw new InvalidOperationException($"Type '{typeName}' not found in any module");
+
+        return type.GetFieldByName(fieldName)
+            ?? throw new InvalidOperationException($"Field '{fieldName}' not found on type '{typeName}'");
     }
 
     /// <summary>
