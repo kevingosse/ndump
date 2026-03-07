@@ -16,6 +16,23 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
         _fixture = fixture;
     }
 
+    private Type ProxyType(string clrTypeName) =>
+        Assembly.GetType($"_.{clrTypeName}")!;
+
+    private List<dynamic> GetInstances(string clrTypeName)
+    {
+        var type = ProxyType(clrTypeName);
+        var method = type.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static)!;
+        return ((IEnumerable)method.Invoke(null, [Context])!).Cast<dynamic>().ToList();
+    }
+
+    private dynamic FromAddress(string clrTypeName, ulong address)
+    {
+        var type = ProxyType(clrTypeName);
+        var method = type.GetMethod("FromAddress", BindingFlags.Public | BindingFlags.Static)!;
+        return method.Invoke(null, [address, Context])!;
+    }
+
     [Fact]
     public void DumpFile_Exists()
     {
@@ -80,16 +97,7 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_CanEnumerateCustomerInstances()
     {
-        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer");
-        Assert.NotNull(customerType);
-
-        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        Assert.NotNull(getInstances);
-
-        var instances = getInstances.Invoke(null, [Context]) as IEnumerable;
-        Assert.NotNull(instances);
-
-        var customers = instances.Cast<object>().ToList();
+        var customers = GetInstances("Ndump.TestApp.Customer");
 
         // We created 3 customers in TestApp
         Assert.Equal(3, customers.Count);
@@ -98,16 +106,9 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_CanReadCustomerStringField()
     {
-        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
+        var customers = GetInstances("Ndump.TestApp.Customer");
 
-        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
-
-        // Read the _name property from each customer
-        var nameProp = customerType.GetProperty("_name");
-        Assert.NotNull(nameProp);
-
-        var names = instances.Select(c => nameProp.GetValue(c) as string).OrderBy(n => n).ToList();
+        var names = customers.Select(c => (string?)c._name).OrderBy(n => n).ToList();
 
         Assert.Contains("Alice", names);
         Assert.Contains("Bob", names);
@@ -117,15 +118,9 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_CanReadCustomerIntField()
     {
-        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
+        var customers = GetInstances("Ndump.TestApp.Customer");
 
-        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
-
-        var ageProp = customerType.GetProperty("_age");
-        Assert.NotNull(ageProp);
-
-        var ages = instances.Select(c => (int)ageProp.GetValue(c)!).OrderBy(a => a).ToList();
+        var ages = customers.Select(c => (int)c._age).OrderBy(a => a).ToList();
 
         Assert.Equal([28, 30, 45], ages);
     }
@@ -133,15 +128,9 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_CanReadCustomerBoolField()
     {
-        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
+        var customers = GetInstances("Ndump.TestApp.Customer");
 
-        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
-
-        var activeProp = customerType.GetProperty("_isActive");
-        Assert.NotNull(activeProp);
-
-        var activeValues = instances.Select(c => (bool)activeProp.GetValue(c)!).ToList();
+        var activeValues = customers.Select(c => (bool)c._isActive).ToList();
 
         // Alice=true, Bob=false, Charlie=true
         Assert.Equal(2, activeValues.Count(v => v));
@@ -151,22 +140,15 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_CanNavigateObjectReferences()
     {
-        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
-        var orderType = Assembly.GetType("_.Ndump.TestApp.Order")!;
-
-        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
+        var customers = GetInstances("Ndump.TestApp.Customer");
 
         // Navigate Customer -> _lastOrder -> _orderId
-        var lastOrderProp = customerType.GetProperty("_lastOrder")!;
-        var orderIdProp = orderType.GetProperty("_orderId")!;
-
         var orderIds = new List<int>();
-        foreach (var customer in instances)
+        foreach (var customer in customers)
         {
-            var order = lastOrderProp.GetValue(customer);
+            dynamic order = customer._lastOrder;
             Assert.NotNull(order);
-            orderIds.Add((int)orderIdProp.GetValue(order)!);
+            orderIds.Add((int)order._orderId);
         }
 
         orderIds.Sort();
@@ -176,68 +158,46 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_CanNavigateObjectReference_AndReadFields()
     {
-        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
-        var addressType = Assembly.GetType("_.Ndump.TestApp.Address")!;
-
-        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
-
-        var nameProp = customerType.GetProperty("_name")!;
-        var addressProp = customerType.GetProperty("_address")!;
-        var streetProp = addressType.GetProperty("_street")!;
-        var cityProp = addressType.GetProperty("_city")!;
-        var zipProp = addressType.GetProperty("_zipCode")!;
+        var customers = GetInstances("Ndump.TestApp.Customer");
 
         // Alice has addr1("123 Main St", "Springfield", 62701)
-        var alice = instances.Single(c => (string?)nameProp.GetValue(c) == "Alice");
-        var aliceAddr = addressProp.GetValue(alice);
+        var alice = customers.Single(c => (string?)c._name == "Alice");
+        dynamic aliceAddr = alice._address;
         Assert.NotNull(aliceAddr);
-        Assert.IsType(addressType, aliceAddr);
-        Assert.Equal("123 Main St", streetProp.GetValue(aliceAddr));
-        Assert.Equal("Springfield", cityProp.GetValue(aliceAddr));
-        Assert.Equal(62701, (int)zipProp.GetValue(aliceAddr)!);
+        Assert.IsType(ProxyType("Ndump.TestApp.Address"), (object)aliceAddr);
+        Assert.Equal("123 Main St", (string)aliceAddr._street);
+        Assert.Equal("Springfield", (string)aliceAddr._city);
+        Assert.Equal(62701, (int)aliceAddr._zipCode);
 
         // Bob has addr2("456 Oak Ave", "Shelbyville", 62702)
-        var bob = instances.Single(c => (string?)nameProp.GetValue(c) == "Bob");
-        var bobAddr = addressProp.GetValue(bob);
+        var bob = customers.Single(c => (string?)c._name == "Bob");
+        dynamic bobAddr = bob._address;
         Assert.NotNull(bobAddr);
-        Assert.Equal("456 Oak Ave", streetProp.GetValue(bobAddr));
-        Assert.Equal("Shelbyville", cityProp.GetValue(bobAddr));
-        Assert.Equal(62702, (int)zipProp.GetValue(bobAddr)!);
+        Assert.Equal("456 Oak Ave", (string)bobAddr._street);
+        Assert.Equal("Shelbyville", (string)bobAddr._city);
+        Assert.Equal(62702, (int)bobAddr._zipCode);
     }
 
     [Fact]
     public void Proxies_CanEnumerateTagInstances()
     {
-        var tagType = Assembly.GetType("_.Ndump.TestApp.Tag")!;
+        var tags = GetInstances("Ndump.TestApp.Tag");
+        Assert.Equal(2, tags.Count);
 
-        var getInstances = tagType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
-
-        Assert.Equal(2, instances.Count);
-
-        var labelProp = tagType.GetProperty("_label")!;
-
-        var labels = instances.Select(t => labelProp.GetValue(t) as string).OrderBy(l => l).ToList();
+        var labels = tags.Select(t => (string?)t._label).OrderBy(l => l).ToList();
         Assert.Equal(["important", "urgent"], labels);
     }
 
     [Fact]
     public void Proxies_FromAddress_ReturnsValidProxy()
     {
-        var tagType = Assembly.GetType("_.Ndump.TestApp.Tag")!;
-
         // Get an address from EnumerateInstances
         var addresses = Context.EnumerateInstances("Ndump.TestApp.Tag").ToList();
         Assert.NotEmpty(addresses);
 
-        var fromAddress = tagType.GetMethod("FromAddress", BindingFlags.Public | BindingFlags.Static)!;
-
-        var proxy = fromAddress.Invoke(null, [addresses[0], Context]);
+        dynamic proxy = FromAddress("Ndump.TestApp.Tag", addresses[0]);
         Assert.NotNull(proxy);
-
-        var addrMethod = tagType.GetMethod("GetObjAddress")!;
-        Assert.Equal(addresses[0], (ulong)addrMethod.Invoke(proxy, null)!);
+        Assert.Equal(addresses[0], (ulong)proxy.GetObjAddress());
     }
 
     [Fact]
@@ -258,68 +218,39 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_CanReadArrayField()
     {
-        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
-        var orderType = Assembly.GetType("_.Ndump.TestApp.Order")!;
-
-        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
-
-        var nameProp = customerType.GetProperty("_name")!;
-        var historyProp = customerType.GetProperty("_orderHistory")!;
-        var orderIdProp = orderType.GetProperty("_orderId")!;
+        var customers = GetInstances("Ndump.TestApp.Customer");
 
         // Find Alice (has [order1, order2])
-        var alice = instances.Single(c => (string?)nameProp.GetValue(c) == "Alice");
-        var aliceHistory = historyProp.GetValue(alice);
-        Assert.NotNull(aliceHistory);
-
-        // DumpArray implements IEnumerable, use it to get elements
-        var aliceOrders = ((IEnumerable)aliceHistory).Cast<object>().ToList();
+        var alice = customers.Single(c => (string?)c._name == "Alice");
+        var aliceOrders = ((IEnumerable)alice._orderHistory).Cast<dynamic>().ToList();
         Assert.Equal(2, aliceOrders.Count);
 
-        var aliceOrderIds = aliceOrders.Select(o => (int)orderIdProp.GetValue(o)!).OrderBy(id => id).ToList();
+        var aliceOrderIds = aliceOrders.Select(o => (int)o._orderId).OrderBy(id => id).ToList();
         Assert.Equal([1001, 1002], aliceOrderIds);
 
         // Find Charlie (has [order1, order2, order3])
-        var charlie = instances.Single(c => (string?)nameProp.GetValue(c) == "Charlie");
-        var charlieHistory = historyProp.GetValue(charlie);
-        Assert.NotNull(charlieHistory);
-
-        var charlieOrders = ((IEnumerable)charlieHistory).Cast<object>().ToList();
+        var charlie = customers.Single(c => (string?)c._name == "Charlie");
+        var charlieOrders = ((IEnumerable)charlie._orderHistory).Cast<dynamic>().ToList();
         Assert.Equal(3, charlieOrders.Count);
     }
 
     [Fact]
     public void Proxies_ArrayField_HasLength()
     {
-        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
-
-        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
-
-        var nameProp = customerType.GetProperty("_name")!;
-        var historyProp = customerType.GetProperty("_orderHistory")!;
+        var customers = GetInstances("Ndump.TestApp.Customer");
 
         // Bob has [order2] — 1 element
-        var bob = instances.Single(c => (string?)nameProp.GetValue(c) == "Bob");
-        var bobHistory = historyProp.GetValue(bob)!;
-
-        var lengthProp = bobHistory.GetType().GetProperty("Length");
-        Assert.NotNull(lengthProp);
-        Assert.Equal(1, (int)lengthProp.GetValue(bobHistory)!);
+        var bob = customers.Single(c => (string?)c._name == "Bob");
+        dynamic bobHistory = bob._orderHistory;
+        Assert.Equal(1, (int)bobHistory.Length);
     }
 
     [Fact]
     public void Proxies_OrderHasDoubleField()
     {
-        var orderType = Assembly.GetType("_.Ndump.TestApp.Order")!;
+        var orders = GetInstances("Ndump.TestApp.Order");
 
-        var getInstances = orderType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
-
-        var totalProp = orderType.GetProperty("_total")!;
-
-        var totals = instances.Select(o => (double)totalProp.GetValue(o)!).OrderBy(t => t).ToList();
+        var totals = orders.Select(o => (double)o._total).OrderBy(t => t).ToList();
 
         Assert.Equal(5.00, totals[0], precision: 2);
         Assert.Equal(29.99, totals[1], precision: 2);
@@ -344,40 +275,23 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_CanReadObjectArrayField()
     {
-        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
-
-        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
-
-        var nameProp = customerType.GetProperty("_name")!;
-        var mixedProp = customerType.GetProperty("_mixedItems")!;
+        var customers = GetInstances("Ndump.TestApp.Customer");
 
         // Alice has [order1, addr1, tag1, "hello"] — 4 elements
-        var alice = instances.Single(c => (string?)nameProp.GetValue(c) == "Alice");
-        var aliceMixed = mixedProp.GetValue(alice);
-        Assert.NotNull(aliceMixed);
-
-        var aliceItems = ((IEnumerable)aliceMixed).Cast<object>().ToList();
+        var alice = customers.Single(c => (string?)c._name == "Alice");
+        var aliceItems = ((IEnumerable)alice._mixedItems).Cast<object>().ToList();
         Assert.Equal(4, aliceItems.Count);
     }
 
     [Fact]
     public void Proxies_ObjectArrayElements_InheritFromSystemObject()
     {
-        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
-        var sysObjType = Assembly.GetType("_.System.Object")!;
-
-        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
-
-        var nameProp = customerType.GetProperty("_name")!;
-        var mixedProp = customerType.GetProperty("_mixedItems")!;
+        var sysObjType = ProxyType("System.Object");
+        var customers = GetInstances("Ndump.TestApp.Customer");
 
         // Bob has [tag2, order2] — elements should inherit from _.System.Object
-        var bob = instances.Single(c => (string?)nameProp.GetValue(c) == "Bob");
-        var bobMixed = mixedProp.GetValue(bob)!;
-
-        var bobItems = ((IEnumerable)bobMixed).Cast<object>().ToList();
+        var bob = customers.Single(c => (string?)c._name == "Bob");
+        var bobItems = ((IEnumerable)bob._mixedItems).Cast<object>().ToList();
         Assert.Equal(2, bobItems.Count);
 
         foreach (var item in bobItems)
@@ -389,20 +303,13 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_ObjectArrayElements_AreCorrectProxyTypes()
     {
-        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
-        var tagType = Assembly.GetType("_.Ndump.TestApp.Tag")!;
-        var orderType = Assembly.GetType("_.Ndump.TestApp.Order")!;
-
-        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
-
-        var nameProp = customerType.GetProperty("_name")!;
-        var mixedProp = customerType.GetProperty("_mixedItems")!;
+        var tagType = ProxyType("Ndump.TestApp.Tag");
+        var orderType = ProxyType("Ndump.TestApp.Order");
+        var customers = GetInstances("Ndump.TestApp.Customer");
 
         // Bob has [tag2, order2] — elements should be actual proxy types
-        var bob = instances.Single(c => (string?)nameProp.GetValue(c) == "Bob");
-        var bobMixed = mixedProp.GetValue(bob)!;
-        var bobItems = ((IEnumerable)bobMixed).Cast<object>().ToList();
+        var bob = customers.Single(c => (string?)c._name == "Bob");
+        var bobItems = ((IEnumerable)bob._mixedItems).Cast<object>().ToList();
 
         var proxyTypes = bobItems.Select(d => d.GetType()).ToList();
         Assert.Contains(tagType, proxyTypes);
@@ -412,43 +319,27 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_ObjectArrayElements_CanReadFieldsDirectly()
     {
-        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
-        var orderType = Assembly.GetType("_.Ndump.TestApp.Order")!;
-
-        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
-
-        var nameProp = customerType.GetProperty("_name")!;
-        var mixedProp = customerType.GetProperty("_mixedItems")!;
-        var orderIdProp = orderType.GetProperty("_orderId")!;
+        var orderType = ProxyType("Ndump.TestApp.Order");
+        var customers = GetInstances("Ndump.TestApp.Customer");
 
         // Bob has [tag2, order2] — the Order element is already the right proxy type
-        var bob = instances.Single(c => (string?)nameProp.GetValue(c) == "Bob");
-        var bobMixed = mixedProp.GetValue(bob)!;
-        var bobItems = ((IEnumerable)bobMixed).Cast<object>().ToList();
+        var bob = customers.Single(c => (string?)c._name == "Bob");
+        var bobItems = ((IEnumerable)bob._mixedItems).Cast<dynamic>().ToList();
 
-        var orderElement = bobItems.Single(d => d.GetType() == orderType);
+        var orderElement = bobItems.Single(d => ((object)d).GetType() == orderType);
 
         // Can read fields directly — no cast needed since ResolveProxy returns the right type
-        var orderId = (int)orderIdProp.GetValue(orderElement)!;
-        Assert.Equal(1002, orderId);
+        Assert.Equal(1002, (int)orderElement._orderId);
     }
 
     [Fact]
     public void Proxies_ObjectArrayElements_HasCorrectProxyTypes()
     {
-        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
-
-        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
-
-        var nameProp = customerType.GetProperty("_name")!;
-        var mixedProp = customerType.GetProperty("_mixedItems")!;
+        var customers = GetInstances("Ndump.TestApp.Customer");
 
         // Alice has [order1, addr1, tag1, "hello"] — check proxy types
-        var alice = instances.Single(c => (string?)nameProp.GetValue(c) == "Alice");
-        var aliceMixed = mixedProp.GetValue(alice)!;
-        var aliceItems = ((IEnumerable)aliceMixed).Cast<object>().ToList();
+        var alice = customers.Single(c => (string?)c._name == "Alice");
+        var aliceItems = ((IEnumerable)alice._mixedItems).Cast<object>().ToList();
 
         var proxyTypeNames = aliceItems.Select(d => d.GetType().FullName).ToList();
         Assert.Contains("_.Ndump.TestApp.Order", proxyTypeNames);
@@ -459,7 +350,7 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     }
 
     [Fact]
-    public void TypeInspector_DiscoversAnimalHierarchy()
+    public void Proxies_DiscoversAnimalHierarchy()
     {
         using var ctx = DumpContext.Open(_fixture.DumpPath);
         var inspector = new TypeInspector();
@@ -481,24 +372,19 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_AnimalArray_ContainsCatsAndDogs()
     {
-        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
-        var catType = Assembly.GetType("_.Ndump.TestApp.Cat")!;
-        var dogType = Assembly.GetType("_.Ndump.TestApp.Dog")!;
-        var animalType = Assembly.GetType("_.Ndump.TestApp.Animal")!;
+        var catType = ProxyType("Ndump.TestApp.Cat");
+        var dogType = ProxyType("Ndump.TestApp.Dog");
+        var animalType = ProxyType("Ndump.TestApp.Animal");
 
         // Cat and Dog should extend Animal in the proxy hierarchy
         Assert.True(animalType.IsAssignableFrom(catType));
         Assert.True(animalType.IsAssignableFrom(dogType));
 
-        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
-
-        var nameProp = customerType.GetProperty("_name")!;
-        var petsProp = customerType.GetProperty("_pets")!;
+        var customers = GetInstances("Ndump.TestApp.Customer");
 
         // Alice has [cat1, dog1]
-        var alice = instances.Single(c => (string?)nameProp.GetValue(c) == "Alice");
-        var alicePets = ((IEnumerable)petsProp.GetValue(alice)!).Cast<object>().ToList();
+        var alice = customers.Single(c => (string?)c._name == "Alice");
+        var alicePets = ((IEnumerable)alice._pets).Cast<object>().ToList();
         Assert.Equal(2, alicePets.Count);
 
         // Elements should be actual Cat and Dog proxy types, not just Animal
@@ -516,49 +402,32 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_AnimalArray_CanReadInheritedAndOwnFields()
     {
-        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
-        var animalType = Assembly.GetType("_.Ndump.TestApp.Animal")!;
-        var dogType = Assembly.GetType("_.Ndump.TestApp.Dog")!;
-
-        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
-
-        var nameProp = customerType.GetProperty("_name")!;
-        var petsProp = customerType.GetProperty("_pets")!;
+        var dogType = ProxyType("Ndump.TestApp.Dog");
+        var customers = GetInstances("Ndump.TestApp.Customer");
 
         // Alice has [cat1("Whiskers", 3, indoor=true), dog1("Rex", 4, "German Shepherd")]
-        var alice = instances.Single(c => (string?)nameProp.GetValue(c) == "Alice");
-        var alicePets = ((IEnumerable)petsProp.GetValue(alice)!).Cast<object>().ToList();
+        var alice = customers.Single(c => (string?)c._name == "Alice");
+        var alicePets = ((IEnumerable)alice._pets).Cast<dynamic>().ToList();
 
-        // Read inherited _name field (declared on Animal proxy) from a Dog
-        var animalNameProp = animalType.GetProperty("_name")!;
-
-        var petNames = alicePets.Select(p => (string?)animalNameProp.GetValue(p)).OrderBy(n => n).ToList();
+        // Read inherited _name field (declared on Animal proxy) from all pets
+        var petNames = alicePets.Select(p => (string?)p._name).OrderBy(n => n).ToList();
         Assert.Equal(["Rex", "Whiskers"], petNames);
 
         // Read Dog-specific _breed field
-        var breedProp = dogType.GetProperty("_breed")!;
-
-        var dog = alicePets.Single(p => p.GetType() == dogType);
-        Assert.Equal("German Shepherd", breedProp.GetValue(dog));
+        var dog = alicePets.Single(p => ((object)p).GetType() == dogType);
+        Assert.Equal("German Shepherd", (string)dog._breed);
     }
 
     [Fact]
     public void Proxies_AnimalArray_Charlie_HasMixedPets()
     {
-        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
-        var catType = Assembly.GetType("_.Ndump.TestApp.Cat")!;
-        var dogType = Assembly.GetType("_.Ndump.TestApp.Dog")!;
-
-        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
-
-        var nameProp = customerType.GetProperty("_name")!;
-        var petsProp = customerType.GetProperty("_pets")!;
+        var catType = ProxyType("Ndump.TestApp.Cat");
+        var dogType = ProxyType("Ndump.TestApp.Dog");
+        var customers = GetInstances("Ndump.TestApp.Customer");
 
         // Charlie has [cat2("Mittens"), dog1("Rex"), cat1("Whiskers")]
-        var charlie = instances.Single(c => (string?)nameProp.GetValue(c) == "Charlie");
-        var charliePets = ((IEnumerable)petsProp.GetValue(charlie)!).Cast<object>().ToList();
+        var charlie = customers.Single(c => (string?)c._name == "Charlie");
+        var charliePets = ((IEnumerable)charlie._pets).Cast<object>().ToList();
         Assert.Equal(3, charliePets.Count);
 
         var catCount = charliePets.Count(p => p.GetType() == catType);
@@ -570,20 +439,17 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_InheritFromSystemObject()
     {
-        var sysObjType = Assembly.GetType("_.System.Object")!;
+        var sysObjType = ProxyType("System.Object");
 
-        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
-        Assert.True(sysObjType.IsAssignableFrom(customerType));
-
-        var orderType = Assembly.GetType("_.Ndump.TestApp.Order")!;
-        Assert.True(sysObjType.IsAssignableFrom(orderType));
+        Assert.True(sysObjType.IsAssignableFrom(ProxyType("Ndump.TestApp.Customer")));
+        Assert.True(sysObjType.IsAssignableFrom(ProxyType("Ndump.TestApp.Order")));
     }
 
     [Fact]
     public void Proxies_SystemString_HasImplicitConversionToString()
     {
-        var stringType = Assembly.GetType("_.System.String")!;
-        var sysObjType = Assembly.GetType("_.System.Object")!;
+        var stringType = ProxyType("System.String");
+        var sysObjType = ProxyType("System.Object");
 
         // _.System.String should extend _.System.Object
         Assert.True(sysObjType.IsAssignableFrom(stringType));
@@ -597,18 +463,12 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_SystemString_ToStringReturnsValue()
     {
-        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
-        var stringType = Assembly.GetType("_.System.String")!;
-
-        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
-
-        var nameProp = customerType.GetProperty("_name")!;
-        var mixedProp = customerType.GetProperty("_mixedItems")!;
+        var stringType = ProxyType("System.String");
+        var customers = GetInstances("Ndump.TestApp.Customer");
 
         // Alice has [order1, addr1, tag1, "hello"] — the string element should have ToString() == "hello"
-        var alice = instances.Single(c => (string?)nameProp.GetValue(c) == "Alice");
-        var aliceMixed = ((IEnumerable)mixedProp.GetValue(alice)!).Cast<object>().ToList();
+        var alice = customers.Single(c => (string?)c._name == "Alice");
+        var aliceMixed = ((IEnumerable)alice._mixedItems).Cast<object>().ToList();
 
         var stringElement = aliceMixed.Single(d => d.GetType() == stringType);
         Assert.Equal("hello", stringElement.ToString());
@@ -617,18 +477,12 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_SystemString_ImplicitOperatorReturnsValue()
     {
-        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
-        var stringType = Assembly.GetType("_.System.String")!;
-
-        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
-
-        var nameProp = customerType.GetProperty("_name")!;
-        var mixedProp = customerType.GetProperty("_mixedItems")!;
+        var stringType = ProxyType("System.String");
+        var customers = GetInstances("Ndump.TestApp.Customer");
 
         // Alice has "hello" in _mixedItems
-        var alice = instances.Single(c => (string?)nameProp.GetValue(c) == "Alice");
-        var aliceMixed = ((IEnumerable)mixedProp.GetValue(alice)!).Cast<object>().ToList();
+        var alice = customers.Single(c => (string?)c._name == "Alice");
+        var aliceMixed = ((IEnumerable)alice._mixedItems).Cast<object>().ToList();
 
         var stringElement = aliceMixed.Single(d => d.GetType() == stringType);
 
@@ -642,28 +496,21 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_SystemString_ValuePropertyReturnsValue()
     {
-        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
-        var stringType = Assembly.GetType("_.System.String")!;
-
-        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
-
-        var nameProp = customerType.GetProperty("_name")!;
-        var mixedProp = customerType.GetProperty("_mixedItems")!;
+        var stringType = ProxyType("System.String");
+        var customers = GetInstances("Ndump.TestApp.Customer");
 
         // Charlie has "world" in _mixedItems
-        var charlie = instances.Single(c => (string?)nameProp.GetValue(c) == "Charlie");
-        var charlieMixed = ((IEnumerable)mixedProp.GetValue(charlie)!).Cast<object>().ToList();
+        var charlie = customers.Single(c => (string?)c._name == "Charlie");
+        var charlieMixed = ((IEnumerable)charlie._mixedItems).Cast<dynamic>().ToList();
 
-        var stringElement = charlieMixed.Single(d => d.GetType() == stringType);
-        var valueProp = stringType.GetProperty("Value")!;
-        Assert.Equal("world", valueProp.GetValue(stringElement));
+        var stringElement = charlieMixed.Single(d => ((object)d).GetType() == stringType);
+        Assert.Equal("world", (string?)stringElement.Value);
     }
 
     [Fact]
     public void Proxies_CustomerHasDictionaryField()
     {
-        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
+        var customerType = ProxyType("Ndump.TestApp.Customer");
 
         var scoresProp = customerType.GetProperty("_scores");
         Assert.NotNull(scoresProp);
@@ -678,95 +525,71 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_DictionaryProxy_CanReadCount()
     {
-        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
-
-        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
-
-        var nameProp = customerType.GetProperty("_name")!;
-        var scoresProp = customerType.GetProperty("_scores")!;
+        var customers = GetInstances("Ndump.TestApp.Customer");
 
         // Alice has {"math": 95, "science": 87} — count = 2
-        var alice = instances.Single(c => (string?)nameProp.GetValue(c) == "Alice");
-        var aliceScores = scoresProp.GetValue(alice)!;
-        var countProp = aliceScores.GetType().GetProperty("_count")!;
-        Assert.Equal(2, (int)countProp.GetValue(aliceScores)!);
+        var alice = customers.Single(c => (string?)c._name == "Alice");
+        dynamic aliceScores = alice._scores;
+        Assert.Equal(2, (int)aliceScores._count);
 
         // Bob has {"art": 72} — count = 1
-        var bob = instances.Single(c => (string?)nameProp.GetValue(c) == "Bob");
-        var bobScores = scoresProp.GetValue(bob)!;
-        Assert.Equal(1, (int)countProp.GetValue(bobScores)!);
+        var bob = customers.Single(c => (string?)c._name == "Bob");
+        dynamic bobScores = bob._scores;
+        Assert.Equal(1, (int)bobScores._count);
 
         // Charlie has {"math": 100, "art": 88, "science": 91} — count = 3
-        var charlie = instances.Single(c => (string?)nameProp.GetValue(c) == "Charlie");
-        var charlieScores = scoresProp.GetValue(charlie)!;
-        Assert.Equal(3, (int)countProp.GetValue(charlieScores)!);
+        var charlie = customers.Single(c => (string?)c._name == "Charlie");
+        dynamic charlieScores = charlie._scores;
+        Assert.Equal(3, (int)charlieScores._count);
     }
 
     [Fact]
     public void Proxies_DictionaryProxy_HasEntriesAndBuckets()
     {
-        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
-
-        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
-
-        var nameProp = customerType.GetProperty("_name")!;
-        var scoresProp = customerType.GetProperty("_scores")!;
+        var customers = GetInstances("Ndump.TestApp.Customer");
 
         // Bob has {"art": 72} — 1 entry
-        var bob = instances.Single(c => (string?)nameProp.GetValue(c) == "Bob");
-        var bobScores = scoresProp.GetValue(bob)!;
+        var bob = customers.Single(c => (string?)c._name == "Bob");
+        dynamic bobScores = bob._scores;
 
         // _entries returns a DumpArray<Entry> of struct element proxies
-        var entriesProp = bobScores.GetType().GetProperty("_entries");
-        Assert.NotNull(entriesProp);
-        var entries = ((IEnumerable)entriesProp.GetValue(bobScores)!).Cast<object>().ToList();
+        var entries = ((IEnumerable)bobScores._entries).Cast<dynamic>().ToList();
         Assert.True(entries.Count >= 1);
 
         // Each entry is a proper Entry proxy with fields
         var firstEntry = entries[0];
-        var entryType = firstEntry.GetType();
+        var entryType = ((object)firstEntry).GetType();
         Assert.NotNull(entryType.GetProperty("hashCode"));
         Assert.NotNull(entryType.GetProperty("next"));
         Assert.NotNull(entryType.GetProperty("value"));
 
         // Read the value from the first entry (Bob has {"art": 72}, count=1)
-        var valueProp = entryType.GetProperty("value")!;
-        var value = (int)valueProp.GetValue(firstEntry)!;
-        Assert.Equal(72, value);
+        Assert.Equal(72, (int)firstEntry.value);
 
         // _buckets should also exist (int[] array)
-        var bucketsProp = bobScores.GetType().GetProperty("_buckets");
-        Assert.NotNull(bucketsProp);
+        Assert.NotNull(((object)bobScores).GetType().GetProperty("_buckets"));
     }
 
     [Fact]
     public void Proxies_StringArrayField_ReturnsStringValues()
     {
-        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
-
-        var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
-
-        var nameProp = customerType.GetProperty("_name")!;
-        var tagsProp = customerType.GetProperty("_tags")!;
+        var customers = GetInstances("Ndump.TestApp.Customer");
 
         // Alice has ["vip", "early-adopter"]
-        var alice = instances.Single(c => (string?)nameProp.GetValue(c) == "Alice");
-        var aliceTags = ((IEnumerable)tagsProp.GetValue(alice)!).Cast<string?>().ToList();
+        var alice = customers.Single(c => (string?)c._name == "Alice");
+        var aliceTags = ((IEnumerable)alice._tags).Cast<string?>().ToList();
         Assert.Equal(2, aliceTags.Count);
         Assert.Contains("vip", aliceTags);
         Assert.Contains("early-adopter", aliceTags);
 
         // Bob has ["regular"]
-        var bob = instances.Single(c => (string?)nameProp.GetValue(c) == "Bob");
-        var bobTags = ((IEnumerable)tagsProp.GetValue(bob)!).Cast<string?>().ToList();
+        var bob = customers.Single(c => (string?)c._name == "Bob");
+        var bobTags = ((IEnumerable)bob._tags).Cast<string?>().ToList();
         Assert.Equal(["regular"], bobTags);
 
         // Charlie has ["vip", "premium", "newsletter"]
-        var charlie = instances.Single(c => (string?)nameProp.GetValue(c) == "Charlie");
-        var charlieTags = ((IEnumerable)tagsProp.GetValue(charlie)!).Cast<string?>().ToList();
+        var charlie = customers.Single(c => (string?)c._name == "Charlie");
+        var charlieTags = ((IEnumerable)charlie._tags).Cast<string?>().ToList();
         Assert.Equal(3, charlieTags.Count);
         Assert.Contains("premium", charlieTags);
     }
