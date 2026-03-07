@@ -13,27 +13,9 @@ public sealed class StreamReader : _.System.IO.TextReader
 
     public _.System.Text.Decoder? _decoder => Field<_.System.Text.Decoder>();
 
-    public global::Ndump.Core.DumpArray<byte>? _byteBuffer
-    {
-        get
-        {
-            var addr = RefAddress();
-            if (addr == 0) return null;
-            var len = _ctx.GetArrayLength(addr);
-            return new global::Ndump.Core.DumpArray<byte>(addr, len, i => _ctx.GetArrayElementValue<byte>(addr, i));
-        }
-    }
+    public global::Ndump.Core.DumpArray<byte>? _byteBuffer => ArrayField<byte>();
 
-    public global::Ndump.Core.DumpArray<char>? _charBuffer
-    {
-        get
-        {
-            var addr = RefAddress();
-            if (addr == 0) return null;
-            var len = _ctx.GetArrayLength(addr);
-            return new global::Ndump.Core.DumpArray<char>(addr, len, i => _ctx.GetArrayElementValue<char>(addr, i));
-        }
-    }
+    public global::Ndump.Core.DumpArray<char>? _charBuffer => ArrayField<char>();
 
     public int _charPos => Field<int>();
 

@@ -14,6 +14,17 @@ public class Object
     protected readonly bool _isStructElement;
 
     private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::System.Func<ulong, DumpContext, object>?> _proxyFactories = new();
+    private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::System.Func<ulong, DumpContext, ulong, int, object>?> _structProxyFactories = new();
+    private static readonly global::System.Func<ulong, DumpContext, object?>? _proxyResolver = ResolveProxyResolverMethod();
+
+    private static global::System.Func<ulong, DumpContext, object?>? ResolveProxyResolverMethod()
+    {
+        var resolverType = typeof(Object).Assembly.GetType("_.ProxyResolver");
+        if (resolverType is null) return null;
+        var method = resolverType.GetMethod("Resolve", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static);
+        if (method is null) return null;
+        return (global::System.Func<ulong, DumpContext, object?>)global::System.Delegate.CreateDelegate(typeof(global::System.Func<ulong, DumpContext, object?>), method);
+    }
 
     protected Object(ulong address, DumpContext ctx)
     {
@@ -65,14 +76,46 @@ public class Object
             ? _ctx.GetStructArrayElementObjectAddress(_arrayAddr, _arrayIndex, fieldName)
             : _ctx.GetObjectAddress(_objAddress, fieldName);
 
+    protected global::Ndump.Core.DumpArray<T>? ArrayField<T>([CallerMemberName] string fieldName = "")
+    {
+        var addr = RefAddress(fieldName);
+        if (addr == 0) return null;
+        var len = _ctx.GetArrayLength(addr);
+        return new global::Ndump.Core.DumpArray<T>(addr, len, i => ReadArrayElement<T>(addr, i));
+    }
+
+    protected global::Ndump.Core.DumpArray<ulong>? ArrayAddresses([CallerMemberName] string fieldName = "")
+    {
+        var addr = RefAddress(fieldName);
+        if (addr == 0) return null;
+        var len = _ctx.GetArrayLength(addr);
+        return new global::Ndump.Core.DumpArray<ulong>(addr, len, i => _ctx.GetArrayElementAddress(addr, i));
+    }
+
     protected T ReadArrayElement<T>(ulong arrayAddr, int index)
     {
         if (typeof(T) == typeof(string))
             return (T)(object)_ctx.GetArrayElementString(arrayAddr, index)!;
         if (!typeof(T).IsValueType)
         {
+            var structFactory = _structProxyFactories.GetOrAdd(typeof(T), static t =>
+            {
+                var method = t.GetMethod("FromArrayElement", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static);
+                if (method is null) return null;
+                return (global::System.Func<ulong, DumpContext, ulong, int, object>)((a, c, aa, ai) => method.Invoke(null, [a, c, aa, ai])!);
+            });
+            if (structFactory is not null)
+            {
+                var ea = _ctx.GetArrayStructElementAddress(arrayAddr, index);
+                return (T)structFactory(ea, _ctx, arrayAddr, index);
+            }
             var addr = _ctx.GetArrayElementAddress(arrayAddr, index);
             if (addr == 0) return default!;
+            if (_proxyResolver is not null)
+            {
+                var resolved = _proxyResolver(addr, _ctx);
+                if (resolved is T t) return t;
+            }
             return (T)CreateProxy(typeof(T), addr, _ctx);
         }
         return _ctx.GetArrayElementValue<T>(arrayAddr, index);

@@ -381,10 +381,7 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type, knownTypes);
 
-        Assert.Contains("public global::Ndump.Core.DumpArray<_.MyApp.Order?>? _orderHistory", code);
-        Assert.Contains("RefAddress()", code);
-        Assert.Contains("_ctx.GetArrayLength(addr)", code);
-        Assert.Contains("_.MyApp.Order.FromAddress(ea, _ctx)", code);
+        Assert.Contains("public global::Ndump.Core.DumpArray<_.MyApp.Order?>? _orderHistory => ArrayField<_.MyApp.Order?>()", code);
     }
 
     [Fact]
@@ -410,8 +407,7 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public global::Ndump.Core.DumpArray<ulong>? _items", code);
-        Assert.Contains("_ctx.GetArrayElementAddress(addr, i)", code);
+        Assert.Contains("public global::Ndump.Core.DumpArray<ulong>? _items => ArrayAddresses()", code);
     }
 
     [Fact]
@@ -437,8 +433,7 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public global::Ndump.Core.DumpArray<string?>? _names", code);
-        Assert.Contains("_ctx.GetArrayElementString(addr, i)", code);
+        Assert.Contains("public global::Ndump.Core.DumpArray<string?>? _names => ArrayField<string?>()", code);
     }
 
     [Fact]
@@ -464,8 +459,7 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public global::Ndump.Core.DumpArray<int>? _scores", code);
-        Assert.Contains("_ctx.GetArrayElementValue<int>(addr, i)", code);
+        Assert.Contains("public global::Ndump.Core.DumpArray<int>? _scores => ArrayField<int>()", code);
     }
 
     [Fact]
@@ -495,9 +489,7 @@ public class ProxyEmitterTests
         var order = new TypeMetadata { FullName = "MyApp.Order", Namespace = "MyApp", Name = "Order", Fields = [], BaseTypeName = "System.Object" };
         var code = _emitter.GenerateProxyCode(type, allTypes: [sysObj, order, type]);
 
-        // System.Object is a known proxy type and a base type, so should use resolver with fallback
-        Assert.Contains("public global::Ndump.Core.DumpArray<_.System.Object?>? _mixedItems", code);
-        Assert.Contains("global::_.ProxyResolver.Resolve(ea, _ctx) as _.System.Object ?? _.System.Object.FromAddress(ea, _ctx)", code);
+        Assert.Contains("public global::Ndump.Core.DumpArray<_.System.Object?>? _mixedItems => ArrayField<_.System.Object?>()", code);
     }
 
     [Fact]
@@ -698,9 +690,7 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(owner, allTypes: [animal, cat, owner]);
 
-        Assert.Contains("DumpArray<_.MyApp.Animal?>?", code);
-        // Uses resolver with fallback for base types
-        Assert.Contains("global::_.ProxyResolver.Resolve(ea, _ctx) as _.MyApp.Animal ?? _.MyApp.Animal.FromAddress(ea, _ctx)", code);
+        Assert.Contains("DumpArray<_.MyApp.Animal?>? _pets => ArrayField<_.MyApp.Animal?>()", code);
     }
 
     [Fact]
@@ -733,10 +723,7 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(owner, allTypes: [order, owner]);
 
-        Assert.Contains("DumpArray<_.MyApp.Order?>?", code);
-        // Leaf types use direct FromAddress (no resolver)
-        Assert.Contains("_.MyApp.Order.FromAddress(ea, _ctx)", code);
-        Assert.DoesNotContain("ProxyResolver", code);
+        Assert.Contains("DumpArray<_.MyApp.Order?>? _orders => ArrayField<_.MyApp.Order?>()", code);
     }
 
     [Fact]
@@ -1142,7 +1129,7 @@ public class ProxyEmitterTests
         Assert.Contains("public sealed class List<T> : global::_.System.Object", code);
         // Array element type matches type arg → DumpArray<T>
         Assert.Contains("DumpArray<T>?", code);
-        Assert.Contains("ReadArrayElement<T>(addr, i)", code);
+        Assert.Contains("DumpArray<T>? _items => ArrayField<T>()", code);
     }
 
     [Fact]

@@ -11,16 +11,7 @@ public sealed class BufferedFileStreamStrategy : _.System.IO.Strategies.FileStre
 
     public int _bufferSize => Field<int>();
 
-    public global::Ndump.Core.DumpArray<byte>? _buffer
-    {
-        get
-        {
-            var addr = RefAddress();
-            if (addr == 0) return null;
-            var len = _ctx.GetArrayLength(addr);
-            return new global::Ndump.Core.DumpArray<byte>(addr, len, i => _ctx.GetArrayElementValue<byte>(addr, i));
-        }
-    }
+    public global::Ndump.Core.DumpArray<byte>? _buffer => ArrayField<byte>();
 
     public int _writePos => Field<int>();
 

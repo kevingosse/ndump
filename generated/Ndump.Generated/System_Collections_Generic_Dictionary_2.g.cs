@@ -7,27 +7,9 @@ public sealed class Dictionary<T1, T2> : global::_.System.Object
 {
     private Dictionary(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    public global::Ndump.Core.DumpArray<int>? _buckets
-    {
-        get
-        {
-            var addr = RefAddress();
-            if (addr == 0) return null;
-            var len = _ctx.GetArrayLength(addr);
-            return new global::Ndump.Core.DumpArray<int>(addr, len, i => _ctx.GetArrayElementValue<int>(addr, i));
-        }
-    }
+    public global::Ndump.Core.DumpArray<int>? _buckets => ArrayField<int>();
 
-    public global::Ndump.Core.DumpArray<Entry>? _entries
-    {
-        get
-        {
-            var addr = RefAddress();
-            if (addr == 0) return null;
-            var len = _ctx.GetArrayLength(addr);
-            return new global::Ndump.Core.DumpArray<Entry>(addr, len, i => Entry.FromArrayElement(_ctx.GetArrayStructElementAddress(addr, i), _ctx, addr, i));
-        }
-    }
+    public global::Ndump.Core.DumpArray<Entry>? _entries => ArrayField<Entry>();
 
     public ulong _fastModMultiplier => Field<ulong>();
 

@@ -655,18 +655,8 @@ public sealed class ProxyEmitter
         // Check if the element type matches a type argument
         if (elementTypeName is not null && typeArgMap.TryGetValue(elementTypeName, out var elemParam))
         {
-            // Generic array element — use ReadArrayElement<T>
-            var arrayAddrExpr = propName == field.Name ? "RefAddress()" : $"RefAddress(\"{field.Name}\")";
-            sb.AppendLine($"    public global::Ndump.Core.DumpArray<{elemParam}>? {propName}");
-            sb.AppendLine("    {");
-            sb.AppendLine("        get");
-            sb.AppendLine("        {");
-            sb.AppendLine($"            var addr = {arrayAddrExpr};");
-            sb.AppendLine("            if (addr == 0) return null;");
-            sb.AppendLine("            var len = _ctx.GetArrayLength(addr);");
-            sb.AppendLine($"            return new global::Ndump.Core.DumpArray<{elemParam}>(addr, len, i => ReadArrayElement<{elemParam}>(addr, i));");
-            sb.AppendLine("        }");
-            sb.AppendLine("    }");
+            var fieldNameArg = propName == field.Name ? "" : $"\"{field.Name}\"";
+            sb.AppendLine($"    public global::Ndump.Core.DumpArray<{elemParam}>? {propName} => ArrayField<{elemParam}>({fieldNameArg});");
             return;
         }
 
@@ -682,17 +672,8 @@ public sealed class ProxyEmitter
                 {
                     var nestedSuffix = elementTypeName[(plusIdx + 1)..];
                     var sanitizedNested = SanitizeTypeName(nestedSuffix);
-                    var arrayAddrExpr2 = propName == field.Name ? "RefAddress()" : $"RefAddress(\"{field.Name}\")";
-                    sb.AppendLine($"    public global::Ndump.Core.DumpArray<{sanitizedNested}>? {propName}");
-                    sb.AppendLine("    {");
-                    sb.AppendLine("        get");
-                    sb.AppendLine("        {");
-                    sb.AppendLine($"            var addr = {arrayAddrExpr2};");
-                    sb.AppendLine("            if (addr == 0) return null;");
-                    sb.AppendLine("            var len = _ctx.GetArrayLength(addr);");
-                    sb.AppendLine($"            return new global::Ndump.Core.DumpArray<{sanitizedNested}>(addr, len, i => {sanitizedNested}.FromArrayElement(_ctx.GetArrayStructElementAddress(addr, i), _ctx, addr, i));");
-                    sb.AppendLine("        }");
-                    sb.AppendLine("    }");
+                    var fieldNameArg = propName == field.Name ? "" : $"\"{field.Name}\"";
+                    sb.AppendLine($"    public global::Ndump.Core.DumpArray<{sanitizedNested}>? {propName} => ArrayField<{sanitizedNested}>({fieldNameArg});");
                     return;
                 }
             }
@@ -725,6 +706,17 @@ public sealed class ProxyEmitter
         sb.AppendLine("    protected readonly bool _isStructElement;");
         sb.AppendLine();
         sb.AppendLine("    private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::System.Func<ulong, DumpContext, object>?> _proxyFactories = new();");
+        sb.AppendLine("    private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::System.Func<ulong, DumpContext, ulong, int, object>?> _structProxyFactories = new();");
+        sb.AppendLine("    private static readonly global::System.Func<ulong, DumpContext, object?>? _proxyResolver = ResolveProxyResolverMethod();");
+        sb.AppendLine();
+        sb.AppendLine("    private static global::System.Func<ulong, DumpContext, object?>? ResolveProxyResolverMethod()");
+        sb.AppendLine("    {");
+        sb.AppendLine("        var resolverType = typeof(Object).Assembly.GetType(\"_.ProxyResolver\");");
+        sb.AppendLine("        if (resolverType is null) return null;");
+        sb.AppendLine("        var method = resolverType.GetMethod(\"Resolve\", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static);");
+        sb.AppendLine("        if (method is null) return null;");
+        sb.AppendLine("        return (global::System.Func<ulong, DumpContext, object?>)global::System.Delegate.CreateDelegate(typeof(global::System.Func<ulong, DumpContext, object?>), method);");
+        sb.AppendLine("    }");
         sb.AppendLine();
         sb.AppendLine("    protected Object(ulong address, DumpContext ctx)");
         sb.AppendLine("    {");
@@ -776,14 +768,46 @@ public sealed class ProxyEmitter
         sb.AppendLine("            ? _ctx.GetStructArrayElementObjectAddress(_arrayAddr, _arrayIndex, fieldName)");
         sb.AppendLine("            : _ctx.GetObjectAddress(_objAddress, fieldName);");
         sb.AppendLine();
+        sb.AppendLine("    protected global::Ndump.Core.DumpArray<T>? ArrayField<T>([CallerMemberName] string fieldName = \"\")");
+        sb.AppendLine("    {");
+        sb.AppendLine("        var addr = RefAddress(fieldName);");
+        sb.AppendLine("        if (addr == 0) return null;");
+        sb.AppendLine("        var len = _ctx.GetArrayLength(addr);");
+        sb.AppendLine("        return new global::Ndump.Core.DumpArray<T>(addr, len, i => ReadArrayElement<T>(addr, i));");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    protected global::Ndump.Core.DumpArray<ulong>? ArrayAddresses([CallerMemberName] string fieldName = \"\")");
+        sb.AppendLine("    {");
+        sb.AppendLine("        var addr = RefAddress(fieldName);");
+        sb.AppendLine("        if (addr == 0) return null;");
+        sb.AppendLine("        var len = _ctx.GetArrayLength(addr);");
+        sb.AppendLine("        return new global::Ndump.Core.DumpArray<ulong>(addr, len, i => _ctx.GetArrayElementAddress(addr, i));");
+        sb.AppendLine("    }");
+        sb.AppendLine();
         sb.AppendLine("    protected T ReadArrayElement<T>(ulong arrayAddr, int index)");
         sb.AppendLine("    {");
         sb.AppendLine("        if (typeof(T) == typeof(string))");
         sb.AppendLine("            return (T)(object)_ctx.GetArrayElementString(arrayAddr, index)!;");
         sb.AppendLine("        if (!typeof(T).IsValueType)");
         sb.AppendLine("        {");
+        sb.AppendLine("            var structFactory = _structProxyFactories.GetOrAdd(typeof(T), static t =>");
+        sb.AppendLine("            {");
+        sb.AppendLine("                var method = t.GetMethod(\"FromArrayElement\", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static);");
+        sb.AppendLine("                if (method is null) return null;");
+        sb.AppendLine("                return (global::System.Func<ulong, DumpContext, ulong, int, object>)((a, c, aa, ai) => method.Invoke(null, [a, c, aa, ai])!);");
+        sb.AppendLine("            });");
+        sb.AppendLine("            if (structFactory is not null)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                var ea = _ctx.GetArrayStructElementAddress(arrayAddr, index);");
+        sb.AppendLine("                return (T)structFactory(ea, _ctx, arrayAddr, index);");
+        sb.AppendLine("            }");
         sb.AppendLine("            var addr = _ctx.GetArrayElementAddress(arrayAddr, index);");
         sb.AppendLine("            if (addr == 0) return default!;");
+        sb.AppendLine("            if (_proxyResolver is not null)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                var resolved = _proxyResolver(addr, _ctx);");
+        sb.AppendLine("                if (resolved is T t) return t;");
+        sb.AppendLine("            }");
         sb.AppendLine("            return (T)CreateProxy(typeof(T), addr, _ctx);");
         sb.AppendLine("        }");
         sb.AppendLine("        return _ctx.GetArrayElementValue<T>(arrayAddr, index);");
@@ -1010,39 +1034,31 @@ public sealed class ProxyEmitter
     {
         var elementKind = field.ArrayElementKind ?? FieldKind.Unknown;
         var elementTypeName = ResolveArrayElementTypeName(field.ArrayElementTypeName, ownerType);
-
-        // Determine the C# element type and the reader lambda
-        string csElementType;
-        string readerLambda;
+        var fieldNameArg = propName == field.Name ? "" : $"\"{field.Name}\"";
 
         switch (elementKind)
         {
             case FieldKind.String:
-                csElementType = "string?";
-                readerLambda = "i => _ctx.GetArrayElementString(addr, i)";
+                sb.AppendLine($"    public global::Ndump.Core.DumpArray<string?>? {propName} => ArrayField<string?>({fieldNameArg});");
                 break;
 
             case FieldKind.Primitive:
-                csElementType = MapClrPrimitiveTypeName(elementTypeName);
-                readerLambda = $"i => _ctx.GetArrayElementValue<{csElementType}>(addr, i)";
+            {
+                var csType = MapClrPrimitiveTypeName(elementTypeName);
+                sb.AppendLine($"    public global::Ndump.Core.DumpArray<{csType}>? {propName} => ArrayField<{csType}>({fieldNameArg});");
                 break;
+            }
 
             case FieldKind.ObjectReference:
                 if (IsUsableProxyType(elementTypeName))
                 {
                     var qualifiedProxy = GetFullyQualifiedProxyType(elementTypeName!);
-                    csElementType = $"{qualifiedProxy}?";
-                    var isBaseType = _baseTypes.Contains(elementTypeName!);
-                    if (isBaseType)
-                        readerLambda = $"i => {{ var ea = _ctx.GetArrayElementAddress(addr, i); return ea == 0 ? null : global::_.ProxyResolver.Resolve(ea, _ctx) as {qualifiedProxy} ?? {qualifiedProxy}.FromAddress(ea, _ctx); }}";
-                    else
-                        readerLambda = $"i => {{ var ea = _ctx.GetArrayElementAddress(addr, i); return ea == 0 ? null : {qualifiedProxy}.FromAddress(ea, _ctx); }}";
+                    sb.AppendLine($"    public global::Ndump.Core.DumpArray<{qualifiedProxy}?>? {propName} => ArrayField<{qualifiedProxy}?>({fieldNameArg});");
                 }
                 else
                 {
-                    // Unknown element type — expose as address
-                    csElementType = "ulong";
-                    readerLambda = "i => _ctx.GetArrayElementAddress(addr, i)";
+                    // Unknown element type — expose raw addresses
+                    sb.AppendLine($"    public global::Ndump.Core.DumpArray<ulong>? {propName} => ArrayAddresses({fieldNameArg});");
                 }
                 break;
 
@@ -1050,32 +1066,19 @@ public sealed class ProxyEmitter
                 if (IsUsableProxyType(elementTypeName))
                 {
                     var qualifiedProxy = GetFullyQualifiedProxyType(elementTypeName!);
-                    csElementType = qualifiedProxy;
-                    readerLambda = $"i => {{ var ea = _ctx.GetArrayStructElementAddress(addr, i); return {qualifiedProxy}.FromArrayElement(ea, _ctx, addr, i); }}";
+                    sb.AppendLine($"    public global::Ndump.Core.DumpArray<{qualifiedProxy}>? {propName} => ArrayField<{qualifiedProxy}>({fieldNameArg});");
                 }
                 else
                 {
-                    csElementType = "ulong";
-                    readerLambda = "i => _ctx.GetArrayStructElementAddress(addr, i)";
+                    // Unknown struct element type — expose raw addresses
+                    sb.AppendLine($"    public global::Ndump.Core.DumpArray<ulong>? {propName} => ArrayAddresses({fieldNameArg});");
                 }
                 break;
 
             default:
                 sb.AppendLine($"    // Array field: {field.Name} ({field.TypeName}) — element type not supported");
-                return;
+                break;
         }
-
-        var arrayAddrExpr = propName == field.Name ? "RefAddress()" : $"RefAddress(\"{field.Name}\")";
-        sb.AppendLine($"    public global::Ndump.Core.DumpArray<{csElementType}>? {propName}");
-        sb.AppendLine("    {");
-        sb.AppendLine("        get");
-        sb.AppendLine("        {");
-        sb.AppendLine($"            var addr = {arrayAddrExpr};");
-        sb.AppendLine("            if (addr == 0) return null;");
-        sb.AppendLine($"            var len = _ctx.GetArrayLength(addr);");
-        sb.AppendLine($"            return new global::Ndump.Core.DumpArray<{csElementType}>(addr, len, {readerLambda});");
-        sb.AppendLine("        }");
-        sb.AppendLine("    }");
     }
 
     private static string MapClrPrimitiveTypeName(string? clrTypeName)

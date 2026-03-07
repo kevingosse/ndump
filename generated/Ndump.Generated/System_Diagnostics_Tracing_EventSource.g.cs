@@ -49,16 +49,7 @@ public partial class EventSource : _.System.Object
 
     // Array field: m_traits (object) — element type not supported
 
-    public global::Ndump.Core.DumpArray<ulong>? m_channelData
-    {
-        get
-        {
-            var addr = RefAddress();
-            if (addr == 0) return null;
-            var len = _ctx.GetArrayLength(addr);
-            return new global::Ndump.Core.DumpArray<ulong>(addr, len, i => _ctx.GetArrayElementValue<ulong>(addr, i));
-        }
-    }
+    public global::Ndump.Core.DumpArray<ulong>? m_channelData => ArrayField<ulong>();
 
     public _.System.Diagnostics.Tracing.ActivityTracker? m_activityTracker => Field<_.System.Diagnostics.Tracing.ActivityTracker>();
 

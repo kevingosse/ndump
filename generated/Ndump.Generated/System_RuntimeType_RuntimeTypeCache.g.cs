@@ -45,16 +45,7 @@ public partial class RuntimeType
 
         public ulong m_genericCache => RefAddress();
 
-        public global::Ndump.Core.DumpArray<_.System.Object?>? _emptyArray
-        {
-            get
-            {
-                var addr = RefAddress();
-                if (addr == 0) return null;
-                var len = _ctx.GetArrayLength(addr);
-                return new global::Ndump.Core.DumpArray<_.System.Object?>(addr, len, i => { var ea = _ctx.GetArrayElementAddress(addr, i); return ea == 0 ? null : global::_.ProxyResolver.Resolve(ea, _ctx) as _.System.Object ?? _.System.Object.FromAddress(ea, _ctx); });
-            }
-        }
+        public global::Ndump.Core.DumpArray<_.System.Object?>? _emptyArray => ArrayField<_.System.Object?>();
 
         public _.System.RuntimeType? _genericTypeDefinition => Field<_.System.RuntimeType>();
 
