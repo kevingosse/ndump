@@ -152,7 +152,7 @@ public class ProxyEmitterTests
     }
 
     [Fact]
-    public void GenerateProxy_HasAddressProperty()
+    public void GenerateProxy_HasAddressMethod()
     {
         var type = new TypeMetadata
         {
@@ -164,7 +164,7 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public ulong ObjAddress => _objAddress;", code);
+        Assert.Contains("public ulong GetObjAddress() => _objAddress;", code);
     }
 
     [Fact]

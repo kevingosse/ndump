@@ -89,9 +89,9 @@ public sealed class ProxyEmitter
         sb.AppendLine($"            yield return new {SanitizeTypeName(type.Name)}(addr, ctx);");
         sb.AppendLine("    }");
 
-        // Address property (useful for debugging/inspection)
+        // Address accessor (method to avoid collisions with object fields)
         sb.AppendLine();
-        sb.AppendLine("    public ulong ObjAddress => _objAddress;");
+        sb.AppendLine("    public ulong GetObjAddress() => _objAddress;");
 
         // ToString override
         sb.AppendLine();
