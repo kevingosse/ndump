@@ -1,13 +1,21 @@
 using System.Diagnostics;
+using System.Reflection;
+using Ndump.Core;
 
 namespace Ndump.IntegrationTests;
 
 /// <summary>
 /// Helper to build TestApp, start it (which self-dumps via createdump), and clean up.
+/// Also projects the dump once so all tests share a single projection.
 /// </summary>
 public sealed class DumpFixture : IAsyncLifetime
 {
     public string DumpPath { get; private set; } = "";
+
+    /// <summary>
+    /// Shared projection result. Tests should use this instead of calling Project() themselves.
+    /// </summary>
+    public DumpProjector.ProjectionResult Projection { get; private set; } = null!;
 
     private readonly string _testAppDir;
     private readonly string _publishDir;
@@ -87,10 +95,15 @@ public sealed class DumpFixture : IAsyncLifetime
 
         if (!File.Exists(DumpPath))
             throw new FileNotFoundException("Dump file was not created", DumpPath);
+
+        // Project once for all tests
+        var projector = new DumpProjector();
+        Projection = projector.Project(DumpPath);
     }
 
     public Task DisposeAsync()
     {
+        try { Projection?.Dispose(); } catch { }
         try { if (File.Exists(DumpPath)) File.Delete(DumpPath); } catch { }
         try { if (Directory.Exists(_publishDir)) Directory.Delete(_publishDir, true); } catch { }
         return Task.CompletedTask;

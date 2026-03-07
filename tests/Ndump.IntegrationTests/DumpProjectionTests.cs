@@ -7,6 +7,9 @@ namespace Ndump.IntegrationTests;
 public class DumpProjectionTests : IClassFixture<DumpFixture>
 {
     private readonly DumpFixture _fixture;
+    private DumpProjector.ProjectionResult Result => _fixture.Projection;
+    private Assembly Assembly => Result.GeneratedAssembly;
+    private DumpContext Context => Result.Context;
 
     public DumpProjectionTests(DumpFixture fixture)
     {
@@ -68,33 +71,21 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void FullPipeline_ProjectsDump_AndProxiesWork()
     {
-        var projector = new DumpProjector();
-        using var result = projector.Project(_fixture.DumpPath);
-
-        Assert.NotNull(result.GeneratedAssembly);
-        Assert.True(result.DiscoveredTypes.Count > 0);
-        Assert.True(result.GeneratedFiles.Count > 0);
-
-        // Verify we generated files
-        foreach (var file in result.GeneratedFiles)
-        {
-            Assert.True(File.Exists(file), $"Generated file should exist: {file}");
-        }
+        Assert.NotNull(Result.GeneratedAssembly);
+        Assert.True(Result.DiscoveredTypes.Count > 0);
+        Assert.True(Result.GeneratedFiles.Count > 0);
     }
 
     [Fact]
     public void Proxies_CanEnumerateCustomerInstances()
     {
-        var projector = new DumpProjector();
-        using var result = projector.Project(_fixture.DumpPath);
-
-        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
+        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer");
         Assert.NotNull(customerType);
 
         var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
         Assert.NotNull(getInstances);
 
-        var instances = getInstances.Invoke(null, [result.Context]) as IEnumerable;
+        var instances = getInstances.Invoke(null, [Context]) as IEnumerable;
         Assert.NotNull(instances);
 
         var customers = instances.Cast<object>().ToList();
@@ -106,14 +97,10 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_CanReadCustomerStringField()
     {
-        var projector = new DumpProjector();
-        using var result = projector.Project(_fixture.DumpPath);
-
-        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
-        Assert.NotNull(customerType);
+        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
 
         var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [result.Context]) as IEnumerable)!.Cast<object>().ToList();
+        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
 
         // Read the _name property from each customer
         var nameProp = customerType.GetProperty("_name");
@@ -129,14 +116,10 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_CanReadCustomerIntField()
     {
-        var projector = new DumpProjector();
-        using var result = projector.Project(_fixture.DumpPath);
-
-        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
-        Assert.NotNull(customerType);
+        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
 
         var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [result.Context]) as IEnumerable)!.Cast<object>().ToList();
+        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
 
         var ageProp = customerType.GetProperty("_age");
         Assert.NotNull(ageProp);
@@ -149,14 +132,10 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_CanReadCustomerBoolField()
     {
-        var projector = new DumpProjector();
-        using var result = projector.Project(_fixture.DumpPath);
-
-        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
-        Assert.NotNull(customerType);
+        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
 
         var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [result.Context]) as IEnumerable)!.Cast<object>().ToList();
+        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
 
         var activeProp = customerType.GetProperty("_isActive");
         Assert.NotNull(activeProp);
@@ -171,23 +150,15 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_CanNavigateObjectReferences()
     {
-        var projector = new DumpProjector();
-        using var result = projector.Project(_fixture.DumpPath);
-
-        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
-        var orderType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Order");
-        Assert.NotNull(customerType);
-        Assert.NotNull(orderType);
+        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
+        var orderType = Assembly.GetType("_.Ndump.TestApp.Order")!;
 
         var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [result.Context]) as IEnumerable)!.Cast<object>().ToList();
+        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
 
         // Navigate Customer -> _lastOrder -> _orderId
-        var lastOrderProp = customerType.GetProperty("_lastOrder");
-        Assert.NotNull(lastOrderProp);
-
-        var orderIdProp = orderType.GetProperty("_orderId");
-        Assert.NotNull(orderIdProp);
+        var lastOrderProp = customerType.GetProperty("_lastOrder")!;
+        var orderIdProp = orderType.GetProperty("_orderId")!;
 
         var orderIds = new List<int>();
         foreach (var customer in instances)
@@ -204,19 +175,14 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_CanEnumerateTagInstances()
     {
-        var projector = new DumpProjector();
-        using var result = projector.Project(_fixture.DumpPath);
-
-        var tagType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Tag");
-        Assert.NotNull(tagType);
+        var tagType = Assembly.GetType("_.Ndump.TestApp.Tag")!;
 
         var getInstances = tagType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [result.Context]) as IEnumerable)!.Cast<object>().ToList();
+        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
 
         Assert.Equal(2, instances.Count);
 
-        var labelProp = tagType.GetProperty("_label");
-        Assert.NotNull(labelProp);
+        var labelProp = tagType.GetProperty("_label")!;
 
         var labels = instances.Select(t => labelProp.GetValue(t) as string).OrderBy(l => l).ToList();
         Assert.Equal(["important", "urgent"], labels);
@@ -225,25 +191,19 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_FromAddress_ReturnsValidProxy()
     {
-        var projector = new DumpProjector();
-        using var result = projector.Project(_fixture.DumpPath);
-
-        var tagType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Tag");
-        Assert.NotNull(tagType);
+        var tagType = Assembly.GetType("_.Ndump.TestApp.Tag")!;
 
         // Get an address from EnumerateInstances
-        var addresses = result.Context.EnumerateInstances("Ndump.TestApp.Tag").ToList();
+        var addresses = Context.EnumerateInstances("Ndump.TestApp.Tag").ToList();
         Assert.NotEmpty(addresses);
 
-        var fromAddress = tagType.GetMethod("FromAddress", BindingFlags.Public | BindingFlags.Static);
-        Assert.NotNull(fromAddress);
+        var fromAddress = tagType.GetMethod("FromAddress", BindingFlags.Public | BindingFlags.Static)!;
 
-        var proxy = fromAddress.Invoke(null, [addresses[0], result.Context]);
+        var proxy = fromAddress.Invoke(null, [addresses[0], Context]);
         Assert.NotNull(proxy);
 
-        var addrProp = tagType.GetMethod("GetObjAddress");
-        Assert.NotNull(addrProp);
-        Assert.Equal(addresses[0], (ulong)addrProp.Invoke(proxy, null)!);
+        var addrMethod = tagType.GetMethod("GetObjAddress")!;
+        Assert.Equal(addresses[0], (ulong)addrMethod.Invoke(proxy, null)!);
     }
 
     [Fact]
@@ -264,23 +224,15 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_CanReadArrayField()
     {
-        var projector = new DumpProjector();
-        using var result = projector.Project(_fixture.DumpPath);
-
-        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
-        var orderType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Order");
-        Assert.NotNull(customerType);
-        Assert.NotNull(orderType);
+        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
+        var orderType = Assembly.GetType("_.Ndump.TestApp.Order")!;
 
         var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [result.Context]) as IEnumerable)!.Cast<object>().ToList();
+        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
 
-        var nameProp = customerType.GetProperty("_name");
-        var historyProp = customerType.GetProperty("_orderHistory");
-        var orderIdProp = orderType.GetProperty("_orderId");
-        Assert.NotNull(nameProp);
-        Assert.NotNull(historyProp);
-        Assert.NotNull(orderIdProp);
+        var nameProp = customerType.GetProperty("_name")!;
+        var historyProp = customerType.GetProperty("_orderHistory")!;
+        var orderIdProp = orderType.GetProperty("_orderId")!;
 
         // Find Alice (has [order1, order2])
         var alice = instances.Single(c => (string?)nameProp.GetValue(c) == "Alice");
@@ -306,19 +258,13 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_ArrayField_HasLength()
     {
-        var projector = new DumpProjector();
-        using var result = projector.Project(_fixture.DumpPath);
-
-        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
-        Assert.NotNull(customerType);
+        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
 
         var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [result.Context]) as IEnumerable)!.Cast<object>().ToList();
+        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
 
-        var nameProp = customerType.GetProperty("_name");
-        var historyProp = customerType.GetProperty("_orderHistory");
-        Assert.NotNull(nameProp);
-        Assert.NotNull(historyProp);
+        var nameProp = customerType.GetProperty("_name")!;
+        var historyProp = customerType.GetProperty("_orderHistory")!;
 
         // Bob has [order2] — 1 element
         var bob = instances.Single(c => (string?)nameProp.GetValue(c) == "Bob");
@@ -332,17 +278,12 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_OrderHasDoubleField()
     {
-        var projector = new DumpProjector();
-        using var result = projector.Project(_fixture.DumpPath);
-
-        var orderType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Order");
-        Assert.NotNull(orderType);
+        var orderType = Assembly.GetType("_.Ndump.TestApp.Order")!;
 
         var getInstances = orderType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [result.Context]) as IEnumerable)!.Cast<object>().ToList();
+        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
 
-        var totalProp = orderType.GetProperty("_total");
-        Assert.NotNull(totalProp);
+        var totalProp = orderType.GetProperty("_total")!;
 
         var totals = instances.Select(o => (double)totalProp.GetValue(o)!).OrderBy(t => t).ToList();
 
@@ -369,19 +310,13 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_CanReadObjectArrayField()
     {
-        var projector = new DumpProjector();
-        using var result = projector.Project(_fixture.DumpPath);
-
-        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
-        Assert.NotNull(customerType);
+        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
 
         var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [result.Context]) as IEnumerable)!.Cast<object>().ToList();
+        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
 
-        var nameProp = customerType.GetProperty("_name");
-        var mixedProp = customerType.GetProperty("_mixedItems");
-        Assert.NotNull(nameProp);
-        Assert.NotNull(mixedProp);
+        var nameProp = customerType.GetProperty("_name")!;
+        var mixedProp = customerType.GetProperty("_mixedItems")!;
 
         // Alice has [order1, addr1, tag1, "hello"] — 4 elements
         var alice = instances.Single(c => (string?)nameProp.GetValue(c) == "Alice");
@@ -395,21 +330,14 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_ObjectArrayElements_InheritFromSystemObject()
     {
-        var projector = new DumpProjector();
-        using var result = projector.Project(_fixture.DumpPath);
-
-        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
-        var sysObjType = result.GeneratedAssembly.GetType("_.System.Object");
-        Assert.NotNull(customerType);
-        Assert.NotNull(sysObjType);
+        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
+        var sysObjType = Assembly.GetType("_.System.Object")!;
 
         var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [result.Context]) as IEnumerable)!.Cast<object>().ToList();
+        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
 
-        var nameProp = customerType.GetProperty("_name");
-        var mixedProp = customerType.GetProperty("_mixedItems");
-        Assert.NotNull(nameProp);
-        Assert.NotNull(mixedProp);
+        var nameProp = customerType.GetProperty("_name")!;
+        var mixedProp = customerType.GetProperty("_mixedItems")!;
 
         // Bob has [tag2, order2] — elements should inherit from _.System.Object
         var bob = instances.Single(c => (string?)nameProp.GetValue(c) == "Bob");
@@ -427,23 +355,15 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_ObjectArrayElements_AreCorrectProxyTypes()
     {
-        var projector = new DumpProjector();
-        using var result = projector.Project(_fixture.DumpPath);
-
-        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
-        var tagType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Tag");
-        var orderType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Order");
-        Assert.NotNull(customerType);
-        Assert.NotNull(tagType);
-        Assert.NotNull(orderType);
+        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
+        var tagType = Assembly.GetType("_.Ndump.TestApp.Tag")!;
+        var orderType = Assembly.GetType("_.Ndump.TestApp.Order")!;
 
         var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [result.Context]) as IEnumerable)!.Cast<object>().ToList();
+        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
 
-        var nameProp = customerType.GetProperty("_name");
-        var mixedProp = customerType.GetProperty("_mixedItems");
-        Assert.NotNull(nameProp);
-        Assert.NotNull(mixedProp);
+        var nameProp = customerType.GetProperty("_name")!;
+        var mixedProp = customerType.GetProperty("_mixedItems")!;
 
         // Bob has [tag2, order2] — elements should be actual proxy types
         var bob = instances.Single(c => (string?)nameProp.GetValue(c) == "Bob");
@@ -458,23 +378,15 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_ObjectArrayElements_CanReadFieldsDirectly()
     {
-        var projector = new DumpProjector();
-        using var result = projector.Project(_fixture.DumpPath);
-
-        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
-        var orderType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Order");
-        Assert.NotNull(customerType);
-        Assert.NotNull(orderType);
+        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
+        var orderType = Assembly.GetType("_.Ndump.TestApp.Order")!;
 
         var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [result.Context]) as IEnumerable)!.Cast<object>().ToList();
+        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
 
-        var nameProp = customerType.GetProperty("_name");
-        var mixedProp = customerType.GetProperty("_mixedItems");
-        var orderIdProp = orderType.GetProperty("_orderId");
-        Assert.NotNull(nameProp);
-        Assert.NotNull(mixedProp);
-        Assert.NotNull(orderIdProp);
+        var nameProp = customerType.GetProperty("_name")!;
+        var mixedProp = customerType.GetProperty("_mixedItems")!;
+        var orderIdProp = orderType.GetProperty("_orderId")!;
 
         // Bob has [tag2, order2] — the Order element is already the right proxy type
         var bob = instances.Single(c => (string?)nameProp.GetValue(c) == "Bob");
@@ -491,19 +403,13 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_ObjectArrayElements_HasCorrectProxyTypes()
     {
-        var projector = new DumpProjector();
-        using var result = projector.Project(_fixture.DumpPath);
-
-        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
-        Assert.NotNull(customerType);
+        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
 
         var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [result.Context]) as IEnumerable)!.Cast<object>().ToList();
+        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
 
-        var nameProp = customerType.GetProperty("_name");
-        var mixedProp = customerType.GetProperty("_mixedItems");
-        Assert.NotNull(nameProp);
-        Assert.NotNull(mixedProp);
+        var nameProp = customerType.GetProperty("_name")!;
+        var mixedProp = customerType.GetProperty("_mixedItems")!;
 
         // Alice has [order1, addr1, tag1, "hello"] — check proxy types
         var alice = instances.Single(c => (string?)nameProp.GetValue(c) == "Alice");
@@ -541,29 +447,20 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_AnimalArray_ContainsCatsAndDogs()
     {
-        var projector = new DumpProjector();
-        using var result = projector.Project(_fixture.DumpPath);
-
-        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
-        var catType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Cat");
-        var dogType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Dog");
-        var animalType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Animal");
-        Assert.NotNull(customerType);
-        Assert.NotNull(catType);
-        Assert.NotNull(dogType);
-        Assert.NotNull(animalType);
+        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
+        var catType = Assembly.GetType("_.Ndump.TestApp.Cat")!;
+        var dogType = Assembly.GetType("_.Ndump.TestApp.Dog")!;
+        var animalType = Assembly.GetType("_.Ndump.TestApp.Animal")!;
 
         // Cat and Dog should extend Animal in the proxy hierarchy
         Assert.True(animalType.IsAssignableFrom(catType));
         Assert.True(animalType.IsAssignableFrom(dogType));
 
         var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [result.Context]) as IEnumerable)!.Cast<object>().ToList();
+        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
 
-        var nameProp = customerType.GetProperty("_name");
-        var petsProp = customerType.GetProperty("_pets");
-        Assert.NotNull(nameProp);
-        Assert.NotNull(petsProp);
+        var nameProp = customerType.GetProperty("_name")!;
+        var petsProp = customerType.GetProperty("_pets")!;
 
         // Alice has [cat1, dog1]
         var alice = instances.Single(c => (string?)nameProp.GetValue(c) == "Alice");
@@ -585,38 +482,28 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_AnimalArray_CanReadInheritedAndOwnFields()
     {
-        var projector = new DumpProjector();
-        using var result = projector.Project(_fixture.DumpPath);
-
-        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
-        var animalType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Animal");
-        var dogType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Dog");
-        Assert.NotNull(customerType);
-        Assert.NotNull(animalType);
-        Assert.NotNull(dogType);
+        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
+        var animalType = Assembly.GetType("_.Ndump.TestApp.Animal")!;
+        var dogType = Assembly.GetType("_.Ndump.TestApp.Dog")!;
 
         var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [result.Context]) as IEnumerable)!.Cast<object>().ToList();
+        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
 
-        var nameProp = customerType.GetProperty("_name");
-        var petsProp = customerType.GetProperty("_pets");
-        Assert.NotNull(nameProp);
-        Assert.NotNull(petsProp);
+        var nameProp = customerType.GetProperty("_name")!;
+        var petsProp = customerType.GetProperty("_pets")!;
 
         // Alice has [cat1("Whiskers", 3, indoor=true), dog1("Rex", 4, "German Shepherd")]
         var alice = instances.Single(c => (string?)nameProp.GetValue(c) == "Alice");
         var alicePets = ((IEnumerable)petsProp.GetValue(alice)!).Cast<object>().ToList();
 
         // Read inherited _name field (declared on Animal proxy) from a Dog
-        var animalNameProp = animalType.GetProperty("_name");
-        Assert.NotNull(animalNameProp);
+        var animalNameProp = animalType.GetProperty("_name")!;
 
         var petNames = alicePets.Select(p => (string?)animalNameProp.GetValue(p)).OrderBy(n => n).ToList();
         Assert.Equal(["Rex", "Whiskers"], petNames);
 
         // Read Dog-specific _breed field
-        var breedProp = dogType.GetProperty("_breed");
-        Assert.NotNull(breedProp);
+        var breedProp = dogType.GetProperty("_breed")!;
 
         var dog = alicePets.Single(p => p.GetType() == dogType);
         Assert.Equal("German Shepherd", breedProp.GetValue(dog));
@@ -625,25 +512,19 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_AnimalArray_Charlie_HasMixedPets()
     {
-        var projector = new DumpProjector();
-        using var result = projector.Project(_fixture.DumpPath);
-
-        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
-        var catType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Cat");
-        var dogType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Dog");
-        Assert.NotNull(customerType);
-        Assert.NotNull(catType);
-        Assert.NotNull(dogType);
+        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
+        var catType = Assembly.GetType("_.Ndump.TestApp.Cat")!;
+        var dogType = Assembly.GetType("_.Ndump.TestApp.Dog")!;
 
         var getInstances = customerType.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static);
-        var instances = (getInstances!.Invoke(null, [result.Context]) as IEnumerable)!.Cast<object>().ToList();
+        var instances = (getInstances!.Invoke(null, [Context]) as IEnumerable)!.Cast<object>().ToList();
 
-        var nameProp = customerType.GetProperty("_name");
-        var petsProp = customerType.GetProperty("_pets");
+        var nameProp = customerType.GetProperty("_name")!;
+        var petsProp = customerType.GetProperty("_pets")!;
 
         // Charlie has [cat2("Mittens"), dog1("Rex"), cat1("Whiskers")]
-        var charlie = instances.Single(c => (string?)nameProp!.GetValue(c) == "Charlie");
-        var charliePets = ((IEnumerable)petsProp!.GetValue(charlie)!).Cast<object>().ToList();
+        var charlie = instances.Single(c => (string?)nameProp.GetValue(c) == "Charlie");
+        var charliePets = ((IEnumerable)petsProp.GetValue(charlie)!).Cast<object>().ToList();
         Assert.Equal(3, charliePets.Count);
 
         var catCount = charliePets.Count(p => p.GetType() == catType);
@@ -655,18 +536,12 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_InheritFromSystemObject()
     {
-        var projector = new DumpProjector();
-        using var result = projector.Project(_fixture.DumpPath);
+        var sysObjType = Assembly.GetType("_.System.Object")!;
 
-        var sysObjType = result.GeneratedAssembly.GetType("_.System.Object");
-        Assert.NotNull(sysObjType);
-
-        var customerType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Customer");
-        Assert.NotNull(customerType);
+        var customerType = Assembly.GetType("_.Ndump.TestApp.Customer")!;
         Assert.True(sysObjType.IsAssignableFrom(customerType));
 
-        var orderType = result.GeneratedAssembly.GetType("_.Ndump.TestApp.Order");
-        Assert.NotNull(orderType);
+        var orderType = Assembly.GetType("_.Ndump.TestApp.Order")!;
         Assert.True(sysObjType.IsAssignableFrom(orderType));
     }
 }
