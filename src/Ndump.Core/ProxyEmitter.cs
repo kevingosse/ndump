@@ -74,7 +74,7 @@ public sealed class ProxyEmitter
                 if (!emittedNestedGeneric.Add(bt))
                     continue;
                 code = GenerateNestedGenericTypeProxy(type);
-                safeName = SanitizeTypeName(type.Name);
+                safeName = SanitizeTypeName(ConvertToBacktickForm(type.Name));
             }
             else if (type.IsGenericInstance)
             {
