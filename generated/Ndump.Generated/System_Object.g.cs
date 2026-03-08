@@ -28,68 +28,35 @@ public class Object
 
     protected T Field<T>([CallerMemberName] string fieldName = "")
     {
-        if (_interiorTypeName is not null)
-        {
-            if (typeof(T) == typeof(string))
-                return (T)(object)_ctx.GetStringField(_objAddress, _interiorTypeName, fieldName)!;
-            if (!typeof(T).IsValueType)
-            {
-                var addr = _ctx.GetObjectAddress(_objAddress, _interiorTypeName, fieldName);
-                if (addr == 0) return default!;
-                return global::_.ProxyResolver.Resolve<T>(addr, _ctx);
-            }
-            return _ctx.GetFieldValue<T>(_objAddress, _interiorTypeName, fieldName);
-        }
         if (typeof(T) == typeof(string))
-            return (T)(object)_ctx.GetStringField(_objAddress, fieldName)!;
+            return (T)(object)_ctx.GetStringField(_objAddress, fieldName, _interiorTypeName)!;
         if (!typeof(T).IsValueType)
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, fieldName);
+            var addr = _ctx.GetObjectAddress(_objAddress, fieldName, _interiorTypeName);
             if (addr == 0) return default!;
             return global::_.ProxyResolver.Resolve<T>(addr, _ctx);
         }
-        return _ctx.GetFieldValue<T>(_objAddress, fieldName);
+        return _ctx.GetFieldValue<T>(_objAddress, fieldName, _interiorTypeName);
     }
 
     protected T StructField<T>(string structTypeName, [CallerMemberName] string fieldName = "") where T : global::Ndump.Core.IProxy<T>
-    {
-        ulong addr;
-        if (_interiorTypeName is not null)
-            addr = _ctx.GetInteriorValueTypeFieldAddress(_objAddress, _interiorTypeName, fieldName);
-        else
-            addr = _ctx.GetValueTypeFieldAddress(_objAddress, fieldName);
-        return T.FromInterior(addr, _ctx, structTypeName);
-    }
+        => T.FromInterior(_ctx.GetValueTypeFieldAddress(_objAddress, fieldName, _interiorTypeName), _ctx, structTypeName);
 
     protected T? NullableField<T>([CallerMemberName] string fieldName = "") where T : struct
-    {
-        if (_interiorTypeName is not null)
-            return _ctx.GetNullableFieldValue<T>(_objAddress, _interiorTypeName, fieldName);
-        return _ctx.GetNullableFieldValue<T>(_objAddress, fieldName);
-    }
+        => _ctx.GetNullableFieldValue<T>(_objAddress, fieldName, _interiorTypeName);
 
     protected T? NullableStructField<T>(string innerTypeName, [CallerMemberName] string fieldName = "") where T : class, global::Ndump.Core.IProxy<T>
     {
-        (bool hasValue, ulong valueAddr) info;
-        if (_interiorTypeName is not null)
-            info = _ctx.GetNullableFieldInfo(_objAddress, _interiorTypeName, fieldName);
-        else
-            info = _ctx.GetNullableFieldInfo(_objAddress, fieldName);
-        if (!info.hasValue) return null;
-        return T.FromInterior(info.valueAddr, _ctx, innerTypeName);
+        var info = _ctx.GetNullableFieldInfo(_objAddress, fieldName, _interiorTypeName);
+        if (!info.HasValue) return null;
+        return T.FromInterior(info.ValueAddress, _ctx, innerTypeName);
     }
 
     protected ulong RawFieldAddress([CallerMemberName] string fieldName = "")
-    {
-        if (_interiorTypeName is not null)
-            return _ctx.GetInteriorValueTypeFieldAddress(_objAddress, _interiorTypeName, fieldName);
-        return _ctx.GetValueTypeFieldAddress(_objAddress, fieldName);
-    }
+        => _ctx.GetValueTypeFieldAddress(_objAddress, fieldName, _interiorTypeName);
 
     protected ulong RefAddress([CallerMemberName] string fieldName = "")
-        => _interiorTypeName is not null
-            ? _ctx.GetObjectAddress(_objAddress, _interiorTypeName, fieldName)
-            : _ctx.GetObjectAddress(_objAddress, fieldName);
+        => _ctx.GetObjectAddress(_objAddress, fieldName, _interiorTypeName);
 
     protected global::Ndump.Core.DumpArray<T>? ArrayField<T>([CallerMemberName] string fieldName = "")
     {

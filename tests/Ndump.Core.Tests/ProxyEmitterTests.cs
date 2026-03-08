@@ -855,10 +855,10 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        // Interior struct path in Field<T> should use the interiorTypeName overloads
-        Assert.Contains("_ctx.GetFieldValue<T>(_objAddress, _interiorTypeName, fieldName)", code);
-        Assert.Contains("_ctx.GetStringField(_objAddress, _interiorTypeName, fieldName)", code);
-        Assert.Contains("_ctx.GetObjectAddress(_objAddress, _interiorTypeName, fieldName)", code);
+        // Field<T> passes _interiorTypeName as optional parameter to DumpContext methods
+        Assert.Contains("_ctx.GetFieldValue<T>(_objAddress, fieldName, _interiorTypeName)", code);
+        Assert.Contains("_ctx.GetStringField(_objAddress, fieldName, _interiorTypeName)", code);
+        Assert.Contains("_ctx.GetObjectAddress(_objAddress, fieldName, _interiorTypeName)", code);
     }
 
     [Fact]
@@ -874,9 +874,8 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        // Field<T> (interior path + heap path) and ReadArrayElement<T>
-        // should all use ProxyResolver.Resolve<T> — 3 occurrences total
-        Assert.Equal(3, CountOccurrences(code, "return global::_.ProxyResolver.Resolve<T>(addr, _ctx);"));
+        // Field<T> and ReadArrayElement<T> should both use ProxyResolver.Resolve<T>
+        Assert.Equal(2, CountOccurrences(code, "return global::_.ProxyResolver.Resolve<T>(addr, _ctx);"));
     }
 
     private static int CountOccurrences(string text, string pattern)

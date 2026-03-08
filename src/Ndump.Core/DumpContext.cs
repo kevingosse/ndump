@@ -47,122 +47,45 @@ public sealed class DumpContext : IDisposable
     }
 
     /// <summary>
-    /// Read a primitive/value-type field from an object at the given address.
+    /// Read a primitive/value-type field. When typeName is null, resolves type from the heap object header.
+    /// When typeName is provided, uses it to resolve the field on an interior struct.
     /// </summary>
-    public T GetFieldValue<T>(ulong objAddress, string fieldName)
+    public T GetFieldValue<T>(ulong address, string fieldName, string? typeName = null)
     {
-        var obj = Heap.GetObject(objAddress);
-        if (!obj.IsValid)
-            throw new InvalidOperationException($"Invalid object at address 0x{objAddress:X}");
-
-        var type = obj.Type;
-        if (type is null)
-            throw new InvalidOperationException($"Cannot resolve type for object at 0x{objAddress:X}");
-
-        var field = type.GetFieldByName(fieldName)
-            ?? throw new InvalidOperationException($"Field '{fieldName}' not found on type '{type.Name}'");
-
-        var addr = field.GetAddress(objAddress, interior: false);
+        var (field, interior) = ResolveField(address, fieldName, typeName);
+        var addr = field.GetAddress(address, interior);
         Span<byte> buffer = stackalloc byte[Unsafe.SizeOf<T>()];
         Runtime.DataTarget.DataReader.Read(addr, buffer);
         return Unsafe.ReadUnaligned<T>(ref buffer[0]);
     }
 
     /// <summary>
-    /// Read a string field from an object at the given address.
+    /// Read a string field. When typeName is null, resolves type from the heap object header.
     /// </summary>
-    public string? GetStringField(ulong objAddress, string fieldName)
+    public string? GetStringField(ulong address, string fieldName, string? typeName = null)
     {
-        var obj = Heap.GetObject(objAddress);
-        if (!obj.IsValid)
-            throw new InvalidOperationException($"Invalid object at address 0x{objAddress:X}");
-
-        var type = obj.Type;
-        if (type is null)
-            throw new InvalidOperationException($"Cannot resolve type for object at 0x{objAddress:X}");
-
-        var field = type.GetFieldByName(fieldName)
-            ?? throw new InvalidOperationException($"Field '{fieldName}' not found on type '{type.Name}'");
-
-        return field.ReadString(objAddress, interior: false);
+        var (field, interior) = ResolveField(address, fieldName, typeName);
+        return field.ReadString(address, interior);
     }
 
     /// <summary>
-    /// Read the address of a reference-type field from an object.
-    /// Returns 0 if the reference is null.
+    /// Read the address of a reference-type field. Returns 0 if the reference is null.
+    /// When typeName is null, resolves type from the heap object header.
     /// </summary>
-    public ulong GetObjectAddress(ulong objAddress, string fieldName)
+    public ulong GetObjectAddress(ulong address, string fieldName, string? typeName = null)
     {
-        var obj = Heap.GetObject(objAddress);
-        if (!obj.IsValid)
-            throw new InvalidOperationException($"Invalid object at address 0x{objAddress:X}");
-
-        var type = obj.Type;
-        if (type is null)
-            throw new InvalidOperationException($"Cannot resolve type for object at 0x{objAddress:X}");
-
-        var field = type.GetFieldByName(fieldName)
-            ?? throw new InvalidOperationException($"Field '{fieldName}' not found on type '{type.Name}'");
-
-        return field.ReadObject(objAddress, interior: false);
+        var (field, interior) = ResolveField(address, fieldName, typeName);
+        return field.ReadObject(address, interior);
     }
 
     /// <summary>
-    /// Read a primitive/value-type field from a struct at the given interior address.
-    /// Requires the CLR type name to resolve the field layout.
+    /// Get the interior address of a value type field.
+    /// When typeName is null, resolves type from the heap object header.
     /// </summary>
-    public T GetFieldValue<T>(ulong address, string typeName, string fieldName)
+    public ulong GetValueTypeFieldAddress(ulong address, string fieldName, string? typeName = null)
     {
-        var field = FindFieldByTypeName(typeName, fieldName);
-        var addr = field.GetAddress(address, interior: true);
-        Span<byte> buffer = stackalloc byte[Unsafe.SizeOf<T>()];
-        Runtime.DataTarget.DataReader.Read(addr, buffer);
-        return Unsafe.ReadUnaligned<T>(ref buffer[0]);
-    }
-
-    /// <summary>
-    /// Read a string field from a struct at the given interior address.
-    /// </summary>
-    public string? GetStringField(ulong address, string typeName, string fieldName)
-    {
-        var field = FindFieldByTypeName(typeName, fieldName);
-        return field.ReadString(address, interior: true);
-    }
-
-    /// <summary>
-    /// Read the address of a reference-type field from a struct at the given interior address.
-    /// </summary>
-    public ulong GetObjectAddress(ulong address, string typeName, string fieldName)
-    {
-        var field = FindFieldByTypeName(typeName, fieldName);
-        return field.ReadObject(address, interior: true);
-    }
-
-    /// <summary>
-    /// Get the interior address of a value type field embedded in a heap object.
-    /// </summary>
-    public ulong GetValueTypeFieldAddress(ulong objAddress, string fieldName)
-    {
-        var obj = Heap.GetObject(objAddress);
-        if (!obj.IsValid)
-            throw new InvalidOperationException($"Invalid object at address 0x{objAddress:X}");
-
-        var type = obj.Type
-            ?? throw new InvalidOperationException($"Cannot resolve type for object at 0x{objAddress:X}");
-
-        var field = type.GetFieldByName(fieldName)
-            ?? throw new InvalidOperationException($"Field '{fieldName}' not found on type '{type.Name}'");
-
-        return field.GetAddress(objAddress, interior: false);
-    }
-
-    /// <summary>
-    /// Get the interior address of a value type field embedded in another struct (at an interior address).
-    /// </summary>
-    public ulong GetInteriorValueTypeFieldAddress(ulong interiorAddress, string typeName, string fieldName)
-    {
-        var field = FindFieldByTypeName(typeName, fieldName);
-        return field.GetAddress(interiorAddress, interior: true);
+        var (field, interior) = ResolveField(address, fieldName, typeName);
+        return field.GetAddress(address, interior);
     }
 
     /// <summary>
@@ -222,13 +145,27 @@ public sealed class DumpContext : IDisposable
     }
 
 
-    private ClrInstanceField FindFieldByTypeName(string typeName, string fieldName)
+    private (ClrInstanceField Field, bool Interior) ResolveField(ulong address, string fieldName, string? typeName)
     {
-        var type = FindTypeByName(typeName)
-            ?? throw new InvalidOperationException($"Type '{typeName}' not found in any module");
-
-        return type.GetFieldByName(fieldName)
-            ?? throw new InvalidOperationException($"Field '{fieldName}' not found on type '{typeName}'");
+        if (typeName is not null)
+        {
+            var type = FindTypeByName(typeName)
+                ?? throw new InvalidOperationException($"Type '{typeName}' not found in any module");
+            var field = type.GetFieldByName(fieldName)
+                ?? throw new InvalidOperationException($"Field '{fieldName}' not found on type '{typeName}'");
+            return (field, true);
+        }
+        else
+        {
+            var obj = Heap.GetObject(address);
+            if (!obj.IsValid)
+                throw new InvalidOperationException($"Invalid object at address 0x{address:X}");
+            var type = obj.Type
+                ?? throw new InvalidOperationException($"Cannot resolve type for object at 0x{address:X}");
+            var field = type.GetFieldByName(fieldName)
+                ?? throw new InvalidOperationException($"Field '{fieldName}' not found on type '{type.Name}'");
+            return (field, false);
+        }
     }
 
     /// <summary>
@@ -315,31 +252,13 @@ public sealed class DumpContext : IDisposable
     }
 
     /// <summary>
-    /// Read a Nullable&lt;T&gt; field from a heap object. Returns null if hasValue is false.
-    /// The field's ClrType (System.Nullable&lt;T&gt;) is used to locate the hasValue and value sub-fields.
+    /// Read a Nullable&lt;T&gt; field. Returns null if hasValue is false.
+    /// When typeName is null, resolves type from the heap object header.
     /// </summary>
-    public T? GetNullableFieldValue<T>(ulong objAddress, string fieldName) where T : struct
+    public T? GetNullableFieldValue<T>(ulong address, string fieldName, string? typeName = null) where T : struct
     {
-        var obj = Heap.GetObject(objAddress);
-        if (!obj.IsValid)
-            throw new InvalidOperationException($"Invalid object at address 0x{objAddress:X}");
-
-        var type = obj.Type
-            ?? throw new InvalidOperationException($"Cannot resolve type for object at 0x{objAddress:X}");
-
-        var field = type.GetFieldByName(fieldName)
-            ?? throw new InvalidOperationException($"Field '{fieldName}' not found on type '{type.Name}'");
-
-        return ReadNullableFromField<T>(objAddress, field, interior: false);
-    }
-
-    /// <summary>
-    /// Read a Nullable&lt;T&gt; field from a struct at the given interior address.
-    /// </summary>
-    public T? GetNullableFieldValue<T>(ulong address, string typeName, string fieldName) where T : struct
-    {
-        var field = FindFieldByTypeName(typeName, fieldName);
-        return ReadNullableFromField<T>(address, field, interior: true);
+        var (field, interior) = ResolveField(address, fieldName, typeName);
+        return ReadNullableFromField<T>(address, field, interior);
     }
 
     private T? ReadNullableFromField<T>(ulong baseAddr, ClrInstanceField field, bool interior) where T : struct
@@ -369,32 +288,15 @@ public sealed class DumpContext : IDisposable
     }
 
     /// <summary>
-    /// Get the interior address of the value sub-field of a Nullable&lt;T&gt; field on a heap object.
+    /// Get the interior address of the value sub-field of a Nullable&lt;T&gt; field.
     /// Used for nullable struct proxies that need to navigate into the value.
     /// Returns (hasValue, valueAddress).
+    /// When typeName is null, resolves type from the heap object header.
     /// </summary>
-    public (bool HasValue, ulong ValueAddress) GetNullableFieldInfo(ulong objAddress, string fieldName)
+    public (bool HasValue, ulong ValueAddress) GetNullableFieldInfo(ulong address, string fieldName, string? typeName = null)
     {
-        var obj = Heap.GetObject(objAddress);
-        if (!obj.IsValid)
-            throw new InvalidOperationException($"Invalid object at address 0x{objAddress:X}");
-
-        var type = obj.Type
-            ?? throw new InvalidOperationException($"Cannot resolve type for object at 0x{objAddress:X}");
-
-        var field = type.GetFieldByName(fieldName)
-            ?? throw new InvalidOperationException($"Field '{fieldName}' not found on type '{type.Name}'");
-
-        return ReadNullableInfo(objAddress, field, interior: false);
-    }
-
-    /// <summary>
-    /// Get the interior address of the value sub-field of a Nullable&lt;T&gt; field on an interior struct.
-    /// </summary>
-    public (bool HasValue, ulong ValueAddress) GetNullableFieldInfo(ulong address, string typeName, string fieldName)
-    {
-        var field = FindFieldByTypeName(typeName, fieldName);
-        return ReadNullableInfo(address, field, interior: true);
+        var (field, interior) = ResolveField(address, fieldName, typeName);
+        return ReadNullableInfo(address, field, interior);
     }
 
     private (bool HasValue, ulong ValueAddress) ReadNullableInfo(ulong baseAddr, ClrInstanceField field, bool interior)
