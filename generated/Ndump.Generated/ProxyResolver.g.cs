@@ -3,15 +3,15 @@ namespace _;
 
 internal static class ProxyResolver
 {
-    public static T Resolve<T>(ulong address, global::Ndump.Core.DumpContext ctx)
+    public static T Resolve<T>(ulong address, global::Ndump.Core.DumpContext context)
     {
-        var typeName = ctx.GetTypeName(address);
+        var typeName = context.GetTypeName(address);
         var proxyType = typeName is not null ? ResolveProxyType(typeName) : null;
         proxyType ??= typeof(T);
 
         var method = proxyType.GetMethod("FromAddress", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static)
             ?? throw new global::System.InvalidOperationException($"No FromAddress factory on {proxyType}");
-        return (T)method.Invoke(null, [address, ctx])!;
+        return (T)method.Invoke(null, [address, context])!;
     }
 
     private static global::System.Type? ResolveProxyType(string clrTypeName)

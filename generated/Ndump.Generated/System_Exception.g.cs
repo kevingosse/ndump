@@ -5,7 +5,7 @@ namespace _.System;
 
 public class Exception : _.System.Object
 {
-    protected Exception(ulong address, DumpContext ctx) : base(address, ctx) { }
+    protected Exception(ulong address, DumpContext context) : base(address, context) { }
 
     public global::_.System.Object? _exceptionMethod => Field<global::_.System.Object>();
 
@@ -35,13 +35,13 @@ public class Exception : _.System.Object
 
     public int _HResult => Field<int>();
 
-    public static new Exception FromAddress(ulong address, DumpContext ctx)
-        => new Exception(address, ctx);
+    public static new Exception FromAddress(ulong address, DumpContext context)
+        => new Exception(address, context);
 
-    public static new global::System.Collections.Generic.IEnumerable<Exception> GetInstances(DumpContext ctx)
+    public static new global::System.Collections.Generic.IEnumerable<Exception> GetInstances(DumpContext context)
     {
-        foreach (var addr in ctx.EnumerateInstances("System.Exception"))
-            yield return new Exception(addr, ctx);
+        foreach (var addr in context.EnumerateInstances("System.Exception"))
+            yield return new Exception(addr, context);
     }
 
     public override string ToString() => $"Exception@0x{_objAddress:X}";

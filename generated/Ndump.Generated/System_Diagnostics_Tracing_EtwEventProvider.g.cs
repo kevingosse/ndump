@@ -5,7 +5,7 @@ namespace _.System.Diagnostics.Tracing;
 
 public sealed class EtwEventProvider : _.System.Diagnostics.Tracing.EventProviderImpl
 {
-    private EtwEventProvider(ulong address, DumpContext ctx) : base(address, ctx) { }
+    private EtwEventProvider(ulong address, DumpContext context) : base(address, context) { }
 
     public _.System.WeakReference<_.System.Diagnostics.Tracing.EventProvider>? _eventProvider => Field<_.System.WeakReference<_.System.Diagnostics.Tracing.EventProvider>>();
 
@@ -17,13 +17,13 @@ public sealed class EtwEventProvider : _.System.Diagnostics.Tracing.EventProvide
 
     public _.System.Guid _providerId => StructField<_.System.Guid>("System.Guid");
 
-    public static new EtwEventProvider FromAddress(ulong address, DumpContext ctx)
-        => new EtwEventProvider(address, ctx);
+    public static new EtwEventProvider FromAddress(ulong address, DumpContext context)
+        => new EtwEventProvider(address, context);
 
-    public static new global::System.Collections.Generic.IEnumerable<EtwEventProvider> GetInstances(DumpContext ctx)
+    public static new global::System.Collections.Generic.IEnumerable<EtwEventProvider> GetInstances(DumpContext context)
     {
-        foreach (var addr in ctx.EnumerateInstances("System.Diagnostics.Tracing.EtwEventProvider"))
-            yield return new EtwEventProvider(addr, ctx);
+        foreach (var addr in context.EnumerateInstances("System.Diagnostics.Tracing.EtwEventProvider"))
+            yield return new EtwEventProvider(addr, context);
     }
 
     public override string ToString() => $"EtwEventProvider@0x{_objAddress:X}";

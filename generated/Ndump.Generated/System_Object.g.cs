@@ -7,20 +7,20 @@ namespace _.System;
 public class Object
 {
     protected readonly ulong _objAddress;
-    protected readonly DumpContext _ctx;
+    protected readonly DumpContext _context;
     // For interior struct fields: the CLR type name of this struct
     protected readonly string? _interiorTypeName;
 
-    protected Object(ulong address, DumpContext ctx)
+    protected Object(ulong address, DumpContext context)
     {
         _objAddress = address;
-        _ctx = ctx;
+        _context = context;
     }
 
-    protected Object(ulong address, DumpContext ctx, string interiorTypeName)
+    protected Object(ulong address, DumpContext context, string interiorTypeName)
     {
         _objAddress = address;
-        _ctx = ctx;
+        _context = context;
         _interiorTypeName = interiorTypeName;
     }
 
@@ -29,40 +29,40 @@ public class Object
     protected T Field<T>([CallerMemberName] string fieldName = "")
     {
         if (typeof(T) == typeof(string))
-            return (T)(object)_ctx.GetStringField(_objAddress, fieldName, _interiorTypeName)!;
+            return (T)(object)_context.GetStringField(_objAddress, fieldName, _interiorTypeName)!;
         if (!typeof(T).IsValueType)
         {
-            var addr = _ctx.GetObjectAddress(_objAddress, fieldName, _interiorTypeName);
+            var addr = _context.GetObjectAddress(_objAddress, fieldName, _interiorTypeName);
             if (addr == 0) return default!;
-            return global::_.ProxyResolver.Resolve<T>(addr, _ctx);
+            return global::_.ProxyResolver.Resolve<T>(addr, _context);
         }
-        return _ctx.GetFieldValue<T>(_objAddress, fieldName, _interiorTypeName);
+        return _context.GetFieldValue<T>(_objAddress, fieldName, _interiorTypeName);
     }
 
     protected T StructField<T>(string structTypeName, [CallerMemberName] string fieldName = "") where T : global::Ndump.Core.IProxy<T>
-        => T.FromInterior(_ctx.GetValueTypeFieldAddress(_objAddress, fieldName, _interiorTypeName), _ctx, structTypeName);
+        => T.FromInterior(_context.GetValueTypeFieldAddress(_objAddress, fieldName, _interiorTypeName), _context, structTypeName);
 
     protected T? NullableField<T>([CallerMemberName] string fieldName = "") where T : struct
-        => _ctx.GetNullableFieldValue<T>(_objAddress, fieldName, _interiorTypeName);
+        => _context.GetNullableFieldValue<T>(_objAddress, fieldName, _interiorTypeName);
 
     protected T? NullableStructField<T>(string innerTypeName, [CallerMemberName] string fieldName = "") where T : class, global::Ndump.Core.IProxy<T>
     {
-        var info = _ctx.GetNullableFieldInfo(_objAddress, fieldName, _interiorTypeName);
+        var info = _context.GetNullableFieldInfo(_objAddress, fieldName, _interiorTypeName);
         if (!info.HasValue) return null;
-        return T.FromInterior(info.ValueAddress, _ctx, innerTypeName);
+        return T.FromInterior(info.ValueAddress, _context, innerTypeName);
     }
 
     protected ulong RawFieldAddress([CallerMemberName] string fieldName = "")
-        => _ctx.GetValueTypeFieldAddress(_objAddress, fieldName, _interiorTypeName);
+        => _context.GetValueTypeFieldAddress(_objAddress, fieldName, _interiorTypeName);
 
     protected ulong RefAddress([CallerMemberName] string fieldName = "")
-        => _ctx.GetObjectAddress(_objAddress, fieldName, _interiorTypeName);
+        => _context.GetObjectAddress(_objAddress, fieldName, _interiorTypeName);
 
     protected global::Ndump.Core.DumpArray<T>? ArrayField<T>([CallerMemberName] string fieldName = "")
     {
         var addr = RefAddress(fieldName);
         if (addr == 0) return null;
-        var len = _ctx.GetArrayLength(addr);
+        var len = _context.GetArrayLength(addr);
         return new global::Ndump.Core.DumpArray<T>(addr, len, i => ReadArrayElement<T>(addr, i));
     }
 
@@ -70,42 +70,42 @@ public class Object
     {
         var addr = RefAddress(fieldName);
         if (addr == 0) return null;
-        var len = _ctx.GetArrayLength(addr);
-        return new global::Ndump.Core.DumpArray<ulong>(addr, len, i => _ctx.GetArrayElementAddress(addr, i));
+        var len = _context.GetArrayLength(addr);
+        return new global::Ndump.Core.DumpArray<ulong>(addr, len, i => _context.GetArrayElementAddress(addr, i));
     }
 
     protected T ReadArrayElement<T>(ulong arrayAddr, int index)
     {
         if (typeof(T) == typeof(string))
-            return (T)(object)_ctx.GetArrayElementString(arrayAddr, index)!;
+            return (T)(object)_context.GetArrayElementString(arrayAddr, index)!;
         if (!typeof(T).IsValueType)
         {
-            var addr = _ctx.GetArrayElementAddress(arrayAddr, index);
+            var addr = _context.GetArrayElementAddress(arrayAddr, index);
             if (addr == 0) return default!;
-            return global::_.ProxyResolver.Resolve<T>(addr, _ctx);
+            return global::_.ProxyResolver.Resolve<T>(addr, _context);
         }
-        return _ctx.GetArrayElementValue<T>(arrayAddr, index);
+        return _context.GetArrayElementValue<T>(arrayAddr, index);
     }
 
     protected global::Ndump.Core.DumpArray<T>? StructArrayField<T>([CallerMemberName] string fieldName = "") where T : global::Ndump.Core.IProxy<T>
     {
         var addr = RefAddress(fieldName);
         if (addr == 0) return null;
-        var len = _ctx.GetArrayLength(addr);
-        var typeName = _ctx.GetArrayComponentTypeName(addr);
+        var len = _context.GetArrayLength(addr);
+        var typeName = _context.GetArrayComponentTypeName(addr);
         return new global::Ndump.Core.DumpArray<T>(addr, len, i =>
         {
-            var ea = _ctx.GetArrayStructElementAddress(addr, i);
-            return T.FromInterior(ea, _ctx, typeName);
+            var ea = _context.GetArrayStructElementAddress(addr, i);
+            return T.FromInterior(ea, _context, typeName);
         });
     }
-    public static Object FromAddress(ulong address, DumpContext ctx)
-        => new Object(address, ctx);
+    public static Object FromAddress(ulong address, DumpContext context)
+        => new Object(address, context);
 
-    public static global::System.Collections.Generic.IEnumerable<Object> GetInstances(DumpContext ctx)
+    public static global::System.Collections.Generic.IEnumerable<Object> GetInstances(DumpContext context)
     {
-        foreach (var addr in ctx.EnumerateInstances("System.Object"))
-            yield return new Object(addr, ctx);
+        foreach (var addr in context.EnumerateInstances("System.Object"))
+            yield return new Object(addr, context);
     }
 
     public override string ToString() => $"Object@0x{_objAddress:X}";

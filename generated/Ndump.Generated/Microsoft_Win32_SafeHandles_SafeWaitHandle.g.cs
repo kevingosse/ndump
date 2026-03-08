@@ -5,15 +5,15 @@ namespace _.Microsoft.Win32.SafeHandles;
 
 public sealed class SafeWaitHandle : _.Microsoft.Win32.SafeHandles.SafeHandleZeroOrMinusOneIsInvalid
 {
-    private SafeWaitHandle(ulong address, DumpContext ctx) : base(address, ctx) { }
+    private SafeWaitHandle(ulong address, DumpContext context) : base(address, context) { }
 
-    public static new SafeWaitHandle FromAddress(ulong address, DumpContext ctx)
-        => new SafeWaitHandle(address, ctx);
+    public static new SafeWaitHandle FromAddress(ulong address, DumpContext context)
+        => new SafeWaitHandle(address, context);
 
-    public static new global::System.Collections.Generic.IEnumerable<SafeWaitHandle> GetInstances(DumpContext ctx)
+    public static new global::System.Collections.Generic.IEnumerable<SafeWaitHandle> GetInstances(DumpContext context)
     {
-        foreach (var addr in ctx.EnumerateInstances("Microsoft.Win32.SafeHandles.SafeWaitHandle"))
-            yield return new SafeWaitHandle(addr, ctx);
+        foreach (var addr in context.EnumerateInstances("Microsoft.Win32.SafeHandles.SafeWaitHandle"))
+            yield return new SafeWaitHandle(addr, context);
     }
 
     public override string ToString() => $"SafeWaitHandle@0x{_objAddress:X}";

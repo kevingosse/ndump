@@ -7,15 +7,15 @@ public partial class UTF8Encoding
 {
     public sealed class UTF8EncodingSealed : _.System.Text.UTF8Encoding
     {
-        private UTF8EncodingSealed(ulong address, DumpContext ctx) : base(address, ctx) { }
+        private UTF8EncodingSealed(ulong address, DumpContext context) : base(address, context) { }
 
-        public static new UTF8EncodingSealed FromAddress(ulong address, DumpContext ctx)
-            => new UTF8EncodingSealed(address, ctx);
+        public static new UTF8EncodingSealed FromAddress(ulong address, DumpContext context)
+            => new UTF8EncodingSealed(address, context);
 
-        public static new global::System.Collections.Generic.IEnumerable<UTF8EncodingSealed> GetInstances(DumpContext ctx)
+        public static new global::System.Collections.Generic.IEnumerable<UTF8EncodingSealed> GetInstances(DumpContext context)
         {
-            foreach (var addr in ctx.EnumerateInstances("System.Text.UTF8Encoding+UTF8EncodingSealed"))
-                yield return new UTF8EncodingSealed(addr, ctx);
+            foreach (var addr in context.EnumerateInstances("System.Text.UTF8Encoding+UTF8EncodingSealed"))
+                yield return new UTF8EncodingSealed(addr, context);
         }
 
         public override string ToString() => $"UTF8EncodingSealed@0x{_objAddress:X}";

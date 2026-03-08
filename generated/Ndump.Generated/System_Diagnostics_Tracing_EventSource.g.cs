@@ -5,7 +5,7 @@ namespace _.System.Diagnostics.Tracing;
 
 public partial class EventSource : _.System.Object
 {
-    protected EventSource(ulong address, DumpContext ctx) : base(address, ctx) { }
+    protected EventSource(ulong address, DumpContext context) : base(address, context) { }
 
     public string? m_name => Field<string>();
 
@@ -57,13 +57,13 @@ public partial class EventSource : _.System.Object
 
     public _.System.Diagnostics.Tracing.TraceLoggingEventHandleTable? m_eventHandleTable => Field<_.System.Diagnostics.Tracing.TraceLoggingEventHandleTable>();
 
-    public static new EventSource FromAddress(ulong address, DumpContext ctx)
-        => new EventSource(address, ctx);
+    public static new EventSource FromAddress(ulong address, DumpContext context)
+        => new EventSource(address, context);
 
-    public static new global::System.Collections.Generic.IEnumerable<EventSource> GetInstances(DumpContext ctx)
+    public static new global::System.Collections.Generic.IEnumerable<EventSource> GetInstances(DumpContext context)
     {
-        foreach (var addr in ctx.EnumerateInstances("System.Diagnostics.Tracing.EventSource"))
-            yield return new EventSource(addr, ctx);
+        foreach (var addr in context.EnumerateInstances("System.Diagnostics.Tracing.EventSource"))
+            yield return new EventSource(addr, context);
     }
 
     public override string ToString() => $"EventSource@0x{_objAddress:X}";

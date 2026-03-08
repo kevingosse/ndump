@@ -5,7 +5,7 @@ namespace _.System;
 
 public sealed class Func<T> : global::_.System.Object
 {
-    private Func(ulong address, DumpContext ctx) : base(address, ctx) { }
+    private Func(ulong address, DumpContext context) : base(address, context) { }
 
     public _.System.Object? _target => Field<_.System.Object>();
 
@@ -19,8 +19,8 @@ public sealed class Func<T> : global::_.System.Object
 
     public nint _invocationCount => Field<nint>();
 
-    public static new Func<T> FromAddress(ulong address, DumpContext ctx)
-        => new Func<T>(address, ctx);
+    public static new Func<T> FromAddress(ulong address, DumpContext context)
+        => new Func<T>(address, context);
 
     public override string ToString() => $"Func@0x{_objAddress:X}";
 }

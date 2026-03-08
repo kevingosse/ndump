@@ -5,7 +5,7 @@ namespace _.Ndump.TestApp;
 
 public sealed class NullableHolder : _.System.Object
 {
-    private NullableHolder(ulong address, DumpContext ctx) : base(address, ctx) { }
+    private NullableHolder(ulong address, DumpContext context) : base(address, context) { }
 
     public int? _intHasValue => NullableField<int>();
 
@@ -23,13 +23,13 @@ public sealed class NullableHolder : _.System.Object
 
     public long? _longNull => NullableField<long>();
 
-    public static new NullableHolder FromAddress(ulong address, DumpContext ctx)
-        => new NullableHolder(address, ctx);
+    public static new NullableHolder FromAddress(ulong address, DumpContext context)
+        => new NullableHolder(address, context);
 
-    public static new global::System.Collections.Generic.IEnumerable<NullableHolder> GetInstances(DumpContext ctx)
+    public static new global::System.Collections.Generic.IEnumerable<NullableHolder> GetInstances(DumpContext context)
     {
-        foreach (var addr in ctx.EnumerateInstances("Ndump.TestApp.NullableHolder"))
-            yield return new NullableHolder(addr, ctx);
+        foreach (var addr in context.EnumerateInstances("Ndump.TestApp.NullableHolder"))
+            yield return new NullableHolder(addr, context);
     }
 
     public override string ToString() => $"NullableHolder@0x{_objAddress:X}";

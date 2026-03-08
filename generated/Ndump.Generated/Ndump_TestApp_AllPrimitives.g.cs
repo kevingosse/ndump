@@ -5,7 +5,7 @@ namespace _.Ndump.TestApp;
 
 public sealed class AllPrimitives : _.System.Object
 {
-    private AllPrimitives(ulong address, DumpContext ctx) : base(address, ctx) { }
+    private AllPrimitives(ulong address, DumpContext context) : base(address, context) { }
 
     public bool _boolVal => Field<bool>();
 
@@ -31,13 +31,13 @@ public sealed class AllPrimitives : _.System.Object
 
     public char _charVal => Field<char>();
 
-    public static new AllPrimitives FromAddress(ulong address, DumpContext ctx)
-        => new AllPrimitives(address, ctx);
+    public static new AllPrimitives FromAddress(ulong address, DumpContext context)
+        => new AllPrimitives(address, context);
 
-    public static new global::System.Collections.Generic.IEnumerable<AllPrimitives> GetInstances(DumpContext ctx)
+    public static new global::System.Collections.Generic.IEnumerable<AllPrimitives> GetInstances(DumpContext context)
     {
-        foreach (var addr in ctx.EnumerateInstances("Ndump.TestApp.AllPrimitives"))
-            yield return new AllPrimitives(addr, ctx);
+        foreach (var addr in context.EnumerateInstances("Ndump.TestApp.AllPrimitives"))
+            yield return new AllPrimitives(addr, context);
     }
 
     public override string ToString() => $"AllPrimitives@0x{_objAddress:X}";

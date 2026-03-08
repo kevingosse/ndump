@@ -5,15 +5,15 @@ namespace _;
 
 public sealed class Free : global::_.System.Object
 {
-    private Free(ulong address, DumpContext ctx) : base(address, ctx) { }
+    private Free(ulong address, DumpContext context) : base(address, context) { }
 
-    public static Free FromAddress(ulong address, DumpContext ctx)
-        => new Free(address, ctx);
+    public static Free FromAddress(ulong address, DumpContext context)
+        => new Free(address, context);
 
-    public static global::System.Collections.Generic.IEnumerable<Free> GetInstances(DumpContext ctx)
+    public static global::System.Collections.Generic.IEnumerable<Free> GetInstances(DumpContext context)
     {
-        foreach (var addr in ctx.EnumerateInstances("Free"))
-            yield return new Free(addr, ctx);
+        foreach (var addr in context.EnumerateInstances("Free"))
+            yield return new Free(addr, context);
     }
 
     public override string ToString() => $"Free@0x{_objAddress:X}";

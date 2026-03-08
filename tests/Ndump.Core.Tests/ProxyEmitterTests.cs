@@ -22,7 +22,7 @@ public class ProxyEmitterTests
         var code = _emitter.GenerateProxyCode(type);
 
         Assert.Contains("public sealed class Customer : global::_.System.Object", code);
-        Assert.Contains("Customer(ulong address, DumpContext ctx) : base(address, ctx) { }", code);
+        Assert.Contains("Customer(ulong address, DumpContext context) : base(address, context) { }", code);
     }
 
     [Fact]
@@ -179,7 +179,7 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public static Tag FromAddress(ulong address, DumpContext ctx)", code);
+        Assert.Contains("public static Tag FromAddress(ulong address, DumpContext context)", code);
     }
 
     [Fact]
@@ -195,8 +195,8 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("GetInstances(DumpContext ctx)", code);
-        Assert.Contains("ctx.EnumerateInstances(\"MyApp.Tag\")", code);
+        Assert.Contains("GetInstances(DumpContext context)", code);
+        Assert.Contains("context.EnumerateInstances(\"MyApp.Tag\")", code);
     }
 
     [Fact]
@@ -833,9 +833,9 @@ public class ProxyEmitterTests
 
         Assert.Contains("namespace _.System;", code);
         Assert.Contains("public class Object", code);
-        // Should declare _objAddress and _ctx fields
+        // Should declare _objAddress and _context fields
         Assert.Contains("protected readonly ulong _objAddress;", code);
-        Assert.Contains("protected readonly DumpContext _ctx;", code);
+        Assert.Contains("protected readonly DumpContext _context;", code);
         Assert.Contains("public ulong GetObjAddress() => _objAddress;", code);
         // Should NOT extend any base class — class declaration has no base
         Assert.Matches(@"public class Object\r?\n", code);
@@ -856,9 +856,9 @@ public class ProxyEmitterTests
         var code = _emitter.GenerateProxyCode(type);
 
         // Field<T> passes _interiorTypeName as optional parameter to DumpContext methods
-        Assert.Contains("_ctx.GetFieldValue<T>(_objAddress, fieldName, _interiorTypeName)", code);
-        Assert.Contains("_ctx.GetStringField(_objAddress, fieldName, _interiorTypeName)", code);
-        Assert.Contains("_ctx.GetObjectAddress(_objAddress, fieldName, _interiorTypeName)", code);
+        Assert.Contains("_context.GetFieldValue<T>(_objAddress, fieldName, _interiorTypeName)", code);
+        Assert.Contains("_context.GetStringField(_objAddress, fieldName, _interiorTypeName)", code);
+        Assert.Contains("_context.GetObjectAddress(_objAddress, fieldName, _interiorTypeName)", code);
     }
 
     [Fact]
@@ -875,7 +875,7 @@ public class ProxyEmitterTests
         var code = _emitter.GenerateProxyCode(type);
 
         // Field<T> and ReadArrayElement<T> should both use ProxyResolver.Resolve<T>
-        Assert.Equal(2, CountOccurrences(code, "return global::_.ProxyResolver.Resolve<T>(addr, _ctx);"));
+        Assert.Equal(2, CountOccurrences(code, "return global::_.ProxyResolver.Resolve<T>(addr, _context);"));
     }
 
     private static int CountOccurrences(string text, string pattern)
@@ -906,7 +906,7 @@ public class ProxyEmitterTests
 
         Assert.Contains("namespace _.System;", code);
         Assert.Contains("class String : global::_.System.Object", code);
-        Assert.Contains("public string? Value => _ctx.GetStringValue(_objAddress);", code);
+        Assert.Contains("public string? Value => _context.GetStringValue(_objAddress);", code);
         Assert.Contains("public static implicit operator string?(String? proxy)", code);
         Assert.Contains("public override string ToString()", code);
         Assert.Contains("public static new String FromAddress", code);
@@ -948,10 +948,10 @@ public class ProxyEmitterTests
         // Inner class uses the leaf name only
         Assert.Contains("public sealed class RuntimeTypeCache : global::_.System.Object", code);
         // Factories use the leaf name
-        Assert.Contains("RuntimeTypeCache FromAddress(ulong address, DumpContext ctx)", code);
-        Assert.Contains("new RuntimeTypeCache(addr, ctx)", code);
+        Assert.Contains("RuntimeTypeCache FromAddress(ulong address, DumpContext context)", code);
+        Assert.Contains("new RuntimeTypeCache(addr, context)", code);
         // EnumerateInstances still uses the full CLR name
-        Assert.Contains("ctx.EnumerateInstances(\"System.RuntimeType+RuntimeTypeCache\")", code);
+        Assert.Contains("context.EnumerateInstances(\"System.RuntimeType+RuntimeTypeCache\")", code);
     }
 
     [Fact]
@@ -1137,8 +1137,8 @@ public class ProxyEmitterTests
 
         Assert.Contains("namespace _.System.Collections.Generic;", code);
         Assert.Contains("public sealed class List<T> : global::_.System.Object", code);
-        Assert.Contains("private List(ulong address, DumpContext ctx) : base(address, ctx) { }", code);
-        Assert.Contains("public static new List<T> FromAddress(ulong address, DumpContext ctx)", code);
+        Assert.Contains("private List(ulong address, DumpContext context) : base(address, context) { }", code);
+        Assert.Contains("public static new List<T> FromAddress(ulong address, DumpContext context)", code);
         Assert.Contains("public int _size => Field<int>();", code);
     }
 

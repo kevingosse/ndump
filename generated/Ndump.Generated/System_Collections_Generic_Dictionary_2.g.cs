@@ -5,7 +5,7 @@ namespace _.System.Collections.Generic;
 
 public partial class Dictionary<T1, T2> : global::_.System.Object
 {
-    private Dictionary(ulong address, DumpContext ctx) : base(address, ctx) { }
+    private Dictionary(ulong address, DumpContext context) : base(address, context) { }
 
     public global::Ndump.Core.DumpArray<int>? _buckets => ArrayField<int>();
 
@@ -27,8 +27,8 @@ public partial class Dictionary<T1, T2> : global::_.System.Object
 
     public global::_.System.Object? _values => Field<global::_.System.Object>();
 
-    public static new Dictionary<T1, T2> FromAddress(ulong address, DumpContext ctx)
-        => new Dictionary<T1, T2>(address, ctx);
+    public static new Dictionary<T1, T2> FromAddress(ulong address, DumpContext context)
+        => new Dictionary<T1, T2>(address, context);
 
     public override string ToString() => $"Dictionary@0x{_objAddress:X}";
 }

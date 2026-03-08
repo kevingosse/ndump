@@ -5,7 +5,7 @@ namespace _.Ndump.TestApp;
 
 public sealed class Customer : _.System.Object
 {
-    private Customer(ulong address, DumpContext ctx) : base(address, ctx) { }
+    private Customer(ulong address, DumpContext context) : base(address, context) { }
 
     public string? _name => Field<string>();
 
@@ -27,13 +27,13 @@ public sealed class Customer : _.System.Object
 
     public _.System.Collections.Generic.Dictionary<string, int>? _scores => Field<_.System.Collections.Generic.Dictionary<string, int>>();
 
-    public static new Customer FromAddress(ulong address, DumpContext ctx)
-        => new Customer(address, ctx);
+    public static new Customer FromAddress(ulong address, DumpContext context)
+        => new Customer(address, context);
 
-    public static new global::System.Collections.Generic.IEnumerable<Customer> GetInstances(DumpContext ctx)
+    public static new global::System.Collections.Generic.IEnumerable<Customer> GetInstances(DumpContext context)
     {
-        foreach (var addr in ctx.EnumerateInstances("Ndump.TestApp.Customer"))
-            yield return new Customer(addr, ctx);
+        foreach (var addr in context.EnumerateInstances("Ndump.TestApp.Customer"))
+            yield return new Customer(addr, context);
     }
 
     public override string ToString() => $"Customer@0x{_objAddress:X}";

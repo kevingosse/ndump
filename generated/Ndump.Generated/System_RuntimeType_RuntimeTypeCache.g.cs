@@ -7,7 +7,7 @@ public partial class RuntimeType
 {
     public sealed class RuntimeTypeCache : _.System.Object
     {
-        private RuntimeTypeCache(ulong address, DumpContext ctx) : base(address, ctx) { }
+        private RuntimeTypeCache(ulong address, DumpContext context) : base(address, context) { }
 
         public _.System.RuntimeType? m_runtimeType => Field<_.System.RuntimeType>();
 
@@ -49,13 +49,13 @@ public partial class RuntimeType
 
         public _.System.RuntimeType? _genericTypeDefinition => Field<_.System.RuntimeType>();
 
-        public static new RuntimeTypeCache FromAddress(ulong address, DumpContext ctx)
-            => new RuntimeTypeCache(address, ctx);
+        public static new RuntimeTypeCache FromAddress(ulong address, DumpContext context)
+            => new RuntimeTypeCache(address, context);
 
-        public static new global::System.Collections.Generic.IEnumerable<RuntimeTypeCache> GetInstances(DumpContext ctx)
+        public static new global::System.Collections.Generic.IEnumerable<RuntimeTypeCache> GetInstances(DumpContext context)
         {
-            foreach (var addr in ctx.EnumerateInstances("System.RuntimeType+RuntimeTypeCache"))
-                yield return new RuntimeTypeCache(addr, ctx);
+            foreach (var addr in context.EnumerateInstances("System.RuntimeType+RuntimeTypeCache"))
+                yield return new RuntimeTypeCache(addr, context);
         }
 
         public override string ToString() => $"RuntimeTypeCache@0x{_objAddress:X}";

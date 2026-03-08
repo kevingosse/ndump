@@ -5,16 +5,16 @@ namespace _.System.Threading;
 
 public sealed class CancellationToken : global::_.System.Object, global::Ndump.Core.IProxy<CancellationToken>
 {
-    private CancellationToken(ulong address, DumpContext ctx) : base(address, ctx) { }
-    private CancellationToken(ulong address, DumpContext ctx, string interiorTypeName) : base(address, ctx, interiorTypeName) { }
+    private CancellationToken(ulong address, DumpContext context) : base(address, context) { }
+    private CancellationToken(ulong address, DumpContext context, string interiorTypeName) : base(address, context, interiorTypeName) { }
 
     public global::_.System.Object? _source => Field<global::_.System.Object>();
 
-    public static new CancellationToken FromAddress(ulong address, DumpContext ctx)
-        => new CancellationToken(address, ctx);
+    public static new CancellationToken FromAddress(ulong address, DumpContext context)
+        => new CancellationToken(address, context);
 
-    public static CancellationToken FromInterior(ulong address, DumpContext ctx, string interiorTypeName)
-        => new CancellationToken(address, ctx, interiorTypeName);
+    public static CancellationToken FromInterior(ulong address, DumpContext context, string interiorTypeName)
+        => new CancellationToken(address, context, interiorTypeName);
 
     public override string ToString() => $"CancellationToken@0x{_objAddress:X}";
 }

@@ -5,7 +5,7 @@ namespace _.Ndump.TestApp;
 
 public sealed class EnumHolder : _.System.Object
 {
-    private EnumHolder(ulong address, DumpContext ctx) : base(address, ctx) { }
+    private EnumHolder(ulong address, DumpContext context) : base(address, context) { }
 
     public int _color => Field<int>();
 
@@ -13,13 +13,13 @@ public sealed class EnumHolder : _.System.Object
 
     public int _permissions => Field<int>();
 
-    public static new EnumHolder FromAddress(ulong address, DumpContext ctx)
-        => new EnumHolder(address, ctx);
+    public static new EnumHolder FromAddress(ulong address, DumpContext context)
+        => new EnumHolder(address, context);
 
-    public static new global::System.Collections.Generic.IEnumerable<EnumHolder> GetInstances(DumpContext ctx)
+    public static new global::System.Collections.Generic.IEnumerable<EnumHolder> GetInstances(DumpContext context)
     {
-        foreach (var addr in ctx.EnumerateInstances("Ndump.TestApp.EnumHolder"))
-            yield return new EnumHolder(addr, ctx);
+        foreach (var addr in context.EnumerateInstances("Ndump.TestApp.EnumHolder"))
+            yield return new EnumHolder(addr, context);
     }
 
     public override string ToString() => $"EnumHolder@0x{_objAddress:X}";

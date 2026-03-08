@@ -5,7 +5,7 @@ namespace _.System.Diagnostics;
 
 public sealed class ProcessStartInfo : _.System.Object
 {
-    private ProcessStartInfo(ulong address, DumpContext ctx) : base(address, ctx) { }
+    private ProcessStartInfo(ulong address, DumpContext context) : base(address, context) { }
 
     public string? _fileName => Field<string>();
 
@@ -55,13 +55,13 @@ public sealed class ProcessStartInfo : _.System.Object
 
     public bool UseShellExecute => Field<bool>("<UseShellExecute>k__BackingField");
 
-    public static new ProcessStartInfo FromAddress(ulong address, DumpContext ctx)
-        => new ProcessStartInfo(address, ctx);
+    public static new ProcessStartInfo FromAddress(ulong address, DumpContext context)
+        => new ProcessStartInfo(address, context);
 
-    public static new global::System.Collections.Generic.IEnumerable<ProcessStartInfo> GetInstances(DumpContext ctx)
+    public static new global::System.Collections.Generic.IEnumerable<ProcessStartInfo> GetInstances(DumpContext context)
     {
-        foreach (var addr in ctx.EnumerateInstances("System.Diagnostics.ProcessStartInfo"))
-            yield return new ProcessStartInfo(addr, ctx);
+        foreach (var addr in context.EnumerateInstances("System.Diagnostics.ProcessStartInfo"))
+            yield return new ProcessStartInfo(addr, context);
     }
 
     public override string ToString() => $"ProcessStartInfo@0x{_objAddress:X}";

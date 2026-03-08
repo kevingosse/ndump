@@ -5,7 +5,7 @@ namespace _.System.IO.Strategies;
 
 public sealed class BufferedFileStreamStrategy : _.System.IO.Strategies.FileStreamStrategy
 {
-    private BufferedFileStreamStrategy(ulong address, DumpContext ctx) : base(address, ctx) { }
+    private BufferedFileStreamStrategy(ulong address, DumpContext context) : base(address, context) { }
 
     public _.System.IO.Strategies.FileStreamStrategy? _strategy => Field<_.System.IO.Strategies.FileStreamStrategy>();
 
@@ -21,13 +21,13 @@ public sealed class BufferedFileStreamStrategy : _.System.IO.Strategies.FileStre
 
     public _.System.Threading.Tasks.CachedCompletedInt32Task _lastSyncCompletedReadTask => StructField<_.System.Threading.Tasks.CachedCompletedInt32Task>("System.Threading.Tasks.CachedCompletedInt32Task");
 
-    public static new BufferedFileStreamStrategy FromAddress(ulong address, DumpContext ctx)
-        => new BufferedFileStreamStrategy(address, ctx);
+    public static new BufferedFileStreamStrategy FromAddress(ulong address, DumpContext context)
+        => new BufferedFileStreamStrategy(address, context);
 
-    public static new global::System.Collections.Generic.IEnumerable<BufferedFileStreamStrategy> GetInstances(DumpContext ctx)
+    public static new global::System.Collections.Generic.IEnumerable<BufferedFileStreamStrategy> GetInstances(DumpContext context)
     {
-        foreach (var addr in ctx.EnumerateInstances("System.IO.Strategies.BufferedFileStreamStrategy"))
-            yield return new BufferedFileStreamStrategy(addr, ctx);
+        foreach (var addr in context.EnumerateInstances("System.IO.Strategies.BufferedFileStreamStrategy"))
+            yield return new BufferedFileStreamStrategy(addr, context);
     }
 
     public override string ToString() => $"BufferedFileStreamStrategy@0x{_objAddress:X}";

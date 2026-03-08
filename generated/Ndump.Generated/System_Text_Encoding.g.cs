@@ -5,7 +5,7 @@ namespace _.System.Text;
 
 public partial class Encoding : _.System.Object
 {
-    protected Encoding(ulong address, DumpContext ctx) : base(address, ctx) { }
+    protected Encoding(ulong address, DumpContext context) : base(address, context) { }
 
     public int _codePage => Field<int>();
 
@@ -17,13 +17,13 @@ public partial class Encoding : _.System.Object
 
     public _.System.Text.DecoderFallback? decoderFallback => Field<_.System.Text.DecoderFallback>();
 
-    public static new Encoding FromAddress(ulong address, DumpContext ctx)
-        => new Encoding(address, ctx);
+    public static new Encoding FromAddress(ulong address, DumpContext context)
+        => new Encoding(address, context);
 
-    public static new global::System.Collections.Generic.IEnumerable<Encoding> GetInstances(DumpContext ctx)
+    public static new global::System.Collections.Generic.IEnumerable<Encoding> GetInstances(DumpContext context)
     {
-        foreach (var addr in ctx.EnumerateInstances("System.Text.Encoding"))
-            yield return new Encoding(addr, ctx);
+        foreach (var addr in context.EnumerateInstances("System.Text.Encoding"))
+            yield return new Encoding(addr, context);
     }
 
     public override string ToString() => $"Encoding@0x{_objAddress:X}";

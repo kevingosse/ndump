@@ -5,7 +5,7 @@ namespace _.System;
 
 public sealed partial class RuntimeType : _.System.Reflection.TypeInfo
 {
-    private RuntimeType(ulong address, DumpContext ctx) : base(address, ctx) { }
+    private RuntimeType(ulong address, DumpContext context) : base(address, context) { }
 
     public _.System.Object? m_keepalive => Field<_.System.Object>();
 
@@ -13,13 +13,13 @@ public sealed partial class RuntimeType : _.System.Reflection.TypeInfo
 
     public nint m_handle => Field<nint>();
 
-    public static new RuntimeType FromAddress(ulong address, DumpContext ctx)
-        => new RuntimeType(address, ctx);
+    public static new RuntimeType FromAddress(ulong address, DumpContext context)
+        => new RuntimeType(address, context);
 
-    public static new global::System.Collections.Generic.IEnumerable<RuntimeType> GetInstances(DumpContext ctx)
+    public static new global::System.Collections.Generic.IEnumerable<RuntimeType> GetInstances(DumpContext context)
     {
-        foreach (var addr in ctx.EnumerateInstances("System.RuntimeType"))
-            yield return new RuntimeType(addr, ctx);
+        foreach (var addr in context.EnumerateInstances("System.RuntimeType"))
+            yield return new RuntimeType(addr, context);
     }
 
     public override string ToString() => $"RuntimeType@0x{_objAddress:X}";

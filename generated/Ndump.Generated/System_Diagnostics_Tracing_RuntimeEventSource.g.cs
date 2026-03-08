@@ -5,7 +5,7 @@ namespace _.System.Diagnostics.Tracing;
 
 public sealed class RuntimeEventSource : _.System.Diagnostics.Tracing.EventSource
 {
-    private RuntimeEventSource(ulong address, DumpContext ctx) : base(address, ctx) { }
+    private RuntimeEventSource(ulong address, DumpContext context) : base(address, context) { }
 
     public global::_.System.Object? _gcHeapSizeCounter => Field<global::_.System.Object>();
 
@@ -61,13 +61,13 @@ public sealed class RuntimeEventSource : _.System.Diagnostics.Tracing.EventSourc
 
     public global::_.System.Object? _jitTimeCounter => Field<global::_.System.Object>();
 
-    public static new RuntimeEventSource FromAddress(ulong address, DumpContext ctx)
-        => new RuntimeEventSource(address, ctx);
+    public static new RuntimeEventSource FromAddress(ulong address, DumpContext context)
+        => new RuntimeEventSource(address, context);
 
-    public static new global::System.Collections.Generic.IEnumerable<RuntimeEventSource> GetInstances(DumpContext ctx)
+    public static new global::System.Collections.Generic.IEnumerable<RuntimeEventSource> GetInstances(DumpContext context)
     {
-        foreach (var addr in ctx.EnumerateInstances("System.Diagnostics.Tracing.RuntimeEventSource"))
-            yield return new RuntimeEventSource(addr, ctx);
+        foreach (var addr in context.EnumerateInstances("System.Diagnostics.Tracing.RuntimeEventSource"))
+            yield return new RuntimeEventSource(addr, context);
     }
 
     public override string ToString() => $"RuntimeEventSource@0x{_objAddress:X}";

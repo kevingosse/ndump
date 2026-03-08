@@ -5,7 +5,7 @@ namespace _.System.Diagnostics;
 
 public sealed class Process : _.System.ComponentModel.Component
 {
-    private Process(ulong address, DumpContext ctx) : base(address, ctx) { }
+    private Process(ulong address, DumpContext context) : base(address, context) { }
 
     public bool _haveProcessId => Field<bool>();
 
@@ -109,13 +109,13 @@ public sealed class Process : _.System.ComponentModel.Component
 
     public bool _responding => Field<bool>();
 
-    public static new Process FromAddress(ulong address, DumpContext ctx)
-        => new Process(address, ctx);
+    public static new Process FromAddress(ulong address, DumpContext context)
+        => new Process(address, context);
 
-    public static new global::System.Collections.Generic.IEnumerable<Process> GetInstances(DumpContext ctx)
+    public static new global::System.Collections.Generic.IEnumerable<Process> GetInstances(DumpContext context)
     {
-        foreach (var addr in ctx.EnumerateInstances("System.Diagnostics.Process"))
-            yield return new Process(addr, ctx);
+        foreach (var addr in context.EnumerateInstances("System.Diagnostics.Process"))
+            yield return new Process(addr, context);
     }
 
     public override string ToString() => $"Process@0x{_objAddress:X}";

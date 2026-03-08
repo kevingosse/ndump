@@ -5,7 +5,7 @@ namespace _.System.Threading;
 
 public sealed class Thread : _.System.Runtime.ConstrainedExecution.CriticalFinalizerObject
 {
-    private Thread(ulong address, DumpContext ctx) : base(address, ctx) { }
+    private Thread(ulong address, DumpContext context) : base(address, context) { }
 
     public global::_.System.Object? _executionContext => Field<global::_.System.Object>();
 
@@ -27,13 +27,13 @@ public sealed class Thread : _.System.Runtime.ConstrainedExecution.CriticalFinal
 
     public bool _isThreadPool => Field<bool>();
 
-    public static new Thread FromAddress(ulong address, DumpContext ctx)
-        => new Thread(address, ctx);
+    public static new Thread FromAddress(ulong address, DumpContext context)
+        => new Thread(address, context);
 
-    public static new global::System.Collections.Generic.IEnumerable<Thread> GetInstances(DumpContext ctx)
+    public static new global::System.Collections.Generic.IEnumerable<Thread> GetInstances(DumpContext context)
     {
-        foreach (var addr in ctx.EnumerateInstances("System.Threading.Thread"))
-            yield return new Thread(addr, ctx);
+        foreach (var addr in context.EnumerateInstances("System.Threading.Thread"))
+            yield return new Thread(addr, context);
     }
 
     public override string ToString() => $"Thread@0x{_objAddress:X}";

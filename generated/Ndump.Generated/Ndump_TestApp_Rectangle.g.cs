@@ -5,18 +5,18 @@ namespace _.Ndump.TestApp;
 
 public sealed class Rectangle : global::_.System.Object, global::Ndump.Core.IProxy<Rectangle>
 {
-    private Rectangle(ulong address, DumpContext ctx) : base(address, ctx) { }
-    private Rectangle(ulong address, DumpContext ctx, string interiorTypeName) : base(address, ctx, interiorTypeName) { }
+    private Rectangle(ulong address, DumpContext context) : base(address, context) { }
+    private Rectangle(ulong address, DumpContext context, string interiorTypeName) : base(address, context, interiorTypeName) { }
 
     public _.Ndump.TestApp.Point TopLeft => StructField<_.Ndump.TestApp.Point>("Ndump.TestApp.Point");
 
     public _.Ndump.TestApp.Point BottomRight => StructField<_.Ndump.TestApp.Point>("Ndump.TestApp.Point");
 
-    public static new Rectangle FromAddress(ulong address, DumpContext ctx)
-        => new Rectangle(address, ctx);
+    public static new Rectangle FromAddress(ulong address, DumpContext context)
+        => new Rectangle(address, context);
 
-    public static Rectangle FromInterior(ulong address, DumpContext ctx, string interiorTypeName)
-        => new Rectangle(address, ctx, interiorTypeName);
+    public static Rectangle FromInterior(ulong address, DumpContext context, string interiorTypeName)
+        => new Rectangle(address, context, interiorTypeName);
 
     public override string ToString() => $"Rectangle@0x{_objAddress:X}";
 }

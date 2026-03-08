@@ -5,7 +5,7 @@ namespace _.System.Reflection;
 
 public sealed class RuntimeModule : _.System.Reflection.Module
 {
-    private RuntimeModule(ulong address, DumpContext ctx) : base(address, ctx) { }
+    private RuntimeModule(ulong address, DumpContext context) : base(address, context) { }
 
     public _.System.RuntimeType? m_runtimeType => Field<_.System.RuntimeType>();
 
@@ -13,13 +13,13 @@ public sealed class RuntimeModule : _.System.Reflection.Module
 
     public nint m_pData => Field<nint>();
 
-    public static new RuntimeModule FromAddress(ulong address, DumpContext ctx)
-        => new RuntimeModule(address, ctx);
+    public static new RuntimeModule FromAddress(ulong address, DumpContext context)
+        => new RuntimeModule(address, context);
 
-    public static new global::System.Collections.Generic.IEnumerable<RuntimeModule> GetInstances(DumpContext ctx)
+    public static new global::System.Collections.Generic.IEnumerable<RuntimeModule> GetInstances(DumpContext context)
     {
-        foreach (var addr in ctx.EnumerateInstances("System.Reflection.RuntimeModule"))
-            yield return new RuntimeModule(addr, ctx);
+        foreach (var addr in context.EnumerateInstances("System.Reflection.RuntimeModule"))
+            yield return new RuntimeModule(addr, context);
     }
 
     public override string ToString() => $"RuntimeModule@0x{_objAddress:X}";

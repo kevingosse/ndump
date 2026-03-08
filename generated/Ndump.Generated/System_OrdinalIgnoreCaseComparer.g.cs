@@ -5,15 +5,15 @@ namespace _.System;
 
 public sealed class OrdinalIgnoreCaseComparer : _.System.OrdinalComparer
 {
-    private OrdinalIgnoreCaseComparer(ulong address, DumpContext ctx) : base(address, ctx) { }
+    private OrdinalIgnoreCaseComparer(ulong address, DumpContext context) : base(address, context) { }
 
-    public static new OrdinalIgnoreCaseComparer FromAddress(ulong address, DumpContext ctx)
-        => new OrdinalIgnoreCaseComparer(address, ctx);
+    public static new OrdinalIgnoreCaseComparer FromAddress(ulong address, DumpContext context)
+        => new OrdinalIgnoreCaseComparer(address, context);
 
-    public static new global::System.Collections.Generic.IEnumerable<OrdinalIgnoreCaseComparer> GetInstances(DumpContext ctx)
+    public static new global::System.Collections.Generic.IEnumerable<OrdinalIgnoreCaseComparer> GetInstances(DumpContext context)
     {
-        foreach (var addr in ctx.EnumerateInstances("System.OrdinalIgnoreCaseComparer"))
-            yield return new OrdinalIgnoreCaseComparer(addr, ctx);
+        foreach (var addr in context.EnumerateInstances("System.OrdinalIgnoreCaseComparer"))
+            yield return new OrdinalIgnoreCaseComparer(addr, context);
     }
 
     public override string ToString() => $"OrdinalIgnoreCaseComparer@0x{_objAddress:X}";

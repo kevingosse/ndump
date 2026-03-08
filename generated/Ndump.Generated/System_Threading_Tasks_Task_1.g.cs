@@ -5,7 +5,7 @@ namespace _.System.Threading.Tasks;
 
 public sealed class Task<T> : global::_.System.Object
 {
-    private Task(ulong address, DumpContext ctx) : base(address, ctx) { }
+    private Task(ulong address, DumpContext context) : base(address, context) { }
 
     public int m_taskId => Field<int>();
 
@@ -23,8 +23,8 @@ public sealed class Task<T> : global::_.System.Object
 
     public _.System.Threading.Tasks.VoidTaskResult m_result => StructField<_.System.Threading.Tasks.VoidTaskResult>("System.Threading.Tasks.VoidTaskResult");
 
-    public static new Task<T> FromAddress(ulong address, DumpContext ctx)
-        => new Task<T>(address, ctx);
+    public static new Task<T> FromAddress(ulong address, DumpContext context)
+        => new Task<T>(address, context);
 
     public override string ToString() => $"Task@0x{_objAddress:X}";
 }

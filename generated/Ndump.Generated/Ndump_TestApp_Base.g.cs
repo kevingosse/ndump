@@ -5,17 +5,17 @@ namespace _.Ndump.TestApp;
 
 public class Base : _.System.Object
 {
-    protected Base(ulong address, DumpContext ctx) : base(address, ctx) { }
+    protected Base(ulong address, DumpContext context) : base(address, context) { }
 
     public int _baseField => Field<int>();
 
-    public static new Base FromAddress(ulong address, DumpContext ctx)
-        => new Base(address, ctx);
+    public static new Base FromAddress(ulong address, DumpContext context)
+        => new Base(address, context);
 
-    public static new global::System.Collections.Generic.IEnumerable<Base> GetInstances(DumpContext ctx)
+    public static new global::System.Collections.Generic.IEnumerable<Base> GetInstances(DumpContext context)
     {
-        foreach (var addr in ctx.EnumerateInstances("Ndump.TestApp.Base"))
-            yield return new Base(addr, ctx);
+        foreach (var addr in context.EnumerateInstances("Ndump.TestApp.Base"))
+            yield return new Base(addr, context);
     }
 
     public override string ToString() => $"Base@0x{_objAddress:X}";

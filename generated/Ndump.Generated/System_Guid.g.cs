@@ -5,8 +5,8 @@ namespace _.System;
 
 public sealed class Guid : global::_.System.Object, global::Ndump.Core.IProxy<Guid>
 {
-    private Guid(ulong address, DumpContext ctx) : base(address, ctx) { }
-    private Guid(ulong address, DumpContext ctx, string interiorTypeName) : base(address, ctx, interiorTypeName) { }
+    private Guid(ulong address, DumpContext context) : base(address, context) { }
+    private Guid(ulong address, DumpContext context, string interiorTypeName) : base(address, context, interiorTypeName) { }
 
     public int _a => Field<int>();
 
@@ -30,11 +30,11 @@ public sealed class Guid : global::_.System.Object, global::Ndump.Core.IProxy<Gu
 
     public byte _k => Field<byte>();
 
-    public static new Guid FromAddress(ulong address, DumpContext ctx)
-        => new Guid(address, ctx);
+    public static new Guid FromAddress(ulong address, DumpContext context)
+        => new Guid(address, context);
 
-    public static Guid FromInterior(ulong address, DumpContext ctx, string interiorTypeName)
-        => new Guid(address, ctx, interiorTypeName);
+    public static Guid FromInterior(ulong address, DumpContext context, string interiorTypeName)
+        => new Guid(address, context, interiorTypeName);
 
     public override string ToString() => $"Guid@0x{_objAddress:X}";
 }
