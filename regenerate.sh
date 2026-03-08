@@ -21,6 +21,6 @@ echo "==> Running TestApp to create dump..."
 "$PUBLISH_DIR/Ndump.TestApp.exe" "$DUMP_PATH"
 
 echo "==> Emitting proxy sources..."
-dotnet run --project "$SCRIPT_DIR/src/Ndump.Cli" -- emit "$DUMP_PATH" -o "$OUTPUT_DIR"
+dotnet run --project "$SCRIPT_DIR/src/Ndump.Cli" -- init "$DUMP_PATH" "$OUTPUT_DIR"
 
 echo "==> Done. Sources written to generated/Ndump.Generated/"

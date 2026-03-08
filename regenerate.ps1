@@ -17,7 +17,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'TestApp failed' }
 
     Write-Host '==> Emitting proxy sources...'
-    dotnet run --project "$scriptDir\src\Ndump.Cli" -- emit $dumpPath -o $outputDir
+    dotnet run --project "$scriptDir\src\Ndump.Cli" -- init $dumpPath $outputDir
     if ($LASTEXITCODE -ne 0) { throw 'Emit failed' }
 
     Write-Host '==> Done. Sources written to generated\Ndump.Generated\'
