@@ -179,7 +179,7 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public static Tag FromAddress(ulong address, DumpContext context)", code);
+        Assert.Contains("public static new Tag FromAddress(ulong address, DumpContext context)", code);
     }
 
     [Fact]
@@ -195,7 +195,7 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("GetInstances(DumpContext context)", code);
+        Assert.Contains("public static new global::System.Collections.Generic.IEnumerable<Tag> GetInstances(DumpContext context)", code);
         Assert.Contains("context.EnumerateInstances(\"MyApp.Tag\")", code);
     }
 

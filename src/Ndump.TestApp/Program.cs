@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+// ReSharper disable NotAccessedField.Local
+// ReSharper disable UnusedMember.Global
 
 namespace Ndump.TestApp;
 
@@ -116,11 +118,11 @@ public class Tag
 // ── Additional types for exhaustive testing ──────────────────────────
 
 // Enum types
-public enum Color : int { Red = 1, Green = 2, Blue = 3 }
+public enum Color { Red = 1, Green = 2, Blue = 3 }
 public enum SmallEnum : byte { Low = 1, Medium = 2, High = 3 }
 
 [Flags]
-public enum Permissions : int { None = 0, Read = 1, Write = 2, Execute = 4, All = 7 }
+public enum Permissions { None = 0, Read = 1, Write = 2, Execute = 4, All = 7 }
 
 // Struct with only primitive fields
 public struct Point

@@ -281,9 +281,9 @@ public sealed class ProxyEmitter
             EmitProperty(body, type, field);
         }
 
-        // FromAddress factory — use 'new' keyword if base also has FromAddress
-        // Value type proxies always need 'new' because they shadow _.System.Object's FromAddress
-        var newKeyword = hasKnownBase || isStructProxy ? "new " : "";
+        // Every generated proxy except _.System.Object inherits a proxy base that already exposes
+        // these static factories, so the derived proxy always intentionally hides them.
+        const string newKeyword = "new ";
         body.AppendLine();
         body.AppendLine($"    public static {newKeyword}{sanitizedName} FromAddress(ulong address, DumpContext context)");
         body.AppendLine($"        => new {sanitizedName}(address, context);");
