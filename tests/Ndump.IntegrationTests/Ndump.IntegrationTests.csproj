@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Ndump.Core\Ndump.Core.csproj" />
+    <ProjectReference Include="..\..\generated\Ndump.Generated\Ndump.Generated.csproj" />
   </ItemGroup>
 
 </Project>

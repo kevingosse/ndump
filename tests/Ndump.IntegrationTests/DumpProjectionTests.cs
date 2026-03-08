@@ -1,6 +1,6 @@
-using System.Collections;
 using System.Reflection;
 using Ndump.Core;
+using _.Ndump.TestApp;
 
 namespace Ndump.IntegrationTests;
 
@@ -8,29 +8,11 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
 {
     private readonly DumpFixture _fixture;
     private DumpProjector.ProjectionResult Result => _fixture.Projection;
-    private Assembly Assembly => Result.GeneratedAssembly;
     private DumpContext Context => Result.Context;
 
     public DumpProjectionTests(DumpFixture fixture)
     {
         _fixture = fixture;
-    }
-
-    private Type ProxyType(string clrTypeName) =>
-        Assembly.GetType($"_.{clrTypeName}")!;
-
-    private List<dynamic> GetInstances(string clrTypeName)
-    {
-        var type = ProxyType(clrTypeName);
-        var method = type.GetMethod("GetInstances", BindingFlags.Public | BindingFlags.Static)!;
-        return ((IEnumerable)method.Invoke(null, [Context])!).Cast<dynamic>().ToList();
-    }
-
-    private dynamic FromAddress(string clrTypeName, ulong address)
-    {
-        var type = ProxyType(clrTypeName);
-        var method = type.GetMethod("FromAddress", BindingFlags.Public | BindingFlags.Static)!;
-        return method.Invoke(null, [address, Context])!;
     }
 
     [Fact]
@@ -97,7 +79,7 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_CanEnumerateCustomerInstances()
     {
-        var customers = GetInstances("Ndump.TestApp.Customer");
+        var customers = Customer.GetInstances(Context).ToList();
 
         // We created 3 customers in TestApp
         Assert.Equal(3, customers.Count);
@@ -106,9 +88,9 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_CanReadCustomerStringField()
     {
-        var customers = GetInstances("Ndump.TestApp.Customer");
+        var customers = Customer.GetInstances(Context).ToList();
 
-        var names = customers.Select(c => (string?)c._name).OrderBy(n => n).ToList();
+        var names = customers.Select(c => c._name).OrderBy(n => n).ToList();
 
         Assert.Contains("Alice", names);
         Assert.Contains("Bob", names);
@@ -118,9 +100,9 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_CanReadCustomerIntField()
     {
-        var customers = GetInstances("Ndump.TestApp.Customer");
+        var customers = Customer.GetInstances(Context).ToList();
 
-        var ages = customers.Select(c => (int)c._age).OrderBy(a => a).ToList();
+        var ages = customers.Select(c => c._age).OrderBy(a => a).ToList();
 
         Assert.Equal([28, 30, 45], ages);
     }
@@ -128,9 +110,9 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_CanReadCustomerBoolField()
     {
-        var customers = GetInstances("Ndump.TestApp.Customer");
+        var customers = Customer.GetInstances(Context).ToList();
 
-        var activeValues = customers.Select(c => (bool)c._isActive).ToList();
+        var activeValues = customers.Select(c => c._isActive).ToList();
 
         // Alice=true, Bob=false, Charlie=true
         Assert.Equal(2, activeValues.Count(v => v));
@@ -140,15 +122,15 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_CanNavigateObjectReferences()
     {
-        var customers = GetInstances("Ndump.TestApp.Customer");
+        var customers = Customer.GetInstances(Context).ToList();
 
         // Navigate Customer -> _lastOrder -> _orderId
         var orderIds = new List<int>();
         foreach (var customer in customers)
         {
-            dynamic order = customer._lastOrder;
+            var order = customer._lastOrder;
             Assert.NotNull(order);
-            orderIds.Add((int)order._orderId);
+            orderIds.Add(order!._orderId);
         }
 
         orderIds.Sort();
@@ -158,33 +140,33 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_CanNavigateObjectReference_AndReadFields()
     {
-        var customers = GetInstances("Ndump.TestApp.Customer");
+        var customers = Customer.GetInstances(Context).ToList();
 
         // Alice has addr1("123 Main St", "Springfield", 62701)
-        var alice = customers.Single(c => (string?)c._name == "Alice");
-        dynamic aliceAddr = alice._address;
+        var alice = customers.Single(c => c._name == "Alice");
+        var aliceAddr = alice._address;
         Assert.NotNull(aliceAddr);
-        Assert.IsType(ProxyType("Ndump.TestApp.Address"), (object)aliceAddr);
-        Assert.Equal("123 Main St", (string)aliceAddr._street);
-        Assert.Equal("Springfield", (string)aliceAddr._city);
-        Assert.Equal(62701, (int)aliceAddr._zipCode);
+        Assert.IsType<Address>(aliceAddr);
+        Assert.Equal("123 Main St", aliceAddr!._street);
+        Assert.Equal("Springfield", aliceAddr._city);
+        Assert.Equal(62701, aliceAddr._zipCode);
 
         // Bob has addr2("456 Oak Ave", "Shelbyville", 62702)
-        var bob = customers.Single(c => (string?)c._name == "Bob");
-        dynamic bobAddr = bob._address;
+        var bob = customers.Single(c => c._name == "Bob");
+        var bobAddr = bob._address;
         Assert.NotNull(bobAddr);
-        Assert.Equal("456 Oak Ave", (string)bobAddr._street);
-        Assert.Equal("Shelbyville", (string)bobAddr._city);
-        Assert.Equal(62702, (int)bobAddr._zipCode);
+        Assert.Equal("456 Oak Ave", bobAddr!._street);
+        Assert.Equal("Shelbyville", bobAddr._city);
+        Assert.Equal(62702, bobAddr._zipCode);
     }
 
     [Fact]
     public void Proxies_CanEnumerateTagInstances()
     {
-        var tags = GetInstances("Ndump.TestApp.Tag");
+        var tags = Tag.GetInstances(Context).ToList();
         Assert.Equal(2, tags.Count);
 
-        var labels = tags.Select(t => (string?)t._label).OrderBy(l => l).ToList();
+        var labels = tags.Select(t => t._label).OrderBy(l => l).ToList();
         Assert.Equal(["important", "urgent"], labels);
     }
 
@@ -195,9 +177,9 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
         var addresses = Context.EnumerateInstances("Ndump.TestApp.Tag").ToList();
         Assert.NotEmpty(addresses);
 
-        dynamic proxy = FromAddress("Ndump.TestApp.Tag", addresses[0]);
+        var proxy = Tag.FromAddress(addresses[0], Context);
         Assert.NotNull(proxy);
-        Assert.Equal(addresses[0], (ulong)proxy.GetObjAddress());
+        Assert.Equal(addresses[0], proxy.GetObjAddress());
     }
 
     [Fact]
@@ -218,39 +200,38 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_CanReadArrayField()
     {
-        var customers = GetInstances("Ndump.TestApp.Customer");
+        var customers = Customer.GetInstances(Context).ToList();
 
         // Find Alice (has [order1, order2])
-        var alice = customers.Single(c => (string?)c._name == "Alice");
-        var aliceOrders = ((IEnumerable)alice._orderHistory).Cast<dynamic>().ToList();
+        var alice = customers.Single(c => c._name == "Alice");
+        var aliceOrders = alice._orderHistory!.ToList();
         Assert.Equal(2, aliceOrders.Count);
 
-        var aliceOrderIds = aliceOrders.Select(o => (int)o._orderId).OrderBy(id => id).ToList();
+        var aliceOrderIds = aliceOrders.Select(o => o!._orderId).OrderBy(id => id).ToList();
         Assert.Equal([1001, 1002], aliceOrderIds);
 
         // Find Charlie (has [order1, order2, order3])
-        var charlie = customers.Single(c => (string?)c._name == "Charlie");
-        var charlieOrders = ((IEnumerable)charlie._orderHistory).Cast<dynamic>().ToList();
+        var charlie = customers.Single(c => c._name == "Charlie");
+        var charlieOrders = charlie._orderHistory!.ToList();
         Assert.Equal(3, charlieOrders.Count);
     }
 
     [Fact]
     public void Proxies_ArrayField_HasLength()
     {
-        var customers = GetInstances("Ndump.TestApp.Customer");
+        var customers = Customer.GetInstances(Context).ToList();
 
         // Bob has [order2] — 1 element
-        var bob = customers.Single(c => (string?)c._name == "Bob");
-        dynamic bobHistory = bob._orderHistory;
-        Assert.Equal(1, (int)bobHistory.Length);
+        var bob = customers.Single(c => c._name == "Bob");
+        Assert.Equal(1, bob._orderHistory!.Length);
     }
 
     [Fact]
     public void Proxies_OrderHasDoubleField()
     {
-        var orders = GetInstances("Ndump.TestApp.Order");
+        var orders = Order.GetInstances(Context).ToList();
 
-        var totals = orders.Select(o => (double)o._total).OrderBy(t => t).ToList();
+        var totals = orders.Select(o => o._total).OrderBy(t => t).ToList();
 
         Assert.Equal(5.00, totals[0], precision: 2);
         Assert.Equal(29.99, totals[1], precision: 2);
@@ -275,73 +256,67 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_CanReadObjectArrayField()
     {
-        var customers = GetInstances("Ndump.TestApp.Customer");
+        var customers = Customer.GetInstances(Context).ToList();
 
         // Alice has [order1, addr1, tag1, "hello"] — 4 elements
-        var alice = customers.Single(c => (string?)c._name == "Alice");
-        var aliceItems = ((IEnumerable)alice._mixedItems).Cast<object>().ToList();
+        var alice = customers.Single(c => c._name == "Alice");
+        var aliceItems = alice._mixedItems!.ToList();
         Assert.Equal(4, aliceItems.Count);
     }
 
     [Fact]
     public void Proxies_ObjectArrayElements_InheritFromSystemObject()
     {
-        var sysObjType = ProxyType("System.Object");
-        var customers = GetInstances("Ndump.TestApp.Customer");
+        var customers = Customer.GetInstances(Context).ToList();
 
         // Bob has [tag2, order2] — elements should inherit from _.System.Object
-        var bob = customers.Single(c => (string?)c._name == "Bob");
-        var bobItems = ((IEnumerable)bob._mixedItems).Cast<object>().ToList();
+        var bob = customers.Single(c => c._name == "Bob");
+        var bobItems = bob._mixedItems!.ToList();
         Assert.Equal(2, bobItems.Count);
 
         foreach (var item in bobItems)
         {
-            Assert.True(sysObjType.IsInstanceOfType(item));
+            Assert.IsAssignableFrom<_.System.Object>(item);
         }
     }
 
     [Fact]
     public void Proxies_ObjectArrayElements_AreCorrectProxyTypes()
     {
-        var tagType = ProxyType("Ndump.TestApp.Tag");
-        var orderType = ProxyType("Ndump.TestApp.Order");
-        var customers = GetInstances("Ndump.TestApp.Customer");
+        var customers = Customer.GetInstances(Context).ToList();
 
         // Bob has [tag2, order2] — elements should be actual proxy types
-        var bob = customers.Single(c => (string?)c._name == "Bob");
-        var bobItems = ((IEnumerable)bob._mixedItems).Cast<object>().ToList();
+        var bob = customers.Single(c => c._name == "Bob");
+        var bobItems = bob._mixedItems!.ToList();
 
-        var proxyTypes = bobItems.Select(d => d.GetType()).ToList();
-        Assert.Contains(tagType, proxyTypes);
-        Assert.Contains(orderType, proxyTypes);
+        var proxyTypes = bobItems.Select(d => d!.GetType()).ToList();
+        Assert.Contains(typeof(Tag), proxyTypes);
+        Assert.Contains(typeof(Order), proxyTypes);
     }
 
     [Fact]
     public void Proxies_ObjectArrayElements_CanReadFieldsDirectly()
     {
-        var orderType = ProxyType("Ndump.TestApp.Order");
-        var customers = GetInstances("Ndump.TestApp.Customer");
+        var customers = Customer.GetInstances(Context).ToList();
 
         // Bob has [tag2, order2] — the Order element is already the right proxy type
-        var bob = customers.Single(c => (string?)c._name == "Bob");
-        var bobItems = ((IEnumerable)bob._mixedItems).Cast<dynamic>().ToList();
-
-        var orderElement = bobItems.Single(d => ((object)d).GetType() == orderType);
+        var bob = customers.Single(c => c._name == "Bob");
+        var orderElement = bob._mixedItems!.OfType<Order>().Single();
 
         // Can read fields directly — no cast needed since ResolveProxy returns the right type
-        Assert.Equal(1002, (int)orderElement._orderId);
+        Assert.Equal(1002, orderElement._orderId);
     }
 
     [Fact]
     public void Proxies_ObjectArrayElements_HasCorrectProxyTypes()
     {
-        var customers = GetInstances("Ndump.TestApp.Customer");
+        var customers = Customer.GetInstances(Context).ToList();
 
         // Alice has [order1, addr1, tag1, "hello"] — check proxy types
-        var alice = customers.Single(c => (string?)c._name == "Alice");
-        var aliceItems = ((IEnumerable)alice._mixedItems).Cast<object>().ToList();
+        var alice = customers.Single(c => c._name == "Alice");
+        var aliceItems = alice._mixedItems!.ToList();
 
-        var proxyTypeNames = aliceItems.Select(d => d.GetType().FullName).ToList();
+        var proxyTypeNames = aliceItems.Select(d => d!.GetType().FullName).ToList();
         Assert.Contains("_.Ndump.TestApp.Order", proxyTypeNames);
         Assert.Contains("_.Ndump.TestApp.Address", proxyTypeNames);
         Assert.Contains("_.Ndump.TestApp.Tag", proxyTypeNames);
@@ -372,90 +347,75 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_AnimalArray_ContainsCatsAndDogs()
     {
-        var catType = ProxyType("Ndump.TestApp.Cat");
-        var dogType = ProxyType("Ndump.TestApp.Dog");
-        var animalType = ProxyType("Ndump.TestApp.Animal");
-
         // Cat and Dog should extend Animal in the proxy hierarchy
-        Assert.True(animalType.IsAssignableFrom(catType));
-        Assert.True(animalType.IsAssignableFrom(dogType));
+        Assert.True(typeof(Animal).IsAssignableFrom(typeof(Cat)));
+        Assert.True(typeof(Animal).IsAssignableFrom(typeof(Dog)));
 
-        var customers = GetInstances("Ndump.TestApp.Customer");
+        var customers = Customer.GetInstances(Context).ToList();
 
         // Alice has [cat1, dog1]
-        var alice = customers.Single(c => (string?)c._name == "Alice");
-        var alicePets = ((IEnumerable)alice._pets).Cast<object>().ToList();
+        var alice = customers.Single(c => c._name == "Alice");
+        var alicePets = alice._pets!.ToList();
         Assert.Equal(2, alicePets.Count);
 
         // Elements should be actual Cat and Dog proxy types, not just Animal
-        var petTypes = alicePets.Select(p => p.GetType()).ToList();
-        Assert.Contains(catType, petTypes);
-        Assert.Contains(dogType, petTypes);
+        Assert.Equal(1, alicePets.OfType<Cat>().Count());
+        Assert.Equal(1, alicePets.OfType<Dog>().Count());
 
         // All pets are assignable to Animal
         foreach (var pet in alicePets)
         {
-            Assert.True(animalType.IsInstanceOfType(pet));
+            Assert.IsAssignableFrom<Animal>(pet);
         }
     }
 
     [Fact]
     public void Proxies_AnimalArray_CanReadInheritedAndOwnFields()
     {
-        var dogType = ProxyType("Ndump.TestApp.Dog");
-        var customers = GetInstances("Ndump.TestApp.Customer");
+        var customers = Customer.GetInstances(Context).ToList();
 
         // Alice has [cat1("Whiskers", 3, indoor=true), dog1("Rex", 4, "German Shepherd")]
-        var alice = customers.Single(c => (string?)c._name == "Alice");
-        var alicePets = ((IEnumerable)alice._pets).Cast<dynamic>().ToList();
+        var alice = customers.Single(c => c._name == "Alice");
+        var alicePets = alice._pets!.ToList();
 
         // Read inherited _name field (declared on Animal proxy) from all pets
-        var petNames = alicePets.Select(p => (string?)p._name).OrderBy(n => n).ToList();
+        var petNames = alicePets.Select(p => p!._name).OrderBy(n => n).ToList();
         Assert.Equal(["Rex", "Whiskers"], petNames);
 
         // Read Dog-specific _breed field
-        var dog = alicePets.Single(p => ((object)p).GetType() == dogType);
-        Assert.Equal("German Shepherd", (string)dog._breed);
+        var dog = alicePets.OfType<Dog>().Single();
+        Assert.Equal("German Shepherd", dog._breed);
     }
 
     [Fact]
     public void Proxies_AnimalArray_Charlie_HasMixedPets()
     {
-        var catType = ProxyType("Ndump.TestApp.Cat");
-        var dogType = ProxyType("Ndump.TestApp.Dog");
-        var customers = GetInstances("Ndump.TestApp.Customer");
+        var customers = Customer.GetInstances(Context).ToList();
 
         // Charlie has [cat2("Mittens"), dog1("Rex"), cat1("Whiskers")]
-        var charlie = customers.Single(c => (string?)c._name == "Charlie");
-        var charliePets = ((IEnumerable)charlie._pets).Cast<object>().ToList();
+        var charlie = customers.Single(c => c._name == "Charlie");
+        var charliePets = charlie._pets!.ToList();
         Assert.Equal(3, charliePets.Count);
 
-        var catCount = charliePets.Count(p => p.GetType() == catType);
-        var dogCount = charliePets.Count(p => p.GetType() == dogType);
-        Assert.Equal(2, catCount);
-        Assert.Equal(1, dogCount);
+        Assert.Equal(2, charliePets.OfType<Cat>().Count());
+        Assert.Equal(1, charliePets.OfType<Dog>().Count());
     }
 
     [Fact]
     public void Proxies_InheritFromSystemObject()
     {
-        var sysObjType = ProxyType("System.Object");
-
-        Assert.True(sysObjType.IsAssignableFrom(ProxyType("Ndump.TestApp.Customer")));
-        Assert.True(sysObjType.IsAssignableFrom(ProxyType("Ndump.TestApp.Order")));
+        Assert.True(typeof(_.System.Object).IsAssignableFrom(typeof(Customer)));
+        Assert.True(typeof(_.System.Object).IsAssignableFrom(typeof(Order)));
     }
 
     [Fact]
     public void Proxies_SystemString_HasImplicitConversionToString()
     {
-        var stringType = ProxyType("System.String");
-        var sysObjType = ProxyType("System.Object");
-
         // _.System.String should extend _.System.Object
-        Assert.True(sysObjType.IsAssignableFrom(stringType));
+        Assert.True(typeof(_.System.Object).IsAssignableFrom(typeof(_.System.String)));
 
         // Should have an implicit operator to string?
-        var implicitOp = stringType.GetMethods(BindingFlags.Public | BindingFlags.Static)
+        var implicitOp = typeof(_.System.String).GetMethods(BindingFlags.Public | BindingFlags.Static)
             .SingleOrDefault(m => m.Name == "op_Implicit" && m.ReturnType == typeof(string));
         Assert.NotNull(implicitOp);
     }
@@ -463,60 +423,47 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_SystemString_ToStringReturnsValue()
     {
-        var stringType = ProxyType("System.String");
-        var customers = GetInstances("Ndump.TestApp.Customer");
+        var customers = Customer.GetInstances(Context).ToList();
 
         // Alice has [order1, addr1, tag1, "hello"] — the string element should have ToString() == "hello"
-        var alice = customers.Single(c => (string?)c._name == "Alice");
-        var aliceMixed = ((IEnumerable)alice._mixedItems).Cast<object>().ToList();
-
-        var stringElement = aliceMixed.Single(d => d.GetType() == stringType);
+        var alice = customers.Single(c => c._name == "Alice");
+        var stringElement = alice._mixedItems!.OfType<_.System.String>().Single();
         Assert.Equal("hello", stringElement.ToString());
     }
 
     [Fact]
     public void Proxies_SystemString_ImplicitOperatorReturnsValue()
     {
-        var stringType = ProxyType("System.String");
-        var customers = GetInstances("Ndump.TestApp.Customer");
+        var customers = Customer.GetInstances(Context).ToList();
 
         // Alice has "hello" in _mixedItems
-        var alice = customers.Single(c => (string?)c._name == "Alice");
-        var aliceMixed = ((IEnumerable)alice._mixedItems).Cast<object>().ToList();
+        var alice = customers.Single(c => c._name == "Alice");
+        var stringElement = alice._mixedItems!.OfType<_.System.String>().Single();
 
-        var stringElement = aliceMixed.Single(d => d.GetType() == stringType);
-
-        // Use the implicit operator via reflection
-        var implicitOp = stringType.GetMethods(BindingFlags.Public | BindingFlags.Static)
-            .Single(m => m.Name == "op_Implicit" && m.ReturnType == typeof(string));
-        var result = (string?)implicitOp.Invoke(null, [stringElement]);
+        // Use the implicit operator directly
+        string? result = stringElement;
         Assert.Equal("hello", result);
     }
 
     [Fact]
     public void Proxies_SystemString_ValuePropertyReturnsValue()
     {
-        var stringType = ProxyType("System.String");
-        var customers = GetInstances("Ndump.TestApp.Customer");
+        var customers = Customer.GetInstances(Context).ToList();
 
         // Charlie has "world" in _mixedItems
-        var charlie = customers.Single(c => (string?)c._name == "Charlie");
-        var charlieMixed = ((IEnumerable)charlie._mixedItems).Cast<dynamic>().ToList();
-
-        var stringElement = charlieMixed.Single(d => ((object)d).GetType() == stringType);
-        Assert.Equal("world", (string?)stringElement.Value);
+        var charlie = customers.Single(c => c._name == "Charlie");
+        var stringElement = charlie._mixedItems!.OfType<_.System.String>().Single();
+        Assert.Equal("world", stringElement.Value);
     }
 
     [Fact]
     public void Proxies_CustomerHasDictionaryField()
     {
-        var customerType = ProxyType("Ndump.TestApp.Customer");
-
-        var scoresProp = customerType.GetProperty("_scores");
+        var scoresProp = typeof(Customer).GetProperty("_scores");
         Assert.NotNull(scoresProp);
 
         // The property type should be a closed generic proxy type
-        var scoresType = scoresProp.PropertyType;
+        var scoresType = scoresProp!.PropertyType;
         Assert.True(scoresType.IsGenericType);
         Assert.Equal("Dictionary`2", scoresType.Name);
         Assert.Equal("_.System.Collections.Generic", scoresType.Namespace);
@@ -525,71 +472,67 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_DictionaryProxy_CanReadCount()
     {
-        var customers = GetInstances("Ndump.TestApp.Customer");
+        var customers = Customer.GetInstances(Context).ToList();
 
         // Alice has {"math": 95, "science": 87} — count = 2
-        var alice = customers.Single(c => (string?)c._name == "Alice");
-        dynamic aliceScores = alice._scores;
-        Assert.Equal(2, (int)aliceScores._count);
+        var alice = customers.Single(c => c._name == "Alice");
+        Assert.Equal(2, alice._scores!._count);
 
         // Bob has {"art": 72} — count = 1
-        var bob = customers.Single(c => (string?)c._name == "Bob");
-        dynamic bobScores = bob._scores;
-        Assert.Equal(1, (int)bobScores._count);
+        var bob = customers.Single(c => c._name == "Bob");
+        Assert.Equal(1, bob._scores!._count);
 
         // Charlie has {"math": 100, "art": 88, "science": 91} — count = 3
-        var charlie = customers.Single(c => (string?)c._name == "Charlie");
-        dynamic charlieScores = charlie._scores;
-        Assert.Equal(3, (int)charlieScores._count);
+        var charlie = customers.Single(c => c._name == "Charlie");
+        Assert.Equal(3, charlie._scores!._count);
     }
 
     [Fact]
     public void Proxies_DictionaryProxy_HasEntriesAndBuckets()
     {
-        var customers = GetInstances("Ndump.TestApp.Customer");
+        var customers = Customer.GetInstances(Context).ToList();
 
         // Bob has {"art": 72} — 1 entry
-        var bob = customers.Single(c => (string?)c._name == "Bob");
-        dynamic bobScores = bob._scores;
+        var bob = customers.Single(c => c._name == "Bob");
+        var bobScores = bob._scores!;
 
         // _entries returns a DumpArray<Entry> of struct element proxies
-        var entries = ((IEnumerable)bobScores._entries).Cast<dynamic>().ToList();
+        var entries = bobScores._entries!.ToList();
         Assert.True(entries.Count >= 1);
 
         // Each entry is a proper Entry proxy with fields
-        var firstEntry = entries[0];
-        var entryType = ((object)firstEntry).GetType();
+        var entryType = typeof(_.System.Collections.Generic.Dictionary<string, int>.Entry);
         Assert.NotNull(entryType.GetProperty("hashCode"));
         Assert.NotNull(entryType.GetProperty("next"));
         Assert.NotNull(entryType.GetProperty("value"));
 
         // Read the value from the first entry (Bob has {"art": 72}, count=1)
-        Assert.Equal(72, (int)firstEntry.value);
+        Assert.Equal(72, (int)entries[0].value!);
 
-        // _buckets should also exist (int[] array)
-        Assert.NotNull(((object)bobScores).GetType().GetProperty("_buckets"));
+        // _buckets should also exist
+        Assert.NotNull(typeof(_.System.Collections.Generic.Dictionary<string, int>).GetProperty("_buckets"));
     }
 
     [Fact]
     public void Proxies_StringArrayField_ReturnsStringValues()
     {
-        var customers = GetInstances("Ndump.TestApp.Customer");
+        var customers = Customer.GetInstances(Context).ToList();
 
         // Alice has ["vip", "early-adopter"]
-        var alice = customers.Single(c => (string?)c._name == "Alice");
-        var aliceTags = ((IEnumerable)alice._tags).Cast<string?>().ToList();
+        var alice = customers.Single(c => c._name == "Alice");
+        var aliceTags = alice._tags!.ToList();
         Assert.Equal(2, aliceTags.Count);
         Assert.Contains("vip", aliceTags);
         Assert.Contains("early-adopter", aliceTags);
 
         // Bob has ["regular"]
-        var bob = customers.Single(c => (string?)c._name == "Bob");
-        var bobTags = ((IEnumerable)bob._tags).Cast<string?>().ToList();
+        var bob = customers.Single(c => c._name == "Bob");
+        var bobTags = bob._tags!.ToList();
         Assert.Equal(["regular"], bobTags);
 
         // Charlie has ["vip", "premium", "newsletter"]
-        var charlie = customers.Single(c => (string?)c._name == "Charlie");
-        var charlieTags = ((IEnumerable)charlie._tags).Cast<string?>().ToList();
+        var charlie = customers.Single(c => c._name == "Charlie");
+        var charlieTags = charlie._tags!.ToList();
         Assert.Equal(3, charlieTags.Count);
         Assert.Contains("premium", charlieTags);
     }
@@ -617,16 +560,14 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_OrderHasNullableProperties()
     {
-        var orderType = ProxyType("Ndump.TestApp.Order");
-
-        var ratingProp = orderType.GetProperty("_rating");
+        var ratingProp = typeof(Order).GetProperty("_rating");
         Assert.NotNull(ratingProp);
-        Assert.Equal(typeof(int?), ratingProp.PropertyType);
+        Assert.Equal(typeof(int?), ratingProp!.PropertyType);
 
-        var shippedAtProp = orderType.GetProperty("_shippedAt");
+        var shippedAtProp = typeof(Order).GetProperty("_shippedAt");
         Assert.NotNull(shippedAtProp);
         // _shippedAt is _.System.DateTime? (nullable proxy struct)
-        Assert.True(Nullable.GetUnderlyingType(shippedAtProp.PropertyType) is not null
+        Assert.True(Nullable.GetUnderlyingType(shippedAtProp!.PropertyType) is not null
                     || shippedAtProp.PropertyType.IsClass,
             "_shippedAt should be a nullable or class type");
     }
@@ -634,10 +575,10 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_NullableIntField_HasValue()
     {
-        var orders = GetInstances("Ndump.TestApp.Order");
+        var orders = Order.GetInstances(Context).ToList();
 
         // order1 has rating=5
-        var order1 = orders.Single(o => (int)o._orderId == 1001);
+        var order1 = orders.Single(o => o._orderId == 1001);
         int? rating = order1._rating;
         Assert.NotNull(rating);
         Assert.Equal(5, rating!.Value);
@@ -646,10 +587,10 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_NullableIntField_IsNull()
     {
-        var orders = GetInstances("Ndump.TestApp.Order");
+        var orders = Order.GetInstances(Context).ToList();
 
         // order3 has no rating (null)
-        var order3 = orders.Single(o => (int)o._orderId == 1003);
+        var order3 = orders.Single(o => o._orderId == 1003);
         int? rating = order3._rating;
         Assert.Null(rating);
     }
@@ -657,10 +598,10 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_NullableIntField_PartiallySet()
     {
-        var orders = GetInstances("Ndump.TestApp.Order");
+        var orders = Order.GetInstances(Context).ToList();
 
         // order2 has shippedAt set but rating is null
-        var order2 = orders.Single(o => (int)o._orderId == 1002);
+        var order2 = orders.Single(o => o._orderId == 1002);
         int? rating = order2._rating;
         Assert.Null(rating);
     }
@@ -668,40 +609,40 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
     [Fact]
     public void Proxies_NullableStructField_HasValue()
     {
-        var orders = GetInstances("Ndump.TestApp.Order");
+        var orders = Order.GetInstances(Context).ToList();
 
         // order1 has shippedAt=2025-06-15
-        var order1 = orders.Single(o => (int)o._orderId == 1001);
+        var order1 = orders.Single(o => o._orderId == 1001);
         var shippedAt = order1._shippedAt;
-        Assert.NotNull((object?)shippedAt);
+        Assert.NotNull(shippedAt);
     }
 
     [Fact]
     public void Proxies_NullableStructField_IsNull()
     {
-        var orders = GetInstances("Ndump.TestApp.Order");
+        var orders = Order.GetInstances(Context).ToList();
 
         // order3 has no shippedAt (null)
-        var order3 = orders.Single(o => (int)o._orderId == 1003);
+        var order3 = orders.Single(o => o._orderId == 1003);
         var shippedAt = order3._shippedAt;
-        Assert.Null((object?)shippedAt);
+        Assert.Null(shippedAt);
     }
 
     [Fact]
     public void Proxies_NullableStructField_PartiallySet()
     {
-        var orders = GetInstances("Ndump.TestApp.Order");
+        var orders = Order.GetInstances(Context).ToList();
 
         // order2 has shippedAt=2025-07-01 but no rating
-        var order2 = orders.Single(o => (int)o._orderId == 1002);
+        var order2 = orders.Single(o => o._orderId == 1002);
         var shippedAt = order2._shippedAt;
-        Assert.NotNull((object?)shippedAt);
+        Assert.NotNull(shippedAt);
     }
 
     [Fact]
     public void Proxies_NullableDoesNotGenerateSeparateProxy()
     {
-        // System.Nullable<...> should NOT have its own proxy type
-        Assert.Null(Assembly.GetType("_.System.Nullable`1"));
+        // System.Nullable<...> should NOT have its own proxy type — verify via runtime-compiled assembly
+        Assert.Null(Result.GeneratedAssembly.GetType("_.System.Nullable`1"));
     }
 }
