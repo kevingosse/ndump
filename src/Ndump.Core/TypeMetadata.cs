@@ -23,6 +23,18 @@ public sealed class FieldInfo
     /// For array fields, the kind of the array element.
     /// </summary>
     public FieldKind? ArrayElementKind { get; init; }
+
+    /// <summary>
+    /// For Nullable&lt;T&gt; value type fields, the resolved inner type name (e.g., "System.DateTime").
+    /// Set when ClrMD reports the Nullable type with unresolved type params but the concrete inner
+    /// type can be resolved from the value sub-field.
+    /// </summary>
+    public string? NullableInnerTypeName { get; init; }
+
+    /// <summary>
+    /// True if this field is a Nullable&lt;T&gt; value type with a resolved inner type.
+    /// </summary>
+    public bool IsNullableValueType => NullableInnerTypeName is not null;
 }
 
 public enum FieldKind

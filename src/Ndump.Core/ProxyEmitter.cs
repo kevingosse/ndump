@@ -987,6 +987,37 @@ public sealed class ProxyEmitter
         sb.AppendLine("        return factory?.Invoke(address, ctx, structTypeName) ?? throw new global::System.InvalidOperationException($\"No FromInterior factory on {proxyType}\");");
         sb.AppendLine("    }");
         sb.AppendLine();
+        sb.AppendLine("    protected T? NullableField<T>([CallerMemberName] string fieldName = \"\") where T : struct");
+        sb.AppendLine("    {");
+        sb.AppendLine("        if (_isStructElement)");
+        sb.AppendLine("            return _ctx.GetStructArrayElementNullableFieldValue<T>(_arrayAddr, _arrayIndex, fieldName);");
+        sb.AppendLine("        if (_interiorTypeName is not null)");
+        sb.AppendLine("            return _ctx.GetNullableFieldValue<T>(_objAddress, _interiorTypeName, fieldName);");
+        sb.AppendLine("        return _ctx.GetNullableFieldValue<T>(_objAddress, fieldName);");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    protected T? NullableStructField<T>(string innerTypeName, [CallerMemberName] string fieldName = \"\") where T : class");
+        sb.AppendLine("    {");
+        sb.AppendLine("        (bool hasValue, ulong valueAddr) info;");
+        sb.AppendLine("        if (_isStructElement)");
+        sb.AppendLine("            info = _ctx.GetStructArrayElementNullableFieldInfo(_arrayAddr, _arrayIndex, fieldName);");
+        sb.AppendLine("        else if (_interiorTypeName is not null)");
+        sb.AppendLine("            info = _ctx.GetNullableFieldInfo(_objAddress, _interiorTypeName, fieldName);");
+        sb.AppendLine("        else");
+        sb.AppendLine("            info = _ctx.GetNullableFieldInfo(_objAddress, fieldName);");
+        sb.AppendLine("        if (!info.hasValue) return null;");
+        sb.AppendLine("        return (T)CreateInteriorProxy(typeof(T), info.valueAddr, _ctx, innerTypeName);");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    protected ulong RawFieldAddress([CallerMemberName] string fieldName = \"\")");
+        sb.AppendLine("    {");
+        sb.AppendLine("        if (_isStructElement)");
+        sb.AppendLine("            return _ctx.GetStructArrayElementValueTypeFieldAddress(_arrayAddr, _arrayIndex, fieldName);");
+        sb.AppendLine("        if (_interiorTypeName is not null)");
+        sb.AppendLine("            return _ctx.GetInteriorValueTypeFieldAddress(_objAddress, _interiorTypeName, fieldName);");
+        sb.AppendLine("        return _ctx.GetValueTypeFieldAddress(_objAddress, fieldName);");
+        sb.AppendLine("    }");
+        sb.AppendLine();
         sb.AppendLine("    protected ulong RefAddress([CallerMemberName] string fieldName = \"\")");
         sb.AppendLine("        => _isStructElement");
         sb.AppendLine("            ? _ctx.GetStructArrayElementObjectAddress(_arrayAddr, _arrayIndex, fieldName)");
@@ -1154,7 +1185,13 @@ public sealed class ProxyEmitter
     }
 
     private static bool IsUselessValueType(string? typeName) => typeName is
-        null or "System.Void" or "System.ValueType";
+        null or "System.ValueType";
+
+    /// <summary>
+    /// True if the type name is System.Void — a type that ClrMD reports when it cannot resolve
+    /// the actual type of a value type field (e.g., delegates, types never instantiated on the heap).
+    /// </summary>
+    private static bool IsVoidType(string? typeName) => typeName is "System.Void";
 
     /// <summary>
     /// Check if a value type name has unresolved generic type parameters (e.g., "System.Nullable&lt;T1&gt;").
@@ -1169,8 +1206,55 @@ public sealed class ProxyEmitter
         return args.Any(a => !a.Contains('.'));
     }
 
+    /// <summary>
+    /// Map a resolved Nullable inner type name to the C# primitive keyword.
+    /// Returns null if the type is not a primitive (e.g., DateTime is a struct, not a primitive).
+    /// </summary>
+    private static string? MapNullableInnerToCs(string innerTypeName)
+    {
+        return innerTypeName switch
+        {
+            "System.Boolean" => "bool",
+            "System.Char" => "char",
+            "System.SByte" => "sbyte",
+            "System.Byte" => "byte",
+            "System.Int16" => "short",
+            "System.UInt16" => "ushort",
+            "System.Int32" => "int",
+            "System.UInt32" => "uint",
+            "System.Int64" => "long",
+            "System.UInt64" => "ulong",
+            "System.Single" => "float",
+            "System.Double" => "double",
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Check if a Nullable inner type name is a primitive (can be read with NullableField&lt;T&gt;).
+    /// </summary>
+    private static bool IsNullablePrimitive(string innerTypeName)
+        => MapNullableInnerToCs(innerTypeName) is not null;
+
     private void EmitValueTypeProperty(StringBuilder sb, FieldInfo field, string propName)
     {
+        // Handle Nullable<T> with a resolved inner type
+        if (field.IsNullableValueType)
+        {
+            EmitNullableProperty(sb, field, propName);
+            return;
+        }
+
+        // Handle System.Void — expose raw interior address
+        if (IsVoidType(field.ReferenceTypeName))
+        {
+            if (propName == field.Name)
+                sb.AppendLine($"    public ulong {propName} => RawFieldAddress();");
+            else
+                sb.AppendLine($"    public ulong {propName} => RawFieldAddress(\"{field.Name}\");");
+            return;
+        }
+
         if (!IsUselessValueType(field.ReferenceTypeName)
             && !HasUnresolvedTypeParams(field.ReferenceTypeName!)
             && IsUsableProxyType(field.ReferenceTypeName))
@@ -1184,6 +1268,34 @@ public sealed class ProxyEmitter
         else
         {
             sb.AppendLine($"    // ValueType field: {field.Name} ({field.ReferenceTypeName ?? field.TypeName}) — no proxy available");
+        }
+    }
+
+    private void EmitNullableProperty(StringBuilder sb, FieldInfo field, string propName)
+    {
+        var innerType = field.NullableInnerTypeName!;
+        var csType = MapNullableInnerToCs(innerType);
+
+        if (csType is not null)
+        {
+            // Nullable primitive: emit as T? using NullableField<T>()
+            if (propName == field.Name)
+                sb.AppendLine($"    public {csType}? {propName} => NullableField<{csType}>();");
+            else
+                sb.AppendLine($"    public {csType}? {propName} => NullableField<{csType}>(\"{field.Name}\");");
+        }
+        else if (IsUsableProxyType(innerType))
+        {
+            // Nullable complex struct with known proxy: emit with NullableStructField
+            var qualifiedProxyType = GetFullyQualifiedProxyType(innerType);
+            if (propName == field.Name)
+                sb.AppendLine($"    public {qualifiedProxyType}? {propName} => NullableStructField<{qualifiedProxyType}>(\"{innerType}\");");
+            else
+                sb.AppendLine($"    public {qualifiedProxyType}? {propName} => NullableStructField<{qualifiedProxyType}>(\"{innerType}\", \"{field.Name}\");");
+        }
+        else
+        {
+            sb.AppendLine($"    // Nullable<{innerType}> field: {field.Name} — inner type has no proxy available");
         }
     }
 

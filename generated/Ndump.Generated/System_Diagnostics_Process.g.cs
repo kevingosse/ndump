@@ -45,13 +45,13 @@ public sealed class Process : _.System.ComponentModel.Component
 
     public bool _watchingForExit => Field<bool>();
 
-    // ValueType field: _onExited (System.Void) — no proxy available
+    public ulong _onExited => RawFieldAddress();
 
     public bool _exited => Field<bool>();
 
     public int _exitCode => Field<int>();
 
-    // ValueType field: _startTime (System.Nullable<T1>) — no proxy available
+    public _.System.DateTime? _startTime => NullableStructField<_.System.DateTime>("System.DateTime");
 
     public _.System.DateTime _exitTime => StructField<_.System.DateTime>("System.DateTime");
 
@@ -63,7 +63,7 @@ public sealed class Process : _.System.ComponentModel.Component
 
     public bool _raisedOnExited => Field<bool>();
 
-    // ValueType field: _registeredWaitHandle (System.Void) — no proxy available
+    public ulong _registeredWaitHandle => RawFieldAddress();
 
     public _.System.Threading.WaitHandle? _waitHandle => Field<_.System.Threading.WaitHandle>();
 
@@ -93,7 +93,7 @@ public sealed class Process : _.System.ComponentModel.Component
 
     public bool _pendingErrorRead => Field<bool>();
 
-    // ValueType field: <SynchronizingObject>k__BackingField (System.Void) — no proxy available
+    public ulong SynchronizingObject => RawFieldAddress("<SynchronizingObject>k__BackingField");
 
     public string? _processName => Field<string>();
 

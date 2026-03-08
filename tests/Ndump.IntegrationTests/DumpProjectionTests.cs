@@ -593,4 +593,115 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
         Assert.Equal(3, charlieTags.Count);
         Assert.Contains("premium", charlieTags);
     }
+
+    // ── Nullable<T> field tests ──────────────────────────────────────
+
+    [Fact]
+    public void TypeInspector_OrderHasNullableFields()
+    {
+        using var ctx = DumpContext.Open(_fixture.DumpPath);
+        var inspector = new TypeInspector();
+        var types = inspector.DiscoverTypes(ctx);
+
+        var order = types.Single(t => t.FullName == "Ndump.TestApp.Order");
+
+        var shippedAt = order.Fields.Single(f => f.Name == "_shippedAt");
+        Assert.True(shippedAt.IsNullableValueType);
+        Assert.Equal("System.DateTime", shippedAt.NullableInnerTypeName);
+
+        var rating = order.Fields.Single(f => f.Name == "_rating");
+        Assert.True(rating.IsNullableValueType);
+        Assert.Equal("System.Int32", rating.NullableInnerTypeName);
+    }
+
+    [Fact]
+    public void Proxies_OrderHasNullableProperties()
+    {
+        var orderType = ProxyType("Ndump.TestApp.Order");
+
+        var ratingProp = orderType.GetProperty("_rating");
+        Assert.NotNull(ratingProp);
+        Assert.Equal(typeof(int?), ratingProp.PropertyType);
+
+        var shippedAtProp = orderType.GetProperty("_shippedAt");
+        Assert.NotNull(shippedAtProp);
+        // _shippedAt is _.System.DateTime? (nullable proxy struct)
+        Assert.True(Nullable.GetUnderlyingType(shippedAtProp.PropertyType) is not null
+                    || shippedAtProp.PropertyType.IsClass,
+            "_shippedAt should be a nullable or class type");
+    }
+
+    [Fact]
+    public void Proxies_NullableIntField_HasValue()
+    {
+        var orders = GetInstances("Ndump.TestApp.Order");
+
+        // order1 has rating=5
+        var order1 = orders.Single(o => (int)o._orderId == 1001);
+        int? rating = order1._rating;
+        Assert.NotNull(rating);
+        Assert.Equal(5, rating!.Value);
+    }
+
+    [Fact]
+    public void Proxies_NullableIntField_IsNull()
+    {
+        var orders = GetInstances("Ndump.TestApp.Order");
+
+        // order3 has no rating (null)
+        var order3 = orders.Single(o => (int)o._orderId == 1003);
+        int? rating = order3._rating;
+        Assert.Null(rating);
+    }
+
+    [Fact]
+    public void Proxies_NullableIntField_PartiallySet()
+    {
+        var orders = GetInstances("Ndump.TestApp.Order");
+
+        // order2 has shippedAt set but rating is null
+        var order2 = orders.Single(o => (int)o._orderId == 1002);
+        int? rating = order2._rating;
+        Assert.Null(rating);
+    }
+
+    [Fact]
+    public void Proxies_NullableStructField_HasValue()
+    {
+        var orders = GetInstances("Ndump.TestApp.Order");
+
+        // order1 has shippedAt=2025-06-15
+        var order1 = orders.Single(o => (int)o._orderId == 1001);
+        var shippedAt = order1._shippedAt;
+        Assert.NotNull((object?)shippedAt);
+    }
+
+    [Fact]
+    public void Proxies_NullableStructField_IsNull()
+    {
+        var orders = GetInstances("Ndump.TestApp.Order");
+
+        // order3 has no shippedAt (null)
+        var order3 = orders.Single(o => (int)o._orderId == 1003);
+        var shippedAt = order3._shippedAt;
+        Assert.Null((object?)shippedAt);
+    }
+
+    [Fact]
+    public void Proxies_NullableStructField_PartiallySet()
+    {
+        var orders = GetInstances("Ndump.TestApp.Order");
+
+        // order2 has shippedAt=2025-07-01 but no rating
+        var order2 = orders.Single(o => (int)o._orderId == 1002);
+        var shippedAt = order2._shippedAt;
+        Assert.NotNull((object?)shippedAt);
+    }
+
+    [Fact]
+    public void Proxies_NullableDoesNotGenerateSeparateProxy()
+    {
+        // System.Nullable<...> should NOT have its own proxy type
+        Assert.Null(Assembly.GetType("_.System.Nullable`1"));
+    }
 }

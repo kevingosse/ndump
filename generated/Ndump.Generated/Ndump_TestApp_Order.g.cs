@@ -15,6 +15,10 @@ public sealed class Order : _.System.Object
 
     public _.System.DateTime _createdAt => StructField<_.System.DateTime>("System.DateTime");
 
+    public _.System.DateTime? _shippedAt => NullableStructField<_.System.DateTime>("System.DateTime");
+
+    public int? _rating => NullableField<int>();
+
     public static new Order FromAddress(ulong address, DumpContext ctx)
         => new Order(address, ctx);
 

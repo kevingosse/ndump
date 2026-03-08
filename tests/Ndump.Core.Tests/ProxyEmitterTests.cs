@@ -1239,4 +1239,257 @@ public class ProxyEmitterTests
         Assert.Null(def);
         Assert.Empty(args);
     }
+
+    [Fact]
+    public void GenerateProxy_NullablePrimitiveField_EmitsNullableProperty()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "MyApp.Order",
+            Namespace = "MyApp",
+            Name = "Order",
+            Fields =
+            [
+                new FieldInfo
+                {
+                    Name = "_rating",
+                    TypeName = "object",
+                    Kind = FieldKind.ValueType,
+                    ReferenceTypeName = "System.Nullable<T1>",
+                    NullableInnerTypeName = "System.Int32"
+                }
+            ]
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        Assert.Contains("public int? _rating => NullableField<int>();", code);
+    }
+
+    [Fact]
+    public void GenerateProxy_NullablePrimitiveField_BackingField_EmitsNullableWithName()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "MyApp.Order",
+            Namespace = "MyApp",
+            Name = "Order",
+            Fields =
+            [
+                new FieldInfo
+                {
+                    Name = "<Rating>k__BackingField",
+                    TypeName = "object",
+                    Kind = FieldKind.ValueType,
+                    ReferenceTypeName = "System.Nullable<T1>",
+                    NullableInnerTypeName = "System.Int32"
+                }
+            ]
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        Assert.Contains("public int? Rating => NullableField<int>(\"<Rating>k__BackingField\");", code);
+    }
+
+    [Fact]
+    public void GenerateProxy_NullableStructField_WithKnownProxy_EmitsNullableStructProperty()
+    {
+        var dateTimeType = new TypeMetadata
+        {
+            FullName = "System.DateTime",
+            Namespace = "System",
+            Name = "DateTime",
+            Fields = [],
+            IsValueType = true
+        };
+        var type = new TypeMetadata
+        {
+            FullName = "MyApp.Order",
+            Namespace = "MyApp",
+            Name = "Order",
+            Fields =
+            [
+                new FieldInfo
+                {
+                    Name = "_shippedAt",
+                    TypeName = "object",
+                    Kind = FieldKind.ValueType,
+                    ReferenceTypeName = "System.Nullable<T1>",
+                    NullableInnerTypeName = "System.DateTime"
+                }
+            ]
+        };
+
+        var code = _emitter.GenerateProxyCode(type, allTypes: [dateTimeType, type]);
+
+        Assert.Contains("public _.System.DateTime? _shippedAt => NullableStructField<_.System.DateTime>(\"System.DateTime\");", code);
+    }
+
+    [Fact]
+    public void GenerateProxy_NullableField_UnknownInnerType_EmitsComment()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "MyApp.Foo",
+            Namespace = "MyApp",
+            Name = "Foo",
+            Fields =
+            [
+                new FieldInfo
+                {
+                    Name = "_data",
+                    TypeName = "object",
+                    Kind = FieldKind.ValueType,
+                    ReferenceTypeName = "System.Nullable<T1>",
+                    NullableInnerTypeName = "SomeLib.UnknownStruct"
+                }
+            ]
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        Assert.Contains("// Nullable<SomeLib.UnknownStruct> field: _data", code);
+    }
+
+    [Fact]
+    public void GenerateProxy_VoidField_EmitsRawFieldAddress()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "MyApp.Holder",
+            Namespace = "MyApp",
+            Name = "Holder",
+            Fields =
+            [
+                new FieldInfo
+                {
+                    Name = "_callback",
+                    TypeName = "object",
+                    Kind = FieldKind.ValueType,
+                    ReferenceTypeName = "System.Void"
+                }
+            ]
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        Assert.Contains("public ulong _callback => RawFieldAddress();", code);
+    }
+
+    [Fact]
+    public void GenerateProxy_VoidField_BackingField_EmitsRawFieldAddressWithName()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "MyApp.Holder",
+            Namespace = "MyApp",
+            Name = "Holder",
+            Fields =
+            [
+                new FieldInfo
+                {
+                    Name = "<Callback>k__BackingField",
+                    TypeName = "object",
+                    Kind = FieldKind.ValueType,
+                    ReferenceTypeName = "System.Void"
+                }
+            ]
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        Assert.Contains("public ulong Callback => RawFieldAddress(\"<Callback>k__BackingField\");", code);
+    }
+
+    [Fact]
+    public void Compile_NullablePrimitiveField_Succeeds()
+    {
+        var compiler = new ProxyCompiler();
+        var sysObj = new TypeMetadata
+        {
+            FullName = "System.Object",
+            Namespace = "System",
+            Name = "Object",
+            Fields = []
+        };
+
+        var type = new TypeMetadata
+        {
+            FullName = "MyApp.Order",
+            Namespace = "MyApp",
+            Name = "Order",
+            BaseTypeName = "System.Object",
+            Fields =
+            [
+                new FieldInfo
+                {
+                    Name = "_rating",
+                    TypeName = "object",
+                    Kind = FieldKind.ValueType,
+                    ReferenceTypeName = "System.Nullable<T1>",
+                    NullableInnerTypeName = "System.Int32"
+                }
+            ]
+        };
+
+        var allTypes = new[] { sysObj, type };
+        var sysObjCode = _emitter.GenerateProxyCode(sysObj, allTypes: allTypes);
+        var code = _emitter.GenerateProxyCode(type, allTypes: allTypes);
+
+        var result = compiler.CompileFromSource([sysObjCode, code]);
+        Assert.True(result.IsSuccess, string.Join("\n", result.Errors));
+
+        var proxyType = result.Assembly!.GetType("_.MyApp.Order");
+        Assert.NotNull(proxyType);
+
+        var ratingProp = proxyType.GetProperty("_rating");
+        Assert.NotNull(ratingProp);
+        Assert.Equal(typeof(int?), ratingProp.PropertyType);
+    }
+
+    [Fact]
+    public void Compile_VoidField_Succeeds()
+    {
+        var compiler = new ProxyCompiler();
+        var sysObj = new TypeMetadata
+        {
+            FullName = "System.Object",
+            Namespace = "System",
+            Name = "Object",
+            Fields = []
+        };
+
+        var type = new TypeMetadata
+        {
+            FullName = "MyApp.Holder",
+            Namespace = "MyApp",
+            Name = "Holder",
+            BaseTypeName = "System.Object",
+            Fields =
+            [
+                new FieldInfo
+                {
+                    Name = "_callback",
+                    TypeName = "object",
+                    Kind = FieldKind.ValueType,
+                    ReferenceTypeName = "System.Void"
+                }
+            ]
+        };
+
+        var allTypes = new[] { sysObj, type };
+        var sysObjCode = _emitter.GenerateProxyCode(sysObj, allTypes: allTypes);
+        var code = _emitter.GenerateProxyCode(type, allTypes: allTypes);
+
+        var result = compiler.CompileFromSource([sysObjCode, code]);
+        Assert.True(result.IsSuccess, string.Join("\n", result.Errors));
+
+        var proxyType = result.Assembly!.GetType("_.MyApp.Holder");
+        Assert.NotNull(proxyType);
+
+        var callbackProp = proxyType.GetProperty("_callback");
+        Assert.NotNull(callbackProp);
+        Assert.Equal(typeof(ulong), callbackProp.PropertyType);
+    }
 }

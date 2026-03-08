@@ -11,13 +11,17 @@ public class Order
     private double _total;
     private string _description;
     private DateTime _createdAt;
+    private DateTime? _shippedAt;
+    private int? _rating;
 
-    public Order(int orderId, double total, string description)
+    public Order(int orderId, double total, string description, DateTime? shippedAt = null, int? rating = null)
     {
         _orderId = orderId;
         _total = total;
         _description = description;
         _createdAt = DateTime.UtcNow;
+        _shippedAt = shippedAt;
+        _rating = rating;
     }
 }
 
@@ -125,8 +129,8 @@ class Program
         var addr1 = new Address("123 Main St", "Springfield", 62701);
         var addr2 = new Address("456 Oak Ave", "Shelbyville", 62702);
 
-        var order1 = new Order(1001, 29.99, "Widget order");
-        var order2 = new Order(1002, 149.50, "Gadget bulk order");
+        var order1 = new Order(1001, 29.99, "Widget order", shippedAt: new DateTime(2025, 6, 15), rating: 5);
+        var order2 = new Order(1002, 149.50, "Gadget bulk order", shippedAt: new DateTime(2025, 7, 1));
         var order3 = new Order(1003, 5.00, "Small item");
 
         var tag1 = new Tag("important", 1);

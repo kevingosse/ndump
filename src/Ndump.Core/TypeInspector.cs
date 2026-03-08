@@ -53,7 +53,8 @@ public sealed class TypeInspector
                 {
                     if (field.IsValueType && field.Type is { IsValueType: true, IsPrimitive: false, Name: not null }
                         && field.Type.Name != "System.String" && !ShouldExclude(field.Type.Name)
-                        && !IsExcludedValueType(field.Type.Name))
+                        && !IsExcludedValueType(field.Type.Name)
+                        && !IsNullableType(field.Type.Name))
                     {
                         pendingValueTypes.Add(field.Type);
                     }
@@ -148,12 +149,105 @@ public sealed class TypeInspector
             };
         }
 
+        // Detect Nullable<T> value type fields — both resolved and unresolved
+        if (kind == FieldKind.ValueType && field.Type?.Name is not null
+            && IsNullableType(field.Type.Name))
+        {
+            var resolvedInner = TryResolveNullableInnerType(field);
+            if (resolvedInner is not null)
+            {
+                return new FieldInfo
+                {
+                    Name = field.Name ?? "<unknown>",
+                    TypeName = MapClrTypeToCs(field, kind),
+                    Kind = kind,
+                    ReferenceTypeName = field.Type.Name,
+                    NullableInnerTypeName = resolvedInner
+                };
+            }
+        }
+
         return new FieldInfo
         {
             Name = field.Name ?? "<unknown>",
             TypeName = MapClrTypeToCs(field, kind),
             Kind = kind,
             ReferenceTypeName = kind is FieldKind.ObjectReference or FieldKind.ValueType ? field.Type?.Name : null
+        };
+    }
+
+    /// <summary>
+    /// For a Nullable&lt;T&gt; field, resolve the concrete inner type.
+    /// For resolved names (e.g., System.Nullable&lt;System.DateTime&gt;), extract from the name.
+    /// For unresolved names (e.g., System.Nullable&lt;T1&gt;), examine ClrMD sub-fields.
+    /// </summary>
+    private static string? TryResolveNullableInnerType(ClrInstanceField field)
+    {
+        if (field.Type is null) return null;
+
+        // If the type name is already resolved (no unresolved params), extract inner type from the name
+        if (!HasUnresolvedTypeParams(field.Type.Name!))
+        {
+            var (_, args) = ParseGenericName(field.Type.Name!);
+            if (args.Count == 1) return args[0];
+        }
+
+        // Otherwise, probe the "value" sub-field of the Nullable struct
+        var valueField = field.Type.GetFieldByName("value");
+        if (valueField is null) return null;
+
+        // First check: does the value sub-field have a resolved type name?
+        if (valueField.Type?.Name is not null
+            && !valueField.Type.Name.Contains("T1") && !valueField.Type.Name.Contains("T2"))
+        {
+            return valueField.Type.Name;
+        }
+
+        // Fallback: use the ElementType to determine the primitive type
+        if (valueField.IsPrimitive)
+        {
+            return MapElementTypeToClrName(valueField.ElementType);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Check if a type name is a Nullable&lt;T&gt; type.
+    /// </summary>
+    private static bool IsNullableType(string typeName)
+        => typeName.StartsWith("System.Nullable<", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Check if a type name has unresolved generic type parameters.
+    /// </summary>
+    private static bool HasUnresolvedTypeParams(string typeName)
+    {
+        var angleIdx = typeName.IndexOf('<');
+        if (angleIdx < 0) return false;
+        var (_, args) = ParseGenericName(typeName);
+        return args.Any(a => !a.Contains('.'));
+    }
+
+    private static string? MapElementTypeToClrName(ClrElementType elementType)
+    {
+        return elementType switch
+        {
+            ClrElementType.Boolean => "System.Boolean",
+            ClrElementType.Char => "System.Char",
+            ClrElementType.Int8 => "System.SByte",
+            ClrElementType.UInt8 => "System.Byte",
+            ClrElementType.Int16 => "System.Int16",
+            ClrElementType.UInt16 => "System.UInt16",
+            ClrElementType.Int32 => "System.Int32",
+            ClrElementType.UInt32 => "System.UInt32",
+            ClrElementType.Int64 => "System.Int64",
+            ClrElementType.UInt64 => "System.UInt64",
+            ClrElementType.Float => "System.Single",
+            ClrElementType.Double => "System.Double",
+            ClrElementType.NativeInt => "System.IntPtr",
+            ClrElementType.NativeUInt => "System.UIntPtr",
+            _ => null
         };
     }
 

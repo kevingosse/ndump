@@ -400,6 +400,147 @@ public sealed class DumpContext : IDisposable
         }
     }
 
+    /// <summary>
+    /// Read a Nullable&lt;T&gt; field from a heap object. Returns null if hasValue is false.
+    /// The field's ClrType (System.Nullable&lt;T&gt;) is used to locate the hasValue and value sub-fields.
+    /// </summary>
+    public T? GetNullableFieldValue<T>(ulong objAddress, string fieldName) where T : struct
+    {
+        var obj = Heap.GetObject(objAddress);
+        if (!obj.IsValid)
+            throw new InvalidOperationException($"Invalid object at address 0x{objAddress:X}");
+
+        var type = obj.Type
+            ?? throw new InvalidOperationException($"Cannot resolve type for object at 0x{objAddress:X}");
+
+        var field = type.GetFieldByName(fieldName)
+            ?? throw new InvalidOperationException($"Field '{fieldName}' not found on type '{type.Name}'");
+
+        return ReadNullableFromField<T>(objAddress, field, interior: false);
+    }
+
+    /// <summary>
+    /// Read a Nullable&lt;T&gt; field from a struct at the given interior address.
+    /// </summary>
+    public T? GetNullableFieldValue<T>(ulong address, string typeName, string fieldName) where T : struct
+    {
+        var field = FindFieldByTypeName(typeName, fieldName);
+        return ReadNullableFromField<T>(address, field, interior: true);
+    }
+
+    /// <summary>
+    /// Read a Nullable&lt;T&gt; field from a struct array element.
+    /// </summary>
+    public T? GetStructArrayElementNullableFieldValue<T>(ulong arrayAddress, int index, string fieldName) where T : struct
+    {
+        var obj = Heap.GetObject(arrayAddress);
+        if (!obj.IsValid)
+            throw new InvalidOperationException($"Invalid object at address 0x{arrayAddress:X}");
+
+        var array = obj.AsArray();
+        var elementAddr = array.GetStructValue(index).Address;
+        var componentType = obj.Type!.ComponentType!;
+        var field = componentType.GetFieldByName(fieldName)
+            ?? throw new InvalidOperationException($"Field '{fieldName}' not found on component type '{componentType.Name}'");
+
+        return ReadNullableFromField<T>(elementAddr, field, interior: true);
+    }
+
+    private T? ReadNullableFromField<T>(ulong baseAddr, ClrInstanceField field, bool interior) where T : struct
+    {
+        var nullableType = field.Type
+            ?? throw new InvalidOperationException($"Cannot resolve type for Nullable field '{field.Name}'");
+
+        var nullableAddr = field.GetAddress(baseAddr, interior);
+
+        var hasValueField = nullableType.GetFieldByName("hasValue")
+            ?? throw new InvalidOperationException($"hasValue field not found on Nullable type '{nullableType.Name}'");
+
+        var hasValueAddr = hasValueField.GetAddress(nullableAddr, interior: true);
+        Span<byte> boolBuf = stackalloc byte[1];
+        Runtime.DataTarget.DataReader.Read(hasValueAddr, boolBuf);
+
+        if (boolBuf[0] == 0)
+            return null;
+
+        var valueField = nullableType.GetFieldByName("value")
+            ?? throw new InvalidOperationException($"value field not found on Nullable type '{nullableType.Name}'");
+
+        var valueAddr = valueField.GetAddress(nullableAddr, interior: true);
+        Span<byte> buffer = stackalloc byte[Unsafe.SizeOf<T>()];
+        Runtime.DataTarget.DataReader.Read(valueAddr, buffer);
+        return Unsafe.ReadUnaligned<T>(ref buffer[0]);
+    }
+
+    /// <summary>
+    /// Get the interior address of the value sub-field of a Nullable&lt;T&gt; field on a heap object.
+    /// Used for nullable struct proxies that need to navigate into the value.
+    /// Returns (hasValue, valueAddress).
+    /// </summary>
+    public (bool HasValue, ulong ValueAddress) GetNullableFieldInfo(ulong objAddress, string fieldName)
+    {
+        var obj = Heap.GetObject(objAddress);
+        if (!obj.IsValid)
+            throw new InvalidOperationException($"Invalid object at address 0x{objAddress:X}");
+
+        var type = obj.Type
+            ?? throw new InvalidOperationException($"Cannot resolve type for object at 0x{objAddress:X}");
+
+        var field = type.GetFieldByName(fieldName)
+            ?? throw new InvalidOperationException($"Field '{fieldName}' not found on type '{type.Name}'");
+
+        return ReadNullableInfo(objAddress, field, interior: false);
+    }
+
+    /// <summary>
+    /// Get the interior address of the value sub-field of a Nullable&lt;T&gt; field on an interior struct.
+    /// </summary>
+    public (bool HasValue, ulong ValueAddress) GetNullableFieldInfo(ulong address, string typeName, string fieldName)
+    {
+        var field = FindFieldByTypeName(typeName, fieldName);
+        return ReadNullableInfo(address, field, interior: true);
+    }
+
+    /// <summary>
+    /// Get the interior address of the value sub-field of a Nullable&lt;T&gt; field on a struct array element.
+    /// </summary>
+    public (bool HasValue, ulong ValueAddress) GetStructArrayElementNullableFieldInfo(ulong arrayAddress, int index, string fieldName)
+    {
+        var obj = Heap.GetObject(arrayAddress);
+        if (!obj.IsValid)
+            throw new InvalidOperationException($"Invalid object at address 0x{arrayAddress:X}");
+
+        var array = obj.AsArray();
+        var elementAddr = array.GetStructValue(index).Address;
+        var componentType = obj.Type!.ComponentType!;
+        var field = componentType.GetFieldByName(fieldName)
+            ?? throw new InvalidOperationException($"Field '{fieldName}' not found on component type '{componentType.Name}'");
+
+        return ReadNullableInfo(elementAddr, field, interior: true);
+    }
+
+    private (bool HasValue, ulong ValueAddress) ReadNullableInfo(ulong baseAddr, ClrInstanceField field, bool interior)
+    {
+        var nullableType = field.Type
+            ?? throw new InvalidOperationException($"Cannot resolve type for Nullable field '{field.Name}'");
+
+        var nullableAddr = field.GetAddress(baseAddr, interior);
+
+        var hasValueField = nullableType.GetFieldByName("hasValue")
+            ?? throw new InvalidOperationException($"hasValue field not found on Nullable type '{nullableType.Name}'");
+
+        var hasValueAddr = hasValueField.GetAddress(nullableAddr, interior: true);
+        Span<byte> boolBuf = stackalloc byte[1];
+        Runtime.DataTarget.DataReader.Read(hasValueAddr, boolBuf);
+        var hasValue = boolBuf[0] != 0;
+
+        var valueField = nullableType.GetFieldByName("value")
+            ?? throw new InvalidOperationException($"value field not found on Nullable type '{nullableType.Name}'");
+
+        var valueAddr = valueField.GetAddress(nullableAddr, interior: true);
+        return (hasValue, valueAddr);
+    }
+
     public void Dispose()
     {
         if (_disposed) return;

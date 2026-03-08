@@ -119,6 +119,37 @@ public class Object
         return factory?.Invoke(address, ctx, structTypeName) ?? throw new global::System.InvalidOperationException($"No FromInterior factory on {proxyType}");
     }
 
+    protected T? NullableField<T>([CallerMemberName] string fieldName = "") where T : struct
+    {
+        if (_isStructElement)
+            return _ctx.GetStructArrayElementNullableFieldValue<T>(_arrayAddr, _arrayIndex, fieldName);
+        if (_interiorTypeName is not null)
+            return _ctx.GetNullableFieldValue<T>(_objAddress, _interiorTypeName, fieldName);
+        return _ctx.GetNullableFieldValue<T>(_objAddress, fieldName);
+    }
+
+    protected T? NullableStructField<T>(string innerTypeName, [CallerMemberName] string fieldName = "") where T : class
+    {
+        (bool hasValue, ulong valueAddr) info;
+        if (_isStructElement)
+            info = _ctx.GetStructArrayElementNullableFieldInfo(_arrayAddr, _arrayIndex, fieldName);
+        else if (_interiorTypeName is not null)
+            info = _ctx.GetNullableFieldInfo(_objAddress, _interiorTypeName, fieldName);
+        else
+            info = _ctx.GetNullableFieldInfo(_objAddress, fieldName);
+        if (!info.hasValue) return null;
+        return (T)CreateInteriorProxy(typeof(T), info.valueAddr, _ctx, innerTypeName);
+    }
+
+    protected ulong RawFieldAddress([CallerMemberName] string fieldName = "")
+    {
+        if (_isStructElement)
+            return _ctx.GetStructArrayElementValueTypeFieldAddress(_arrayAddr, _arrayIndex, fieldName);
+        if (_interiorTypeName is not null)
+            return _ctx.GetInteriorValueTypeFieldAddress(_objAddress, _interiorTypeName, fieldName);
+        return _ctx.GetValueTypeFieldAddress(_objAddress, fieldName);
+    }
+
     protected ulong RefAddress([CallerMemberName] string fieldName = "")
         => _isStructElement
             ? _ctx.GetStructArrayElementObjectAddress(_arrayAddr, _arrayIndex, fieldName)
