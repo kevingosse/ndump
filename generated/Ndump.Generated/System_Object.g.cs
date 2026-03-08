@@ -11,9 +11,6 @@ public class Object
     // For interior struct fields: the CLR type name of this struct
     protected readonly string? _interiorTypeName;
 
-    private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::System.Func<ulong, DumpContext, object>?> _proxyFactories = new();
-    private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::System.Func<ulong, DumpContext, string, object>?> _interiorProxyFactories = new();
-
     protected Object(ulong address, DumpContext ctx)
     {
         _objAddress = address;
@@ -66,13 +63,8 @@ public class Object
 
     private static object CreateInteriorProxy(global::System.Type proxyType, ulong address, DumpContext ctx, string structTypeName)
     {
-        var factory = _interiorProxyFactories.GetOrAdd(proxyType, static t =>
-        {
-            var method = t.GetMethod("FromInterior", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static);
-            if (method is null) return null;
-            return (global::System.Func<ulong, DumpContext, string, object>)((a, c, tn) => method.Invoke(null, [a, c, tn])!);
-        });
-        return factory?.Invoke(address, ctx, structTypeName) ?? throw new global::System.InvalidOperationException($"No FromInterior factory on {proxyType}");
+        var method = proxyType.GetMethod("FromInterior", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static);
+        return method?.Invoke(null, [address, ctx, structTypeName]) ?? throw new global::System.InvalidOperationException($"No FromInterior factory on {proxyType}");
     }
 
     protected T? NullableField<T>([CallerMemberName] string fieldName = "") where T : struct
@@ -127,17 +119,12 @@ public class Object
             return (T)(object)_ctx.GetArrayElementString(arrayAddr, index)!;
         if (!typeof(T).IsValueType)
         {
-            var interiorFactory = _interiorProxyFactories.GetOrAdd(typeof(T), static t =>
-            {
-                var method = t.GetMethod("FromInterior", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static);
-                if (method is null) return null;
-                return (global::System.Func<ulong, DumpContext, string, object>)((a, c, tn) => method.Invoke(null, [a, c, tn])!);
-            });
-            if (interiorFactory is not null)
+            var interiorMethod = typeof(T).GetMethod("FromInterior", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static);
+            if (interiorMethod is not null)
             {
                 var ea = _ctx.GetArrayStructElementAddress(arrayAddr, index);
                 var typeName = _ctx.GetArrayComponentTypeName(arrayAddr);
-                return (T)interiorFactory(ea, _ctx, typeName);
+                return (T)interiorMethod.Invoke(null, [ea, _ctx, typeName])!;
             }
             var addr = _ctx.GetArrayElementAddress(arrayAddr, index);
             if (addr == 0) return default!;
@@ -150,18 +137,8 @@ public class Object
     {
         var resolved = global::_.ProxyResolver.Resolve(address, ctx);
         if (resolved is T t) return t;
-        return (T)CreateProxy(typeof(T), address, ctx);
-    }
-
-    private static object CreateProxy(global::System.Type proxyType, ulong address, DumpContext ctx)
-    {
-        var factory = _proxyFactories.GetOrAdd(proxyType, static t =>
-        {
-            var method = t.GetMethod("FromAddress", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static);
-            if (method is null) return null;
-            return (global::System.Func<ulong, DumpContext, object>)((a, c) => method.Invoke(null, [a, c])!);
-        });
-        return factory?.Invoke(address, ctx) ?? throw new global::System.InvalidOperationException($"No FromAddress factory on {proxyType}");
+        var method = typeof(T).GetMethod("FromAddress", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static);
+        return (T)(method?.Invoke(null, [address, ctx]) ?? throw new global::System.InvalidOperationException($"No FromAddress factory on {typeof(T)}"));
     }
 
     public static Object FromAddress(ulong address, DumpContext ctx)
