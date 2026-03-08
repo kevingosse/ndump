@@ -18,16 +18,6 @@ public class Object
     private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::System.Func<ulong, DumpContext, object>?> _proxyFactories = new();
     private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::System.Func<ulong, DumpContext, ulong, int, object>?> _structProxyFactories = new();
     private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::System.Func<ulong, DumpContext, string, object>?> _interiorProxyFactories = new();
-    private static readonly global::System.Func<ulong, DumpContext, object?>? _proxyResolver = ResolveProxyResolverMethod();
-
-    private static global::System.Func<ulong, DumpContext, object?>? ResolveProxyResolverMethod()
-    {
-        var resolverType = typeof(Object).Assembly.GetType("_.ProxyResolver");
-        if (resolverType is null) return null;
-        var method = resolverType.GetMethod("Resolve", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static);
-        if (method is null) return null;
-        return (global::System.Func<ulong, DumpContext, object?>)global::System.Delegate.CreateDelegate(typeof(global::System.Func<ulong, DumpContext, object?>), method);
-    }
 
     protected Object(ulong address, DumpContext ctx)
     {
@@ -65,12 +55,7 @@ public class Object
         {
             var addr = _ctx.GetObjectAddress(_objAddress, fieldName);
             if (addr == 0) return default!;
-            if (_proxyResolver is not null)
-            {
-                var resolved = _proxyResolver(addr, _ctx);
-                if (resolved is T t) return t;
-            }
-            return (T)CreateProxy(typeof(T), addr, _ctx);
+            return ResolveProxy<T>(addr, _ctx);
         }
         return _ctx.GetFieldValue<T>(_objAddress, fieldName);
     }
@@ -83,12 +68,7 @@ public class Object
         {
             var addr = _ctx.GetStructArrayElementObjectAddress(_arrayAddr, _arrayIndex, fieldName);
             if (addr == 0) return default!;
-            if (_proxyResolver is not null)
-            {
-                var resolved = _proxyResolver(addr, _ctx);
-                if (resolved is T t) return t;
-            }
-            return (T)CreateProxy(typeof(T), addr, _ctx);
+            return ResolveProxy<T>(addr, _ctx);
         }
         return _ctx.GetStructArrayElementFieldValue<T>(_arrayAddr, _arrayIndex, fieldName);
     }
@@ -101,12 +81,7 @@ public class Object
         {
             var addr = _ctx.GetObjectAddress(_objAddress, _interiorTypeName!, fieldName);
             if (addr == 0) return default!;
-            if (_proxyResolver is not null)
-            {
-                var resolved = _proxyResolver(addr, _ctx);
-                if (resolved is T t) return t;
-            }
-            return (T)CreateProxy(typeof(T), addr, _ctx);
+            return ResolveProxy<T>(addr, _ctx);
         }
         return _ctx.GetFieldValue<T>(_objAddress, _interiorTypeName!, fieldName);
     }
@@ -205,14 +180,16 @@ public class Object
             }
             var addr = _ctx.GetArrayElementAddress(arrayAddr, index);
             if (addr == 0) return default!;
-            if (_proxyResolver is not null)
-            {
-                var resolved = _proxyResolver(addr, _ctx);
-                if (resolved is T t) return t;
-            }
-            return (T)CreateProxy(typeof(T), addr, _ctx);
+            return ResolveProxy<T>(addr, _ctx);
         }
         return _ctx.GetArrayElementValue<T>(arrayAddr, index);
+    }
+
+    private static T ResolveProxy<T>(ulong address, DumpContext ctx)
+    {
+        var resolved = global::_.ProxyResolver.Resolve(address, ctx);
+        if (resolved is T t) return t;
+        return (T)CreateProxy(typeof(T), address, ctx);
     }
 
     private static object CreateProxy(global::System.Type proxyType, ulong address, DumpContext ctx)

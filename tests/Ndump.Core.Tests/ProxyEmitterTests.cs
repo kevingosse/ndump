@@ -855,10 +855,10 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        // FieldInterior<T> should consult _proxyResolver before falling back to CreateProxy
+        // FieldInterior<T> should use ResolveProxy for polymorphic resolution
         Assert.Contains("private T FieldInterior<T>(string fieldName)", code);
-        // Verify _proxyResolver is used in all three object-ref field accessor methods
-        Assert.Equal(4, CountOccurrences(code, "_proxyResolver(addr, _ctx)"));
+        // Verify ResolveProxy<T> is used in all four object-ref field accessor methods
+        Assert.Equal(4, CountOccurrences(code, "return ResolveProxy<T>(addr, _ctx);"));
     }
 
     [Fact]
@@ -875,8 +875,8 @@ public class ProxyEmitterTests
         var code = _emitter.GenerateProxyCode(type);
 
         // Field<T>, FieldStructElement<T>, FieldInterior<T>, and ReadArrayElement<T>
-        // should all use _proxyResolver — 4 occurrences total
-        Assert.Contains("if (_proxyResolver is not null)", code);
+        // should all use ResolveProxy<T> — 4 occurrences total
+        Assert.Equal(4, CountOccurrences(code, "return ResolveProxy<T>(addr, _ctx);"));
     }
 
     private static int CountOccurrences(string text, string pattern)
@@ -1537,7 +1537,8 @@ public class ProxyEmitterTests
         var sysObjCode = _emitter.GenerateProxyCode(sysObj, allTypes: allTypes);
         var code = _emitter.GenerateProxyCode(type, allTypes: allTypes);
 
-        var result = compiler.CompileFromSource([sysObjCode, code]);
+        var resolverCode = ProxyEmitter.GenerateProxyResolver();
+        var result = compiler.CompileFromSource([sysObjCode, code, resolverCode]);
         Assert.True(result.IsSuccess, string.Join("\n", result.Errors));
 
         var proxyType = result.Assembly!.GetType("_.MyApp.Order");
@@ -1581,8 +1582,9 @@ public class ProxyEmitterTests
         var allTypes = new[] { sysObj, type };
         var sysObjCode = _emitter.GenerateProxyCode(sysObj, allTypes: allTypes);
         var code = _emitter.GenerateProxyCode(type, allTypes: allTypes);
+        var resolverCode = ProxyEmitter.GenerateProxyResolver();
 
-        var result = compiler.CompileFromSource([sysObjCode, code]);
+        var result = compiler.CompileFromSource([sysObjCode, code, resolverCode]);
         Assert.True(result.IsSuccess, string.Join("\n", result.Errors));
 
         var proxyType = result.Assembly!.GetType("_.MyApp.Holder");

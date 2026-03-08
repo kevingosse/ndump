@@ -16,10 +16,12 @@ public class ProxyCompilerTests
     private string GenerateSystemObjectCode()
         => _emitter.GenerateProxyCode(SystemObjectType);
 
+    private string[] GenerateSystemObjectSources()
+        => [GenerateSystemObjectCode(), ProxyEmitter.GenerateProxyResolver()];
+
     [Fact]
     public void Compile_ValidCode_Succeeds()
     {
-        var sysObjCode = GenerateSystemObjectCode();
         var source = """
             using Ndump.Core;
             namespace _.Test;
@@ -33,7 +35,7 @@ public class ProxyCompilerTests
             }
             """;
 
-        var result = _compiler.CompileFromSource([sysObjCode, source]);
+        var result = _compiler.CompileFromSource([..GenerateSystemObjectSources(), source]);
 
         Assert.True(result.IsSuccess, string.Join("\n", result.Errors));
         Assert.NotNull(result.Assembly);
@@ -72,7 +74,8 @@ public class ProxyCompilerTests
 
         var sysObjCode = _emitter.GenerateProxyCode(sysObj, allTypes: [sysObj, type]);
         var code = _emitter.GenerateProxyCode(type, allTypes: [sysObj, type]);
-        var result = _compiler.CompileFromSource([sysObjCode, code]);
+        var resolverCode = ProxyEmitter.GenerateProxyResolver();
+        var result = _compiler.CompileFromSource([sysObjCode, code, resolverCode]);
 
         Assert.True(result.IsSuccess, string.Join("\n", result.Errors));
 
@@ -136,8 +139,9 @@ public class ProxyCompilerTests
         var sysObjCode = _emitter.GenerateProxyCode(sysObj, allTypes: allTypes);
         var orderCode = _emitter.GenerateProxyCode(orderType, allTypes: allTypes);
         var customerCode = _emitter.GenerateProxyCode(customerType, allTypes: allTypes);
+        var resolverCode = ProxyEmitter.GenerateProxyResolver();
 
-        var result = _compiler.CompileFromSource([sysObjCode, orderCode, customerCode]);
+        var result = _compiler.CompileFromSource([sysObjCode, orderCode, customerCode, resolverCode]);
 
         Assert.True(result.IsSuccess, string.Join("\n", result.Errors));
 
@@ -190,8 +194,9 @@ public class ProxyCompilerTests
         var sysObjCode = _emitter.GenerateProxyCode(sysObj, allTypes: allTypes);
         var orderCode = _emitter.GenerateProxyCode(orderType, allTypes: allTypes);
         var customerCode = _emitter.GenerateProxyCode(customerType, allTypes: allTypes);
+        var resolverCode = ProxyEmitter.GenerateProxyResolver();
 
-        var result = _compiler.CompileFromSource([sysObjCode, orderCode, customerCode]);
+        var result = _compiler.CompileFromSource([sysObjCode, orderCode, customerCode, resolverCode]);
 
         Assert.True(result.IsSuccess, string.Join("\n", result.Errors));
 
@@ -245,8 +250,9 @@ public class ProxyCompilerTests
         var sysObjCode = _emitter.GenerateProxyCode(sysObj, allTypes: allTypes);
         var orderCode = _emitter.GenerateProxyCode(orderType, allTypes: allTypes);
         var customerCode = _emitter.GenerateProxyCode(customerType, allTypes: allTypes);
+        var resolverCode = ProxyEmitter.GenerateProxyResolver();
 
-        var result = _compiler.CompileFromSource([sysObjCode, orderCode, customerCode]);
+        var result = _compiler.CompileFromSource([sysObjCode, orderCode, customerCode, resolverCode]);
 
         Assert.True(result.IsSuccess, string.Join("\n", result.Errors));
 
@@ -339,7 +345,8 @@ public class ProxyCompilerTests
         var allTypes = new[] { sysObj, type };
         var sysObjCode = _emitter.GenerateProxyCode(sysObj, allTypes: allTypes);
         var code = _emitter.GenerateProxyCode(type, allTypes: allTypes);
-        var result = _compiler.CompileFromSource([sysObjCode, code]);
+        var resolverCode = ProxyEmitter.GenerateProxyResolver();
+        var result = _compiler.CompileFromSource([sysObjCode, code, resolverCode]);
 
         Assert.True(result.IsSuccess, string.Join("\n", result.Errors));
 
@@ -400,7 +407,8 @@ public class ProxyCompilerTests
         var catCode = _emitter.GenerateProxyCode(cat, allTypes: allTypes);
         var dogCode = _emitter.GenerateProxyCode(dog, allTypes: allTypes);
 
-        var result = _compiler.CompileFromSource([sysObjCode, animalCode, catCode, dogCode]);
+        var resolverCode = ProxyEmitter.GenerateProxyResolver();
+        var result = _compiler.CompileFromSource([sysObjCode, animalCode, catCode, dogCode, resolverCode]);
 
         Assert.True(result.IsSuccess, string.Join("\n", result.Errors));
 
@@ -432,7 +440,6 @@ public class ProxyCompilerTests
     [Fact]
     public void Compile_ToDisk_ProducesFile()
     {
-        var sysObjCode = GenerateSystemObjectCode();
         var source = """
             using Ndump.Core;
             namespace _.Test;
@@ -449,7 +456,7 @@ public class ProxyCompilerTests
         {
             var outputPath = Path.Combine(tempDir, "test.dll");
 
-            var result = _compiler.CompileFromSource([sysObjCode, source], outputPath);
+            var result = _compiler.CompileFromSource([..GenerateSystemObjectSources(), source], outputPath);
             Assert.True(result.IsSuccess, string.Join("\n", result.Errors));
             Assert.True(File.Exists(outputPath));
         }
