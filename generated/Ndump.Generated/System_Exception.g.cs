@@ -19,7 +19,7 @@ public class Exception : _.System.Object
 
     public _.System.Object? _stackTrace => Field<_.System.Object>();
 
-    // Array field: _watsonBuckets (object) — element type not supported
+    public global::Ndump.Core.DumpArray<byte>? _watsonBuckets => ArrayField<byte>();
 
     public string? _stackTraceString => Field<string>();
 

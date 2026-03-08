@@ -7,7 +7,7 @@ public sealed class TraceLoggingEventHandleTable : _.System.Object
 {
     private TraceLoggingEventHandleTable(ulong address, DumpContext ctx) : base(address, ctx) { }
 
-    // Array field: m_innerTable (object) — element type not supported
+    public global::Ndump.Core.DumpArray<nint>? m_innerTable => ArrayField<nint>();
 
     public static new TraceLoggingEventHandleTable FromAddress(ulong address, DumpContext ctx)
         => new TraceLoggingEventHandleTable(address, ctx);

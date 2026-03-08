@@ -427,7 +427,7 @@ public class BehavioralProxyTests : IClassFixture<DumpFixture>
         Assert.Equal(5, (int)label.Priority);
     }
 
-    [Fact(Skip = "Object reference fields in interior structs are typed as _.System.Object and don't use ProxyResolver for polymorphic resolution")]
+    [Fact]
     public void Struct_Label_ReadsObjectRefField_AsConcreteType()
     {
         dynamic obj = GetSingleInstance("Ndump.TestApp.StructHolder");
@@ -441,11 +441,23 @@ public class BehavioralProxyTests : IClassFixture<DumpFixture>
     }
 
     [Fact]
+    public void Struct_Label_ReadsObjectRefField_Data()
+    {
+        dynamic obj = GetSingleInstance("Ndump.TestApp.StructHolder");
+        dynamic label = obj._label;
+        // Metadata was set to tag1 ("important", id=1) — verify data through resolved proxy
+        dynamic meta = label.Metadata;
+        Assert.Equal("important", (string)meta._label);
+        Assert.Equal(1L, (long)meta._id);
+    }
+
+    [Fact]
     public void Struct_Label_ReadsObjectRefField_AsSystemObject()
     {
         dynamic obj = GetSingleInstance("Ndump.TestApp.StructHolder");
         dynamic label = obj._label;
-        // Metadata was set to tag1 - returned as _.System.Object (no polymorphic resolution for interior struct fields)
+        // Metadata was set to tag1 - resolved to concrete Tag proxy via ProxyResolver,
+        // which still passes IsInstanceOfType check since Tag inherits from _.System.Object
         dynamic meta = label.Metadata;
         Assert.NotNull((object?)meta);
         var sysObjType = ProxyType("System.Object");
@@ -501,7 +513,7 @@ public class BehavioralProxyTests : IClassFixture<DumpFixture>
         Assert.Equal([0x01, 0xFF, 0x42], byteArr);
     }
 
-    [Fact(Skip = "double[] arrays are not supported: ProxyEmitter generates 'element type not supported' comment for double[] when ClrMD can't resolve the component type")]
+    [Fact]
     public void PrimitiveArray_Double_ReadsCorrectValues()
     {
         dynamic obj = GetSingleInstance("Ndump.TestApp.ArrayHolder");
@@ -509,12 +521,28 @@ public class BehavioralProxyTests : IClassFixture<DumpFixture>
         Assert.Equal([1.1, 2.2, 3.3], doubleArr);
     }
 
-    [Fact(Skip = "bool[] arrays are not supported: ProxyEmitter generates 'element type not supported' comment for bool[] when ClrMD can't resolve the component type")]
+    [Fact]
+    public void PrimitiveArray_Double_HasCorrectLength()
+    {
+        dynamic obj = GetSingleInstance("Ndump.TestApp.ArrayHolder");
+        var doubleArr = ((IEnumerable)obj._doubleArray).Cast<double>().ToList();
+        Assert.Equal(3, doubleArr.Count);
+    }
+
+    [Fact]
     public void PrimitiveArray_Bool_ReadsCorrectValues()
     {
         dynamic obj = GetSingleInstance("Ndump.TestApp.ArrayHolder");
         var boolArr = ((IEnumerable)obj._boolArray).Cast<bool>().ToList();
         Assert.Equal([true, false, true], boolArr);
+    }
+
+    [Fact]
+    public void PrimitiveArray_Bool_HasCorrectLength()
+    {
+        dynamic obj = GetSingleInstance("Ndump.TestApp.ArrayHolder");
+        var boolArr = ((IEnumerable)obj._boolArray).Cast<bool>().ToList();
+        Assert.Equal(3, boolArr.Count);
     }
 
     [Fact]

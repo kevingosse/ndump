@@ -65,6 +65,11 @@ public class Object
         {
             var addr = _ctx.GetObjectAddress(_objAddress, fieldName);
             if (addr == 0) return default!;
+            if (_proxyResolver is not null)
+            {
+                var resolved = _proxyResolver(addr, _ctx);
+                if (resolved is T t) return t;
+            }
             return (T)CreateProxy(typeof(T), addr, _ctx);
         }
         return _ctx.GetFieldValue<T>(_objAddress, fieldName);
@@ -78,6 +83,11 @@ public class Object
         {
             var addr = _ctx.GetStructArrayElementObjectAddress(_arrayAddr, _arrayIndex, fieldName);
             if (addr == 0) return default!;
+            if (_proxyResolver is not null)
+            {
+                var resolved = _proxyResolver(addr, _ctx);
+                if (resolved is T t) return t;
+            }
             return (T)CreateProxy(typeof(T), addr, _ctx);
         }
         return _ctx.GetStructArrayElementFieldValue<T>(_arrayAddr, _arrayIndex, fieldName);
@@ -91,6 +101,11 @@ public class Object
         {
             var addr = _ctx.GetObjectAddress(_objAddress, _interiorTypeName!, fieldName);
             if (addr == 0) return default!;
+            if (_proxyResolver is not null)
+            {
+                var resolved = _proxyResolver(addr, _ctx);
+                if (resolved is T t) return t;
+            }
             return (T)CreateProxy(typeof(T), addr, _ctx);
         }
         return _ctx.GetFieldValue<T>(_objAddress, _interiorTypeName!, fieldName);

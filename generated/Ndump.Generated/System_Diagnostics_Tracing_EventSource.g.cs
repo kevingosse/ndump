@@ -15,7 +15,7 @@ public partial class EventSource : _.System.Object
 
     public _.System.Collections.Generic.Dictionary<object, object>? m_eventData => Field<_.System.Collections.Generic.Dictionary<object, object>>();
 
-    // Array field: m_rawManifest (object) — element type not supported
+    public global::Ndump.Core.DumpArray<byte>? m_rawManifest => ArrayField<byte>();
 
     public global::_.System.Object? m_eventCommandExecuted => Field<global::_.System.Object>();
 
@@ -47,13 +47,13 @@ public partial class EventSource : _.System.Object
 
     public global::_.System.Object? m_deferredCommands => Field<global::_.System.Object>();
 
-    // Array field: m_traits (object) — element type not supported
+    public global::Ndump.Core.DumpArray<string?>? m_traits => ArrayField<string?>();
 
     public global::Ndump.Core.DumpArray<ulong>? m_channelData => ArrayField<ulong>();
 
     public _.System.Diagnostics.Tracing.ActivityTracker? m_activityTracker => Field<_.System.Diagnostics.Tracing.ActivityTracker>();
 
-    // Array field: m_providerMetadata (object) — element type not supported
+    public global::Ndump.Core.DumpArray<byte>? m_providerMetadata => ArrayField<byte>();
 
     public _.System.Diagnostics.Tracing.TraceLoggingEventHandleTable? m_eventHandleTable => Field<_.System.Diagnostics.Tracing.TraceLoggingEventHandleTable>();
 

@@ -463,6 +463,58 @@ public class ProxyEmitterTests
     }
 
     [Fact]
+    public void GenerateProxy_ArrayField_DoubleElements_EmitsDoubleArray()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "MyApp.Foo",
+            Namespace = "MyApp",
+            Name = "Foo",
+            Fields =
+            [
+                new FieldInfo
+                {
+                    Name = "_values",
+                    TypeName = "System.Double[]",
+                    Kind = FieldKind.Array,
+                    ArrayElementTypeName = "System.Double",
+                    ArrayElementKind = FieldKind.Primitive
+                }
+            ]
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        Assert.Contains("public global::Ndump.Core.DumpArray<double>? _values => ArrayField<double>()", code);
+    }
+
+    [Fact]
+    public void GenerateProxy_ArrayField_BoolElements_EmitsBoolArray()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "MyApp.Foo",
+            Namespace = "MyApp",
+            Name = "Foo",
+            Fields =
+            [
+                new FieldInfo
+                {
+                    Name = "_flags",
+                    TypeName = "System.Boolean[]",
+                    Kind = FieldKind.Array,
+                    ArrayElementTypeName = "System.Boolean",
+                    ArrayElementKind = FieldKind.Primitive
+                }
+            ]
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        Assert.Contains("public global::Ndump.Core.DumpArray<bool>? _flags => ArrayField<bool>()", code);
+    }
+
+    [Fact]
     public void GenerateProxy_ArrayField_ObjectElements_UsesSystemObjectProxy()
     {
         var knownTypes = new HashSet<string> { "MyApp.Customer", "MyApp.Order", "System.Object" };
@@ -788,6 +840,54 @@ public class ProxyEmitterTests
         // Should NOT extend any base class
         Assert.DoesNotContain(": global::", code);
         Assert.DoesNotContain("sealed", code);
+    }
+
+    [Fact]
+    public void GenerateProxy_SystemObject_FieldInterior_UsesProxyResolver()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "System.Object",
+            Namespace = "System",
+            Name = "Object",
+            Fields = []
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        // FieldInterior<T> should consult _proxyResolver before falling back to CreateProxy
+        Assert.Contains("private T FieldInterior<T>(string fieldName)", code);
+        // Verify _proxyResolver is used in all three object-ref field accessor methods
+        Assert.Equal(4, CountOccurrences(code, "_proxyResolver(addr, _ctx)"));
+    }
+
+    [Fact]
+    public void GenerateProxy_SystemObject_Field_UsesProxyResolver()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "System.Object",
+            Namespace = "System",
+            Name = "Object",
+            Fields = []
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        // Field<T>, FieldStructElement<T>, FieldInterior<T>, and ReadArrayElement<T>
+        // should all use _proxyResolver — 4 occurrences total
+        Assert.Contains("if (_proxyResolver is not null)", code);
+    }
+
+    private static int CountOccurrences(string text, string pattern)
+    {
+        int count = 0, index = 0;
+        while ((index = text.IndexOf(pattern, index, StringComparison.Ordinal)) != -1)
+        {
+            count++;
+            index += pattern.Length;
+        }
+        return count;
     }
 
     [Fact]

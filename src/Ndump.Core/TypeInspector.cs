@@ -149,6 +149,26 @@ public sealed class TypeInspector
             };
         }
 
+        // Fallback: when ComponentType is null (ClrMD quirk for some primitive arrays),
+        // infer element type from the array type name.
+        if (kind == FieldKind.Array && field.Type is { Name: not null } arrayType
+            && arrayType.Name.EndsWith("[]", StringComparison.Ordinal))
+        {
+            var elementTypeName = arrayType.Name[..^2];
+            var elementKind = InferElementKindFromTypeName(elementTypeName);
+            if (elementKind != FieldKind.Unknown)
+            {
+                return new FieldInfo
+                {
+                    Name = field.Name ?? "<unknown>",
+                    TypeName = arrayType.Name,
+                    Kind = kind,
+                    ArrayElementTypeName = elementTypeName,
+                    ArrayElementKind = elementKind
+                };
+            }
+        }
+
         // Detect Nullable<T> value type fields — both resolved and unresolved
         if (kind == FieldKind.ValueType && field.Type?.Name is not null
             && IsNullableType(field.Type.Name))
@@ -281,6 +301,30 @@ public sealed class TypeInspector
 
         if (field.IsValueType)
             return FieldKind.ValueType;
+
+        return FieldKind.Unknown;
+    }
+
+    /// <summary>
+    /// Infer the element FieldKind from a CLR type name when ComponentType is unavailable.
+    /// Handles primitives and System.String; returns Unknown for anything else.
+    /// </summary>
+    private static FieldKind InferElementKindFromTypeName(string typeName)
+    {
+        if (typeName == "System.String")
+            return FieldKind.String;
+
+        if (typeName is
+            "System.Boolean" or "System.Char" or
+            "System.SByte" or "System.Byte" or
+            "System.Int16" or "System.UInt16" or
+            "System.Int32" or "System.UInt32" or
+            "System.Int64" or "System.UInt64" or
+            "System.Single" or "System.Double" or
+            "System.IntPtr" or "System.UIntPtr")
+        {
+            return FieldKind.Primitive;
+        }
 
         return FieldKind.Unknown;
     }

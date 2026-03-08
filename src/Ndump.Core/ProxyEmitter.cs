@@ -933,6 +933,11 @@ public sealed class ProxyEmitter
         sb.AppendLine("        {");
         sb.AppendLine("            var addr = _ctx.GetObjectAddress(_objAddress, fieldName);");
         sb.AppendLine("            if (addr == 0) return default!;");
+        sb.AppendLine("            if (_proxyResolver is not null)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                var resolved = _proxyResolver(addr, _ctx);");
+        sb.AppendLine("                if (resolved is T t) return t;");
+        sb.AppendLine("            }");
         sb.AppendLine("            return (T)CreateProxy(typeof(T), addr, _ctx);");
         sb.AppendLine("        }");
         sb.AppendLine("        return _ctx.GetFieldValue<T>(_objAddress, fieldName);");
@@ -946,6 +951,11 @@ public sealed class ProxyEmitter
         sb.AppendLine("        {");
         sb.AppendLine("            var addr = _ctx.GetStructArrayElementObjectAddress(_arrayAddr, _arrayIndex, fieldName);");
         sb.AppendLine("            if (addr == 0) return default!;");
+        sb.AppendLine("            if (_proxyResolver is not null)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                var resolved = _proxyResolver(addr, _ctx);");
+        sb.AppendLine("                if (resolved is T t) return t;");
+        sb.AppendLine("            }");
         sb.AppendLine("            return (T)CreateProxy(typeof(T), addr, _ctx);");
         sb.AppendLine("        }");
         sb.AppendLine("        return _ctx.GetStructArrayElementFieldValue<T>(_arrayAddr, _arrayIndex, fieldName);");
@@ -959,6 +969,11 @@ public sealed class ProxyEmitter
         sb.AppendLine("        {");
         sb.AppendLine("            var addr = _ctx.GetObjectAddress(_objAddress, _interiorTypeName!, fieldName);");
         sb.AppendLine("            if (addr == 0) return default!;");
+        sb.AppendLine("            if (_proxyResolver is not null)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                var resolved = _proxyResolver(addr, _ctx);");
+        sb.AppendLine("                if (resolved is T t) return t;");
+        sb.AppendLine("            }");
         sb.AppendLine("            return (T)CreateProxy(typeof(T), addr, _ctx);");
         sb.AppendLine("        }");
         sb.AppendLine("        return _ctx.GetFieldValue<T>(_objAddress, _interiorTypeName!, fieldName);");

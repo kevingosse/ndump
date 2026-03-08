@@ -11,9 +11,9 @@ public sealed class ArrayHolder : _.System.Object
 
     public global::Ndump.Core.DumpArray<byte>? _byteArray => ArrayField<byte>();
 
-    // Array field: _doubleArray (object) — element type not supported
+    public global::Ndump.Core.DumpArray<double>? _doubleArray => ArrayField<double>();
 
-    // Array field: _boolArray (object) — element type not supported
+    public global::Ndump.Core.DumpArray<bool>? _boolArray => ArrayField<bool>();
 
     public global::Ndump.Core.DumpArray<int>? _nullArray => ArrayField<int>();
 
