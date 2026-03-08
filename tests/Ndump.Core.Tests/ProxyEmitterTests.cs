@@ -843,7 +843,7 @@ public class ProxyEmitterTests
     }
 
     [Fact]
-    public void GenerateProxy_SystemObject_FieldInterior_UsesProxyResolver()
+    public void GenerateProxy_SystemObject_InteriorPath_UsesProxyResolver()
     {
         var type = new TypeMetadata
         {
@@ -855,10 +855,10 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        // FieldInterior<T> should use ResolveProxy for polymorphic resolution
-        Assert.Contains("private T FieldInterior<T>(string fieldName)", code);
-        // Verify ResolveProxy<T> is used in all four object-ref field accessor methods
-        Assert.Equal(4, CountOccurrences(code, "return ResolveProxy<T>(addr, _ctx);"));
+        // Interior struct path in Field<T> should use the interiorTypeName overloads
+        Assert.Contains("_ctx.GetFieldValue<T>(_objAddress, _interiorTypeName, fieldName)", code);
+        Assert.Contains("_ctx.GetStringField(_objAddress, _interiorTypeName, fieldName)", code);
+        Assert.Contains("_ctx.GetObjectAddress(_objAddress, _interiorTypeName, fieldName)", code);
     }
 
     [Fact]
@@ -874,9 +874,9 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        // Field<T>, FieldStructElement<T>, FieldInterior<T>, and ReadArrayElement<T>
-        // should all use ResolveProxy<T> — 4 occurrences total
-        Assert.Equal(4, CountOccurrences(code, "return ResolveProxy<T>(addr, _ctx);"));
+        // Field<T> (interior path + heap path) and ReadArrayElement<T>
+        // should all use ResolveProxy<T> — 3 occurrences total
+        Assert.Equal(3, CountOccurrences(code, "return ResolveProxy<T>(addr, _ctx);"));
     }
 
     private static int CountOccurrences(string text, string pattern)

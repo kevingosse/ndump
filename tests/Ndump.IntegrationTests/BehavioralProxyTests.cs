@@ -756,11 +756,11 @@ public class BehavioralProxyTests : IClassFixture<DumpFixture>
     }
 
     [Fact]
-    public void StructProxy_Point_HasFromArrayElement()
+    public void StructProxy_Point_HasNoFromArrayElement()
     {
         var pt = ProxyType("Ndump.TestApp.Point");
         var method = pt.GetMethod("FromArrayElement", BindingFlags.Public | BindingFlags.Static);
-        Assert.NotNull(method);
+        Assert.Null(method);
     }
 
     [Fact]

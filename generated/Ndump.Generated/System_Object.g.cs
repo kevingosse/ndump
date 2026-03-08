@@ -8,30 +8,16 @@ public class Object
 {
     protected readonly ulong _objAddress;
     protected readonly DumpContext _ctx;
-    // For struct proxies: array address + index for correct component type resolution
-    protected readonly ulong _arrayAddr;
-    protected readonly int _arrayIndex;
-    protected readonly bool _isStructElement;
     // For interior struct fields: the CLR type name of this struct
     protected readonly string? _interiorTypeName;
 
     private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::System.Func<ulong, DumpContext, object>?> _proxyFactories = new();
-    private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::System.Func<ulong, DumpContext, ulong, int, object>?> _structProxyFactories = new();
     private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::System.Func<ulong, DumpContext, string, object>?> _interiorProxyFactories = new();
 
     protected Object(ulong address, DumpContext ctx)
     {
         _objAddress = address;
         _ctx = ctx;
-    }
-
-    protected Object(ulong address, DumpContext ctx, ulong arrayAddr, int arrayIndex)
-    {
-        _objAddress = address;
-        _ctx = ctx;
-        _arrayAddr = arrayAddr;
-        _arrayIndex = arrayIndex;
-        _isStructElement = true;
     }
 
     protected Object(ulong address, DumpContext ctx, string interiorTypeName)
@@ -45,10 +31,18 @@ public class Object
 
     protected T Field<T>([CallerMemberName] string fieldName = "")
     {
-        if (_isStructElement)
-            return FieldStructElement<T>(fieldName);
         if (_interiorTypeName is not null)
-            return FieldInterior<T>(fieldName);
+        {
+            if (typeof(T) == typeof(string))
+                return (T)(object)_ctx.GetStringField(_objAddress, _interiorTypeName, fieldName)!;
+            if (!typeof(T).IsValueType)
+            {
+                var addr = _ctx.GetObjectAddress(_objAddress, _interiorTypeName, fieldName);
+                if (addr == 0) return default!;
+                return ResolveProxy<T>(addr, _ctx);
+            }
+            return _ctx.GetFieldValue<T>(_objAddress, _interiorTypeName, fieldName);
+        }
         if (typeof(T) == typeof(string))
             return (T)(object)_ctx.GetStringField(_objAddress, fieldName)!;
         if (!typeof(T).IsValueType)
@@ -60,38 +54,10 @@ public class Object
         return _ctx.GetFieldValue<T>(_objAddress, fieldName);
     }
 
-    private T FieldStructElement<T>(string fieldName)
-    {
-        if (typeof(T) == typeof(string))
-            return (T)(object)_ctx.GetStructArrayElementStringField(_arrayAddr, _arrayIndex, fieldName)!;
-        if (!typeof(T).IsValueType)
-        {
-            var addr = _ctx.GetStructArrayElementObjectAddress(_arrayAddr, _arrayIndex, fieldName);
-            if (addr == 0) return default!;
-            return ResolveProxy<T>(addr, _ctx);
-        }
-        return _ctx.GetStructArrayElementFieldValue<T>(_arrayAddr, _arrayIndex, fieldName);
-    }
-
-    private T FieldInterior<T>(string fieldName)
-    {
-        if (typeof(T) == typeof(string))
-            return (T)(object)_ctx.GetStringField(_objAddress, _interiorTypeName!, fieldName)!;
-        if (!typeof(T).IsValueType)
-        {
-            var addr = _ctx.GetObjectAddress(_objAddress, _interiorTypeName!, fieldName);
-            if (addr == 0) return default!;
-            return ResolveProxy<T>(addr, _ctx);
-        }
-        return _ctx.GetFieldValue<T>(_objAddress, _interiorTypeName!, fieldName);
-    }
-
     protected T StructField<T>(string structTypeName, [CallerMemberName] string fieldName = "")
     {
         ulong addr;
-        if (_isStructElement)
-            addr = _ctx.GetStructArrayElementValueTypeFieldAddress(_arrayAddr, _arrayIndex, fieldName);
-        else if (_interiorTypeName is not null)
+        if (_interiorTypeName is not null)
             addr = _ctx.GetInteriorValueTypeFieldAddress(_objAddress, _interiorTypeName, fieldName);
         else
             addr = _ctx.GetValueTypeFieldAddress(_objAddress, fieldName);
@@ -111,8 +77,6 @@ public class Object
 
     protected T? NullableField<T>([CallerMemberName] string fieldName = "") where T : struct
     {
-        if (_isStructElement)
-            return _ctx.GetStructArrayElementNullableFieldValue<T>(_arrayAddr, _arrayIndex, fieldName);
         if (_interiorTypeName is not null)
             return _ctx.GetNullableFieldValue<T>(_objAddress, _interiorTypeName, fieldName);
         return _ctx.GetNullableFieldValue<T>(_objAddress, fieldName);
@@ -121,9 +85,7 @@ public class Object
     protected T? NullableStructField<T>(string innerTypeName, [CallerMemberName] string fieldName = "") where T : class
     {
         (bool hasValue, ulong valueAddr) info;
-        if (_isStructElement)
-            info = _ctx.GetStructArrayElementNullableFieldInfo(_arrayAddr, _arrayIndex, fieldName);
-        else if (_interiorTypeName is not null)
+        if (_interiorTypeName is not null)
             info = _ctx.GetNullableFieldInfo(_objAddress, _interiorTypeName, fieldName);
         else
             info = _ctx.GetNullableFieldInfo(_objAddress, fieldName);
@@ -133,16 +95,14 @@ public class Object
 
     protected ulong RawFieldAddress([CallerMemberName] string fieldName = "")
     {
-        if (_isStructElement)
-            return _ctx.GetStructArrayElementValueTypeFieldAddress(_arrayAddr, _arrayIndex, fieldName);
         if (_interiorTypeName is not null)
             return _ctx.GetInteriorValueTypeFieldAddress(_objAddress, _interiorTypeName, fieldName);
         return _ctx.GetValueTypeFieldAddress(_objAddress, fieldName);
     }
 
     protected ulong RefAddress([CallerMemberName] string fieldName = "")
-        => _isStructElement
-            ? _ctx.GetStructArrayElementObjectAddress(_arrayAddr, _arrayIndex, fieldName)
+        => _interiorTypeName is not null
+            ? _ctx.GetObjectAddress(_objAddress, _interiorTypeName, fieldName)
             : _ctx.GetObjectAddress(_objAddress, fieldName);
 
     protected global::Ndump.Core.DumpArray<T>? ArrayField<T>([CallerMemberName] string fieldName = "")
@@ -167,16 +127,17 @@ public class Object
             return (T)(object)_ctx.GetArrayElementString(arrayAddr, index)!;
         if (!typeof(T).IsValueType)
         {
-            var structFactory = _structProxyFactories.GetOrAdd(typeof(T), static t =>
+            var interiorFactory = _interiorProxyFactories.GetOrAdd(typeof(T), static t =>
             {
-                var method = t.GetMethod("FromArrayElement", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static);
+                var method = t.GetMethod("FromInterior", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static);
                 if (method is null) return null;
-                return (global::System.Func<ulong, DumpContext, ulong, int, object>)((a, c, aa, ai) => method.Invoke(null, [a, c, aa, ai])!);
+                return (global::System.Func<ulong, DumpContext, string, object>)((a, c, tn) => method.Invoke(null, [a, c, tn])!);
             });
-            if (structFactory is not null)
+            if (interiorFactory is not null)
             {
                 var ea = _ctx.GetArrayStructElementAddress(arrayAddr, index);
-                return (T)structFactory(ea, _ctx, arrayAddr, index);
+                var typeName = _ctx.GetArrayComponentTypeName(arrayAddr);
+                return (T)interiorFactory(ea, _ctx, typeName);
             }
             var addr = _ctx.GetArrayElementAddress(arrayAddr, index);
             if (addr == 0) return default!;

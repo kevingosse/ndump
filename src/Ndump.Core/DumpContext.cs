@@ -166,24 +166,6 @@ public sealed class DumpContext : IDisposable
     }
 
     /// <summary>
-    /// Get the interior address of a value type field embedded in a struct array element.
-    /// </summary>
-    public ulong GetStructArrayElementValueTypeFieldAddress(ulong arrayAddress, int index, string fieldName)
-    {
-        var obj = Heap.GetObject(arrayAddress);
-        if (!obj.IsValid)
-            throw new InvalidOperationException($"Invalid object at address 0x{arrayAddress:X}");
-
-        var array = obj.AsArray();
-        var elementAddr = array.GetStructValue(index).Address;
-        var componentType = obj.Type!.ComponentType!;
-        var field = componentType.GetFieldByName(fieldName)
-            ?? throw new InvalidOperationException($"Field '{fieldName}' not found on component type '{componentType.Name}'");
-
-        return field.GetAddress(elementAddr, interior: true);
-    }
-
-    /// <summary>
     /// Get the address of a struct array element.
     /// </summary>
     public ulong GetArrayStructElementAddress(ulong arrayAddress, int index)
@@ -196,61 +178,24 @@ public sealed class DumpContext : IDisposable
     }
 
     /// <summary>
-    /// Read a primitive/value-type field from a struct array element.
-    /// Uses the array's component type for correct field resolution.
+    /// Get the CLR type name of an array's component (element) type.
+    /// Also caches the specialized component type so that FindFieldByTypeName
+    /// resolves to the correct instantiation (important for generic nested value types).
     /// </summary>
-    public T GetStructArrayElementFieldValue<T>(ulong arrayAddress, int index, string fieldName)
+    public string GetArrayComponentTypeName(ulong arrayAddress)
     {
         var obj = Heap.GetObject(arrayAddress);
         if (!obj.IsValid)
             throw new InvalidOperationException($"Invalid object at address 0x{arrayAddress:X}");
 
-        var array = obj.AsArray();
-        var elementAddr = array.GetStructValue(index).Address;
-        var componentType = obj.Type!.ComponentType!;
-        var field = componentType.GetFieldByName(fieldName)
-            ?? throw new InvalidOperationException($"Field '{fieldName}' not found on component type '{componentType.Name}'");
+        var componentType = obj.Type?.ComponentType
+            ?? throw new InvalidOperationException($"Object at 0x{arrayAddress:X} has no component type");
 
-        var addr = field.GetAddress(elementAddr, interior: true);
-        Span<byte> buffer = stackalloc byte[Unsafe.SizeOf<T>()];
-        Runtime.DataTarget.DataReader.Read(addr, buffer);
-        return Unsafe.ReadUnaligned<T>(ref buffer[0]);
-    }
-
-    /// <summary>
-    /// Read a string field from a struct array element.
-    /// </summary>
-    public string? GetStructArrayElementStringField(ulong arrayAddress, int index, string fieldName)
-    {
-        var obj = Heap.GetObject(arrayAddress);
-        if (!obj.IsValid)
-            throw new InvalidOperationException($"Invalid object at address 0x{arrayAddress:X}");
-
-        var array = obj.AsArray();
-        var elementAddr = array.GetStructValue(index).Address;
-        var componentType = obj.Type!.ComponentType!;
-        var field = componentType.GetFieldByName(fieldName)
-            ?? throw new InvalidOperationException($"Field '{fieldName}' not found on component type '{componentType.Name}'");
-
-        return field.ReadString(elementAddr, interior: true);
-    }
-
-    /// <summary>
-    /// Read a reference field from a struct array element.
-    /// </summary>
-    public ulong GetStructArrayElementObjectAddress(ulong arrayAddress, int index, string fieldName)
-    {
-        var obj = Heap.GetObject(arrayAddress);
-        if (!obj.IsValid)
-            throw new InvalidOperationException($"Invalid object at address 0x{arrayAddress:X}");
-
-        var array = obj.AsArray();
-        var elementAddr = array.GetStructValue(index).Address;
-        var componentType = obj.Type!.ComponentType!;
-        var field = componentType.GetFieldByName(fieldName)
-            ?? throw new InvalidOperationException($"Field '{fieldName}' not found on component type '{componentType.Name}'");
-
-        return field.ReadObject(elementAddr, interior: true);
+        var name = componentType.Name!;
+        // Cache the specialized component type so FindFieldByTypeName uses it
+        // instead of looking up the generic definition from modules
+        _typeCache.TryAdd(name, componentType);
+        return name;
     }
 
     /// <summary>
@@ -428,24 +373,6 @@ public sealed class DumpContext : IDisposable
         return ReadNullableFromField<T>(address, field, interior: true);
     }
 
-    /// <summary>
-    /// Read a Nullable&lt;T&gt; field from a struct array element.
-    /// </summary>
-    public T? GetStructArrayElementNullableFieldValue<T>(ulong arrayAddress, int index, string fieldName) where T : struct
-    {
-        var obj = Heap.GetObject(arrayAddress);
-        if (!obj.IsValid)
-            throw new InvalidOperationException($"Invalid object at address 0x{arrayAddress:X}");
-
-        var array = obj.AsArray();
-        var elementAddr = array.GetStructValue(index).Address;
-        var componentType = obj.Type!.ComponentType!;
-        var field = componentType.GetFieldByName(fieldName)
-            ?? throw new InvalidOperationException($"Field '{fieldName}' not found on component type '{componentType.Name}'");
-
-        return ReadNullableFromField<T>(elementAddr, field, interior: true);
-    }
-
     private T? ReadNullableFromField<T>(ulong baseAddr, ClrInstanceField field, bool interior) where T : struct
     {
         var nullableType = field.Type
@@ -499,24 +426,6 @@ public sealed class DumpContext : IDisposable
     {
         var field = FindFieldByTypeName(typeName, fieldName);
         return ReadNullableInfo(address, field, interior: true);
-    }
-
-    /// <summary>
-    /// Get the interior address of the value sub-field of a Nullable&lt;T&gt; field on a struct array element.
-    /// </summary>
-    public (bool HasValue, ulong ValueAddress) GetStructArrayElementNullableFieldInfo(ulong arrayAddress, int index, string fieldName)
-    {
-        var obj = Heap.GetObject(arrayAddress);
-        if (!obj.IsValid)
-            throw new InvalidOperationException($"Invalid object at address 0x{arrayAddress:X}");
-
-        var array = obj.AsArray();
-        var elementAddr = array.GetStructValue(index).Address;
-        var componentType = obj.Type!.ComponentType!;
-        var field = componentType.GetFieldByName(fieldName)
-            ?? throw new InvalidOperationException($"Field '{fieldName}' not found on component type '{componentType.Name}'");
-
-        return ReadNullableInfo(elementAddr, field, interior: true);
     }
 
     private (bool HasValue, ulong ValueAddress) ReadNullableInfo(ulong baseAddr, ClrInstanceField field, bool interior)

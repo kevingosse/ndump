@@ -283,9 +283,7 @@ public sealed class ProxyEmitter
         body.AppendLine($"    {ctorAccess} {sanitizedName}(ulong address, DumpContext ctx) : base(address, ctx) {{ }}");
         if (type.IsValueType)
         {
-            // Value type proxy: additional constructor for array struct elements
-            body.AppendLine($"    {ctorAccess} {sanitizedName}(ulong address, DumpContext ctx, ulong arrayAddr, int arrayIndex) : base(address, ctx, arrayAddr, arrayIndex) {{ }}");
-            // Value type proxy: additional constructor for interior (embedded) struct fields
+            // Value type proxy: additional constructor for interior (embedded) struct fields and array elements
             body.AppendLine($"    {ctorAccess} {sanitizedName}(ulong address, DumpContext ctx, string interiorTypeName) : base(address, ctx, interiorTypeName) {{ }}");
         }
 
@@ -321,11 +319,7 @@ public sealed class ProxyEmitter
 
         if (type.IsValueType)
         {
-            // Factory for struct array elements — uses array context for correct type resolution
-            body.AppendLine();
-            body.AppendLine($"    public static {sanitizedName} FromArrayElement(ulong address, DumpContext ctx, ulong arrayAddr, int arrayIndex)");
-            body.AppendLine($"        => new {sanitizedName}(address, ctx, arrayAddr, arrayIndex);");
-            // Factory for interior (embedded) struct fields
+            // Factory for interior (embedded) struct fields and array elements
             body.AppendLine();
             body.AppendLine($"    public static {sanitizedName} FromInterior(ulong address, DumpContext ctx, string interiorTypeName)");
             body.AppendLine($"        => new {sanitizedName}(address, ctx, interiorTypeName);");
@@ -521,7 +515,7 @@ public sealed class ProxyEmitter
 
         if (nestedType.IsValueType)
         {
-            body.AppendLine($"        private {sanitizedNestedName}(ulong address, DumpContext ctx, ulong arrayAddr, int arrayIndex) : base(address, ctx, arrayAddr, arrayIndex) {{ }}");
+            body.AppendLine($"        private {sanitizedNestedName}(ulong address, DumpContext ctx, string interiorTypeName) : base(address, ctx, interiorTypeName) {{ }}");
         }
         else
         {
@@ -560,8 +554,8 @@ public sealed class ProxyEmitter
         if (nestedType.IsValueType)
         {
             body.AppendLine();
-            body.AppendLine($"        public static {sanitizedNestedName} FromArrayElement(ulong address, DumpContext ctx, ulong arrayAddr, int arrayIndex)");
-            body.AppendLine($"            => new {sanitizedNestedName}(address, ctx, arrayAddr, arrayIndex);");
+            body.AppendLine($"        public static {sanitizedNestedName} FromInterior(ulong address, DumpContext ctx, string interiorTypeName)");
+            body.AppendLine($"            => new {sanitizedNestedName}(address, ctx, interiorTypeName);");
         }
         else
         {
@@ -876,30 +870,16 @@ public sealed class ProxyEmitter
         sb.AppendLine("{");
         sb.AppendLine("    protected readonly ulong _objAddress;");
         sb.AppendLine("    protected readonly DumpContext _ctx;");
-        sb.AppendLine("    // For struct proxies: array address + index for correct component type resolution");
-        sb.AppendLine("    protected readonly ulong _arrayAddr;");
-        sb.AppendLine("    protected readonly int _arrayIndex;");
-        sb.AppendLine("    protected readonly bool _isStructElement;");
         sb.AppendLine("    // For interior struct fields: the CLR type name of this struct");
         sb.AppendLine("    protected readonly string? _interiorTypeName;");
         sb.AppendLine();
         sb.AppendLine("    private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::System.Func<ulong, DumpContext, object>?> _proxyFactories = new();");
-        sb.AppendLine("    private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::System.Func<ulong, DumpContext, ulong, int, object>?> _structProxyFactories = new();");
         sb.AppendLine("    private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<global::System.Type, global::System.Func<ulong, DumpContext, string, object>?> _interiorProxyFactories = new();");
         sb.AppendLine();
         sb.AppendLine("    protected Object(ulong address, DumpContext ctx)");
         sb.AppendLine("    {");
         sb.AppendLine("        _objAddress = address;");
         sb.AppendLine("        _ctx = ctx;");
-        sb.AppendLine("    }");
-        sb.AppendLine();
-        sb.AppendLine("    protected Object(ulong address, DumpContext ctx, ulong arrayAddr, int arrayIndex)");
-        sb.AppendLine("    {");
-        sb.AppendLine("        _objAddress = address;");
-        sb.AppendLine("        _ctx = ctx;");
-        sb.AppendLine("        _arrayAddr = arrayAddr;");
-        sb.AppendLine("        _arrayIndex = arrayIndex;");
-        sb.AppendLine("        _isStructElement = true;");
         sb.AppendLine("    }");
         sb.AppendLine();
         sb.AppendLine("    protected Object(ulong address, DumpContext ctx, string interiorTypeName)");
@@ -913,10 +893,18 @@ public sealed class ProxyEmitter
         sb.AppendLine();
         sb.AppendLine("    protected T Field<T>([CallerMemberName] string fieldName = \"\")");
         sb.AppendLine("    {");
-        sb.AppendLine("        if (_isStructElement)");
-        sb.AppendLine("            return FieldStructElement<T>(fieldName);");
         sb.AppendLine("        if (_interiorTypeName is not null)");
-        sb.AppendLine("            return FieldInterior<T>(fieldName);");
+        sb.AppendLine("        {");
+        sb.AppendLine("            if (typeof(T) == typeof(string))");
+        sb.AppendLine("                return (T)(object)_ctx.GetStringField(_objAddress, _interiorTypeName, fieldName)!;");
+        sb.AppendLine("            if (!typeof(T).IsValueType)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                var addr = _ctx.GetObjectAddress(_objAddress, _interiorTypeName, fieldName);");
+        sb.AppendLine("                if (addr == 0) return default!;");
+        sb.AppendLine("                return ResolveProxy<T>(addr, _ctx);");
+        sb.AppendLine("            }");
+        sb.AppendLine("            return _ctx.GetFieldValue<T>(_objAddress, _interiorTypeName, fieldName);");
+        sb.AppendLine("        }");
         sb.AppendLine("        if (typeof(T) == typeof(string))");
         sb.AppendLine("            return (T)(object)_ctx.GetStringField(_objAddress, fieldName)!;");
         sb.AppendLine("        if (!typeof(T).IsValueType)");
@@ -928,38 +916,10 @@ public sealed class ProxyEmitter
         sb.AppendLine("        return _ctx.GetFieldValue<T>(_objAddress, fieldName);");
         sb.AppendLine("    }");
         sb.AppendLine();
-        sb.AppendLine("    private T FieldStructElement<T>(string fieldName)");
-        sb.AppendLine("    {");
-        sb.AppendLine("        if (typeof(T) == typeof(string))");
-        sb.AppendLine("            return (T)(object)_ctx.GetStructArrayElementStringField(_arrayAddr, _arrayIndex, fieldName)!;");
-        sb.AppendLine("        if (!typeof(T).IsValueType)");
-        sb.AppendLine("        {");
-        sb.AppendLine("            var addr = _ctx.GetStructArrayElementObjectAddress(_arrayAddr, _arrayIndex, fieldName);");
-        sb.AppendLine("            if (addr == 0) return default!;");
-        sb.AppendLine("            return ResolveProxy<T>(addr, _ctx);");
-        sb.AppendLine("        }");
-        sb.AppendLine("        return _ctx.GetStructArrayElementFieldValue<T>(_arrayAddr, _arrayIndex, fieldName);");
-        sb.AppendLine("    }");
-        sb.AppendLine();
-        sb.AppendLine("    private T FieldInterior<T>(string fieldName)");
-        sb.AppendLine("    {");
-        sb.AppendLine("        if (typeof(T) == typeof(string))");
-        sb.AppendLine("            return (T)(object)_ctx.GetStringField(_objAddress, _interiorTypeName!, fieldName)!;");
-        sb.AppendLine("        if (!typeof(T).IsValueType)");
-        sb.AppendLine("        {");
-        sb.AppendLine("            var addr = _ctx.GetObjectAddress(_objAddress, _interiorTypeName!, fieldName);");
-        sb.AppendLine("            if (addr == 0) return default!;");
-        sb.AppendLine("            return ResolveProxy<T>(addr, _ctx);");
-        sb.AppendLine("        }");
-        sb.AppendLine("        return _ctx.GetFieldValue<T>(_objAddress, _interiorTypeName!, fieldName);");
-        sb.AppendLine("    }");
-        sb.AppendLine();
         sb.AppendLine("    protected T StructField<T>(string structTypeName, [CallerMemberName] string fieldName = \"\")");
         sb.AppendLine("    {");
         sb.AppendLine("        ulong addr;");
-        sb.AppendLine("        if (_isStructElement)");
-        sb.AppendLine("            addr = _ctx.GetStructArrayElementValueTypeFieldAddress(_arrayAddr, _arrayIndex, fieldName);");
-        sb.AppendLine("        else if (_interiorTypeName is not null)");
+        sb.AppendLine("        if (_interiorTypeName is not null)");
         sb.AppendLine("            addr = _ctx.GetInteriorValueTypeFieldAddress(_objAddress, _interiorTypeName, fieldName);");
         sb.AppendLine("        else");
         sb.AppendLine("            addr = _ctx.GetValueTypeFieldAddress(_objAddress, fieldName);");
@@ -979,8 +939,6 @@ public sealed class ProxyEmitter
         sb.AppendLine();
         sb.AppendLine("    protected T? NullableField<T>([CallerMemberName] string fieldName = \"\") where T : struct");
         sb.AppendLine("    {");
-        sb.AppendLine("        if (_isStructElement)");
-        sb.AppendLine("            return _ctx.GetStructArrayElementNullableFieldValue<T>(_arrayAddr, _arrayIndex, fieldName);");
         sb.AppendLine("        if (_interiorTypeName is not null)");
         sb.AppendLine("            return _ctx.GetNullableFieldValue<T>(_objAddress, _interiorTypeName, fieldName);");
         sb.AppendLine("        return _ctx.GetNullableFieldValue<T>(_objAddress, fieldName);");
@@ -989,9 +947,7 @@ public sealed class ProxyEmitter
         sb.AppendLine("    protected T? NullableStructField<T>(string innerTypeName, [CallerMemberName] string fieldName = \"\") where T : class");
         sb.AppendLine("    {");
         sb.AppendLine("        (bool hasValue, ulong valueAddr) info;");
-        sb.AppendLine("        if (_isStructElement)");
-        sb.AppendLine("            info = _ctx.GetStructArrayElementNullableFieldInfo(_arrayAddr, _arrayIndex, fieldName);");
-        sb.AppendLine("        else if (_interiorTypeName is not null)");
+        sb.AppendLine("        if (_interiorTypeName is not null)");
         sb.AppendLine("            info = _ctx.GetNullableFieldInfo(_objAddress, _interiorTypeName, fieldName);");
         sb.AppendLine("        else");
         sb.AppendLine("            info = _ctx.GetNullableFieldInfo(_objAddress, fieldName);");
@@ -1001,16 +957,14 @@ public sealed class ProxyEmitter
         sb.AppendLine();
         sb.AppendLine("    protected ulong RawFieldAddress([CallerMemberName] string fieldName = \"\")");
         sb.AppendLine("    {");
-        sb.AppendLine("        if (_isStructElement)");
-        sb.AppendLine("            return _ctx.GetStructArrayElementValueTypeFieldAddress(_arrayAddr, _arrayIndex, fieldName);");
         sb.AppendLine("        if (_interiorTypeName is not null)");
         sb.AppendLine("            return _ctx.GetInteriorValueTypeFieldAddress(_objAddress, _interiorTypeName, fieldName);");
         sb.AppendLine("        return _ctx.GetValueTypeFieldAddress(_objAddress, fieldName);");
         sb.AppendLine("    }");
         sb.AppendLine();
         sb.AppendLine("    protected ulong RefAddress([CallerMemberName] string fieldName = \"\")");
-        sb.AppendLine("        => _isStructElement");
-        sb.AppendLine("            ? _ctx.GetStructArrayElementObjectAddress(_arrayAddr, _arrayIndex, fieldName)");
+        sb.AppendLine("        => _interiorTypeName is not null");
+        sb.AppendLine("            ? _ctx.GetObjectAddress(_objAddress, _interiorTypeName, fieldName)");
         sb.AppendLine("            : _ctx.GetObjectAddress(_objAddress, fieldName);");
         sb.AppendLine();
         sb.AppendLine("    protected global::Ndump.Core.DumpArray<T>? ArrayField<T>([CallerMemberName] string fieldName = \"\")");
@@ -1035,16 +989,17 @@ public sealed class ProxyEmitter
         sb.AppendLine("            return (T)(object)_ctx.GetArrayElementString(arrayAddr, index)!;");
         sb.AppendLine("        if (!typeof(T).IsValueType)");
         sb.AppendLine("        {");
-        sb.AppendLine("            var structFactory = _structProxyFactories.GetOrAdd(typeof(T), static t =>");
+        sb.AppendLine("            var interiorFactory = _interiorProxyFactories.GetOrAdd(typeof(T), static t =>");
         sb.AppendLine("            {");
-        sb.AppendLine("                var method = t.GetMethod(\"FromArrayElement\", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static);");
+        sb.AppendLine("                var method = t.GetMethod(\"FromInterior\", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static);");
         sb.AppendLine("                if (method is null) return null;");
-        sb.AppendLine("                return (global::System.Func<ulong, DumpContext, ulong, int, object>)((a, c, aa, ai) => method.Invoke(null, [a, c, aa, ai])!);");
+        sb.AppendLine("                return (global::System.Func<ulong, DumpContext, string, object>)((a, c, tn) => method.Invoke(null, [a, c, tn])!);");
         sb.AppendLine("            });");
-        sb.AppendLine("            if (structFactory is not null)");
+        sb.AppendLine("            if (interiorFactory is not null)");
         sb.AppendLine("            {");
         sb.AppendLine("                var ea = _ctx.GetArrayStructElementAddress(arrayAddr, index);");
-        sb.AppendLine("                return (T)structFactory(ea, _ctx, arrayAddr, index);");
+        sb.AppendLine("                var typeName = _ctx.GetArrayComponentTypeName(arrayAddr);");
+        sb.AppendLine("                return (T)interiorFactory(ea, _ctx, typeName);");
         sb.AppendLine("            }");
         sb.AppendLine("            var addr = _ctx.GetArrayElementAddress(arrayAddr, index);");
         sb.AppendLine("            if (addr == 0) return default!;");
