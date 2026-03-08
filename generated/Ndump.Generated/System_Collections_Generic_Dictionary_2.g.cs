@@ -9,7 +9,7 @@ public partial class Dictionary<T1, T2> : global::_.System.Object
 
     public global::Ndump.Core.DumpArray<int>? _buckets => ArrayField<int>();
 
-    public global::Ndump.Core.DumpArray<Entry>? _entries => ArrayField<Entry>();
+    public global::Ndump.Core.DumpArray<Entry>? _entries => StructArrayField<Entry>();
 
     public ulong _fastModMultiplier => Field<ulong>();
 

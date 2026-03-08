@@ -3,7 +3,7 @@ using Ndump.Core;
 
 namespace _.System.Threading.Tasks;
 
-public sealed class CachedCompletedInt32Task : global::_.System.Object
+public sealed class CachedCompletedInt32Task : global::_.System.Object, global::Ndump.Core.IProxy<CachedCompletedInt32Task>
 {
     private CachedCompletedInt32Task(ulong address, DumpContext ctx) : base(address, ctx) { }
     private CachedCompletedInt32Task(ulong address, DumpContext ctx, string interiorTypeName) : base(address, ctx, interiorTypeName) { }

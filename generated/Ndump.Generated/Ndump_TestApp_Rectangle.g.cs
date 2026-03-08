@@ -3,7 +3,7 @@ using Ndump.Core;
 
 namespace _.Ndump.TestApp;
 
-public sealed class Rectangle : global::_.System.Object
+public sealed class Rectangle : global::_.System.Object, global::Ndump.Core.IProxy<Rectangle>
 {
     private Rectangle(ulong address, DumpContext ctx) : base(address, ctx) { }
     private Rectangle(ulong address, DumpContext ctx, string interiorTypeName) : base(address, ctx, interiorTypeName) { }

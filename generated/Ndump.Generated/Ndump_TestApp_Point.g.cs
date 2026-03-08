@@ -3,7 +3,7 @@ using Ndump.Core;
 
 namespace _.Ndump.TestApp;
 
-public sealed class Point : global::_.System.Object
+public sealed class Point : global::_.System.Object, global::Ndump.Core.IProxy<Point>
 {
     private Point(ulong address, DumpContext ctx) : base(address, ctx) { }
     private Point(ulong address, DumpContext ctx, string interiorTypeName) : base(address, ctx, interiorTypeName) { }

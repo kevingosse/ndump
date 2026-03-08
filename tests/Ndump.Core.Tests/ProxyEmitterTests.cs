@@ -837,8 +837,8 @@ public class ProxyEmitterTests
         Assert.Contains("protected readonly ulong _objAddress;", code);
         Assert.Contains("protected readonly DumpContext _ctx;", code);
         Assert.Contains("public ulong GetObjAddress() => _objAddress;", code);
-        // Should NOT extend any base class
-        Assert.DoesNotContain(": global::", code);
+        // Should NOT extend any base class — class declaration has no base
+        Assert.Matches(@"public class Object\r?\n", code);
         Assert.DoesNotContain("sealed", code);
     }
 
@@ -875,8 +875,8 @@ public class ProxyEmitterTests
         var code = _emitter.GenerateProxyCode(type);
 
         // Field<T> (interior path + heap path) and ReadArrayElement<T>
-        // should all use ResolveProxy<T> — 3 occurrences total
-        Assert.Equal(3, CountOccurrences(code, "return ResolveProxy<T>(addr, _ctx);"));
+        // should all use ProxyResolver.Resolve<T> — 3 occurrences total
+        Assert.Equal(3, CountOccurrences(code, "return global::_.ProxyResolver.Resolve<T>(addr, _ctx);"));
     }
 
     private static int CountOccurrences(string text, string pattern)

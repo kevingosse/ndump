@@ -3,25 +3,15 @@ namespace _;
 
 internal static class ProxyResolver
 {
-    private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<string, global::System.Func<ulong, global::Ndump.Core.DumpContext, object>?> _cache = new();
-
-    public static object? Resolve(ulong address, global::Ndump.Core.DumpContext ctx)
+    public static T Resolve<T>(ulong address, global::Ndump.Core.DumpContext ctx)
     {
         var typeName = ctx.GetTypeName(address);
-        if (typeName is null) return null;
+        var proxyType = typeName is not null ? ResolveProxyType(typeName) : null;
+        proxyType ??= typeof(T);
 
-        var factory = _cache.GetOrAdd(typeName, static name =>
-        {
-            var proxyType = ResolveProxyType(name);
-            if (proxyType is null) return null;
-
-            var method = proxyType.GetMethod("FromAddress", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static);
-            if (method is null) return null;
-
-            return (global::System.Func<ulong, global::Ndump.Core.DumpContext, object>)((addr, c) => method.Invoke(null, [addr, c])!);
-        });
-
-        return factory?.Invoke(address, ctx);
+        var method = proxyType.GetMethod("FromAddress", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static)
+            ?? throw new global::System.InvalidOperationException($"No FromAddress factory on {proxyType}");
+        return (T)method.Invoke(null, [address, ctx])!;
     }
 
     private static global::System.Type? ResolveProxyType(string clrTypeName)

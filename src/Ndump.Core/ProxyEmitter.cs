@@ -234,7 +234,8 @@ public sealed class ProxyEmitter
 
         // Determine base class: use proxy of CLR base type if known, otherwise _.System.Object
         // Value types always extend _.System.Object directly (they use interior addressing, not CLR hierarchy)
-        var hasKnownBase = !type.IsValueType && type.BaseTypeName is not null && _knownProxyTypes.Contains(type.BaseTypeName);
+        var isStructProxy = IsStructType(type);
+        var hasKnownBase = !isStructProxy && type.BaseTypeName is not null && _knownProxyTypes.Contains(type.BaseTypeName);
         var baseClass = hasKnownBase
             ? GetFullyQualifiedProxyType(type.BaseTypeName!)
             : "global::_.System.Object";
@@ -246,11 +247,12 @@ public sealed class ProxyEmitter
 
         // Generate the class body with standard indentation
         var body = new StringBuilder();
-        body.AppendLine($"public {sealedKeyword}{partialKeyword}class {sanitizedName} : {baseClass}");
+        var interfaces = isStructProxy ? $", global::Ndump.Core.IProxy<{sanitizedName}>" : "";
+        body.AppendLine($"public {sealedKeyword}{partialKeyword}class {sanitizedName} : {baseClass}{interfaces}");
         body.AppendLine("{");
         var ctorAccess = isSealed ? "private" : "protected";
         body.AppendLine($"    {ctorAccess} {sanitizedName}(ulong address, DumpContext ctx) : base(address, ctx) {{ }}");
-        if (type.IsValueType)
+        if (isStructProxy)
         {
             // Value type proxy: additional constructor for interior (embedded) struct fields and array elements
             body.AppendLine($"    {ctorAccess} {sanitizedName}(ulong address, DumpContext ctx, string interiorTypeName) : base(address, ctx, interiorTypeName) {{ }}");
@@ -281,12 +283,12 @@ public sealed class ProxyEmitter
 
         // FromAddress factory — use 'new' keyword if base also has FromAddress
         // Value type proxies always need 'new' because they shadow _.System.Object's FromAddress
-        var newKeyword = hasKnownBase || type.IsValueType ? "new " : "";
+        var newKeyword = hasKnownBase || isStructProxy ? "new " : "";
         body.AppendLine();
         body.AppendLine($"    public static {newKeyword}{sanitizedName} FromAddress(ulong address, DumpContext ctx)");
         body.AppendLine($"        => new {sanitizedName}(address, ctx);");
 
-        if (type.IsValueType)
+        if (isStructProxy)
         {
             // Factory for interior (embedded) struct fields and array elements
             body.AppendLine();
@@ -294,7 +296,7 @@ public sealed class ProxyEmitter
             body.AppendLine($"        => new {sanitizedName}(address, ctx, interiorTypeName);");
         }
 
-        if (!type.IsValueType)
+        if (!isStructProxy)
         {
             // GetInstances — only for reference types (heap objects)
             body.AppendLine();
@@ -391,10 +393,16 @@ public sealed class ProxyEmitter
         });
         var classModifiers = hasNestedTypes ? "partial" : "sealed";
 
+        var isStructProxy = IsStructType(representative);
         var body = new StringBuilder();
-        body.AppendLine($"public {classModifiers} class {classNameWithParams} : {baseClass}");
+        var interfaces = isStructProxy ? $", global::Ndump.Core.IProxy<{classNameWithParams}>" : "";
+        body.AppendLine($"public {classModifiers} class {classNameWithParams} : {baseClass}{interfaces}");
         body.AppendLine("{");
         body.AppendLine($"    private {defName}(ulong address, DumpContext ctx) : base(address, ctx) {{ }}");
+        if (isStructProxy)
+        {
+            body.AppendLine($"    private {defName}(ulong address, DumpContext ctx, string interiorTypeName) : base(address, ctx, interiorTypeName) {{ }}");
+        }
 
         // Properties for each field, substituting type parameters where they match
         var usedNames = new HashSet<string> { defName, "_objAddress", "_ctx" };
@@ -416,6 +424,13 @@ public sealed class ProxyEmitter
         body.AppendLine();
         body.AppendLine($"    public static new {classNameWithParams} FromAddress(ulong address, DumpContext ctx)");
         body.AppendLine($"        => new {classNameWithParams}(address, ctx);");
+
+        if (isStructProxy)
+        {
+            body.AppendLine();
+            body.AppendLine($"    public static {classNameWithParams} FromInterior(ulong address, DumpContext ctx, string interiorTypeName)");
+            body.AppendLine($"        => new {classNameWithParams}(address, ctx, interiorTypeName);");
+        }
 
         // ToString override
         body.AppendLine();
@@ -479,16 +494,14 @@ public sealed class ProxyEmitter
 
         // Build the nested class body
         var body = new StringBuilder();
-        body.AppendLine($"    public sealed class {sanitizedNestedName} : global::_.System.Object");
+        var nestedInterfaces = nestedType.IsValueType ? $", global::Ndump.Core.IProxy<{sanitizedNestedName}>" : "";
+        body.AppendLine($"    public sealed class {sanitizedNestedName} : global::_.System.Object{nestedInterfaces}");
         body.AppendLine("    {");
 
+        body.AppendLine($"        private {sanitizedNestedName}(ulong address, DumpContext ctx) : base(address, ctx) {{ }}");
         if (nestedType.IsValueType)
         {
             body.AppendLine($"        private {sanitizedNestedName}(ulong address, DumpContext ctx, string interiorTypeName) : base(address, ctx, interiorTypeName) {{ }}");
-        }
-        else
-        {
-            body.AppendLine($"        private {sanitizedNestedName}(ulong address, DumpContext ctx) : base(address, ctx) {{ }}");
         }
 
         // Emit fields with type param substitution
@@ -520,17 +533,15 @@ public sealed class ProxyEmitter
             }
         }
 
+        body.AppendLine();
+        body.AppendLine($"        public static new {sanitizedNestedName} FromAddress(ulong address, DumpContext ctx)");
+        body.AppendLine($"            => new {sanitizedNestedName}(address, ctx);");
+
         if (nestedType.IsValueType)
         {
             body.AppendLine();
             body.AppendLine($"        public static {sanitizedNestedName} FromInterior(ulong address, DumpContext ctx, string interiorTypeName)");
             body.AppendLine($"            => new {sanitizedNestedName}(address, ctx, interiorTypeName);");
-        }
-        else
-        {
-            body.AppendLine();
-            body.AppendLine($"        public static new {sanitizedNestedName} FromAddress(ulong address, DumpContext ctx)");
-            body.AppendLine($"            => new {sanitizedNestedName}(address, ctx);");
         }
 
         body.AppendLine();
@@ -812,7 +823,7 @@ public sealed class ProxyEmitter
                     var nestedSuffix = elementTypeName[(plusIdx + 1)..];
                     var sanitizedNested = SanitizeTypeName(nestedSuffix);
                     var fieldNameArg = propName == field.Name ? "" : $"\"{field.Name}\"";
-                    sb.AppendLine($"    public global::Ndump.Core.DumpArray<{sanitizedNested}>? {propName} => ArrayField<{sanitizedNested}>({fieldNameArg});");
+                    sb.AppendLine($"    public global::Ndump.Core.DumpArray<{sanitizedNested}>? {propName} => StructArrayField<{sanitizedNested}>({fieldNameArg});");
                     return;
                 }
             }
@@ -867,7 +878,7 @@ public sealed class ProxyEmitter
         sb.AppendLine("            {");
         sb.AppendLine("                var addr = _ctx.GetObjectAddress(_objAddress, _interiorTypeName, fieldName);");
         sb.AppendLine("                if (addr == 0) return default!;");
-        sb.AppendLine("                return ResolveProxy<T>(addr, _ctx);");
+        sb.AppendLine("                return global::_.ProxyResolver.Resolve<T>(addr, _ctx);");
         sb.AppendLine("            }");
         sb.AppendLine("            return _ctx.GetFieldValue<T>(_objAddress, _interiorTypeName, fieldName);");
         sb.AppendLine("        }");
@@ -877,25 +888,19 @@ public sealed class ProxyEmitter
         sb.AppendLine("        {");
         sb.AppendLine("            var addr = _ctx.GetObjectAddress(_objAddress, fieldName);");
         sb.AppendLine("            if (addr == 0) return default!;");
-        sb.AppendLine("            return ResolveProxy<T>(addr, _ctx);");
+        sb.AppendLine("            return global::_.ProxyResolver.Resolve<T>(addr, _ctx);");
         sb.AppendLine("        }");
         sb.AppendLine("        return _ctx.GetFieldValue<T>(_objAddress, fieldName);");
         sb.AppendLine("    }");
         sb.AppendLine();
-        sb.AppendLine("    protected T StructField<T>(string structTypeName, [CallerMemberName] string fieldName = \"\")");
+        sb.AppendLine("    protected T StructField<T>(string structTypeName, [CallerMemberName] string fieldName = \"\") where T : global::Ndump.Core.IProxy<T>");
         sb.AppendLine("    {");
         sb.AppendLine("        ulong addr;");
         sb.AppendLine("        if (_interiorTypeName is not null)");
         sb.AppendLine("            addr = _ctx.GetInteriorValueTypeFieldAddress(_objAddress, _interiorTypeName, fieldName);");
         sb.AppendLine("        else");
         sb.AppendLine("            addr = _ctx.GetValueTypeFieldAddress(_objAddress, fieldName);");
-        sb.AppendLine("        return (T)CreateInteriorProxy(typeof(T), addr, _ctx, structTypeName);");
-        sb.AppendLine("    }");
-        sb.AppendLine();
-        sb.AppendLine("    private static object CreateInteriorProxy(global::System.Type proxyType, ulong address, DumpContext ctx, string structTypeName)");
-        sb.AppendLine("    {");
-        sb.AppendLine("        var method = proxyType.GetMethod(\"FromInterior\", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static);");
-        sb.AppendLine("        return method?.Invoke(null, [address, ctx, structTypeName]) ?? throw new global::System.InvalidOperationException($\"No FromInterior factory on {proxyType}\");");
+        sb.AppendLine("        return T.FromInterior(addr, _ctx, structTypeName);");
         sb.AppendLine("    }");
         sb.AppendLine();
         sb.AppendLine("    protected T? NullableField<T>([CallerMemberName] string fieldName = \"\") where T : struct");
@@ -905,7 +910,7 @@ public sealed class ProxyEmitter
         sb.AppendLine("        return _ctx.GetNullableFieldValue<T>(_objAddress, fieldName);");
         sb.AppendLine("    }");
         sb.AppendLine();
-        sb.AppendLine("    protected T? NullableStructField<T>(string innerTypeName, [CallerMemberName] string fieldName = \"\") where T : class");
+        sb.AppendLine("    protected T? NullableStructField<T>(string innerTypeName, [CallerMemberName] string fieldName = \"\") where T : class, global::Ndump.Core.IProxy<T>");
         sb.AppendLine("    {");
         sb.AppendLine("        (bool hasValue, ulong valueAddr) info;");
         sb.AppendLine("        if (_interiorTypeName is not null)");
@@ -913,7 +918,7 @@ public sealed class ProxyEmitter
         sb.AppendLine("        else");
         sb.AppendLine("            info = _ctx.GetNullableFieldInfo(_objAddress, fieldName);");
         sb.AppendLine("        if (!info.hasValue) return null;");
-        sb.AppendLine("        return (T)CreateInteriorProxy(typeof(T), info.valueAddr, _ctx, innerTypeName);");
+        sb.AppendLine("        return T.FromInterior(info.valueAddr, _ctx, innerTypeName);");
         sb.AppendLine("    }");
         sb.AppendLine();
         sb.AppendLine("    protected ulong RawFieldAddress([CallerMemberName] string fieldName = \"\")");
@@ -950,29 +955,28 @@ public sealed class ProxyEmitter
         sb.AppendLine("            return (T)(object)_ctx.GetArrayElementString(arrayAddr, index)!;");
         sb.AppendLine("        if (!typeof(T).IsValueType)");
         sb.AppendLine("        {");
-        sb.AppendLine("            var interiorMethod = typeof(T).GetMethod(\"FromInterior\", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static);");
-        sb.AppendLine("            if (interiorMethod is not null)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                var ea = _ctx.GetArrayStructElementAddress(arrayAddr, index);");
-        sb.AppendLine("                var typeName = _ctx.GetArrayComponentTypeName(arrayAddr);");
-        sb.AppendLine("                return (T)interiorMethod.Invoke(null, [ea, _ctx, typeName])!;");
-        sb.AppendLine("            }");
         sb.AppendLine("            var addr = _ctx.GetArrayElementAddress(arrayAddr, index);");
         sb.AppendLine("            if (addr == 0) return default!;");
-        sb.AppendLine("            return ResolveProxy<T>(addr, _ctx);");
+        sb.AppendLine("            return global::_.ProxyResolver.Resolve<T>(addr, _ctx);");
         sb.AppendLine("        }");
         sb.AppendLine("        return _ctx.GetArrayElementValue<T>(arrayAddr, index);");
         sb.AppendLine("    }");
-
         sb.AppendLine();
-        sb.AppendLine("    private static T ResolveProxy<T>(ulong address, DumpContext ctx)");
+        sb.AppendLine("    protected global::Ndump.Core.DumpArray<T>? StructArrayField<T>([CallerMemberName] string fieldName = \"\") where T : global::Ndump.Core.IProxy<T>");
         sb.AppendLine("    {");
-        sb.AppendLine("        var resolved = global::_.ProxyResolver.Resolve(address, ctx);");
-        sb.AppendLine("        if (resolved is T t) return t;");
-        sb.AppendLine("        var method = typeof(T).GetMethod(\"FromAddress\", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static);");
-        sb.AppendLine("        return (T)(method?.Invoke(null, [address, ctx]) ?? throw new global::System.InvalidOperationException($\"No FromAddress factory on {typeof(T)}\"));");
+        sb.AppendLine("        var addr = RefAddress(fieldName);");
+        sb.AppendLine("        if (addr == 0) return null;");
+        sb.AppendLine("        var len = _ctx.GetArrayLength(addr);");
+        sb.AppendLine("        var typeName = _ctx.GetArrayComponentTypeName(addr);");
+        sb.AppendLine("        return new global::Ndump.Core.DumpArray<T>(addr, len, i =>");
+        sb.AppendLine("        {");
+        sb.AppendLine("            var ea = _ctx.GetArrayStructElementAddress(addr, i);");
+        sb.AppendLine("            return T.FromInterior(ea, _ctx, typeName);");
+        sb.AppendLine("        });");
         sb.AppendLine("    }");
-        sb.AppendLine();
+
+
+
         sb.AppendLine("    public static Object FromAddress(ulong address, DumpContext ctx)");
         sb.AppendLine("        => new Object(address, ctx);");
         sb.AppendLine();
@@ -1076,6 +1080,13 @@ public sealed class ProxyEmitter
                 break;
         }
     }
+
+    /// <summary>
+    /// True if the type is a struct proxy — either explicitly marked as a value type,
+    /// or has a base type of System.ValueType or System.Enum (for types discovered via heap walk).
+    /// </summary>
+    private static bool IsStructType(TypeMetadata type) =>
+        type.IsValueType || type.BaseTypeName is "System.ValueType" or "System.Enum";
 
     private static bool IsUselessValueType(string? typeName) => typeName is
         null or "System.ValueType";
@@ -1396,7 +1407,7 @@ public sealed class ProxyEmitter
                 if (IsUsableProxyType(elementTypeName))
                 {
                     var qualifiedProxy = GetFullyQualifiedProxyType(elementTypeName!);
-                    sb.AppendLine($"    public global::Ndump.Core.DumpArray<{qualifiedProxy}>? {propName} => ArrayField<{qualifiedProxy}>({fieldNameArg});");
+                    sb.AppendLine($"    public global::Ndump.Core.DumpArray<{qualifiedProxy}>? {propName} => StructArrayField<{qualifiedProxy}>({fieldNameArg});");
                 }
                 else
                 {
@@ -1614,25 +1625,15 @@ public sealed class ProxyEmitter
         sb.AppendLine();
         sb.AppendLine("internal static class ProxyResolver");
         sb.AppendLine("{");
-        sb.AppendLine("    private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<string, global::System.Func<ulong, global::Ndump.Core.DumpContext, object>?> _cache = new();");
-        sb.AppendLine();
-        sb.AppendLine("    public static object? Resolve(ulong address, global::Ndump.Core.DumpContext ctx)");
+        sb.AppendLine("    public static T Resolve<T>(ulong address, global::Ndump.Core.DumpContext ctx)");
         sb.AppendLine("    {");
         sb.AppendLine("        var typeName = ctx.GetTypeName(address);");
-        sb.AppendLine("        if (typeName is null) return null;");
+        sb.AppendLine("        var proxyType = typeName is not null ? ResolveProxyType(typeName) : null;");
+        sb.AppendLine("        proxyType ??= typeof(T);");
         sb.AppendLine();
-        sb.AppendLine("        var factory = _cache.GetOrAdd(typeName, static name =>");
-        sb.AppendLine("        {");
-        sb.AppendLine("            var proxyType = ResolveProxyType(name);");
-        sb.AppendLine("            if (proxyType is null) return null;");
-        sb.AppendLine();
-        sb.AppendLine("            var method = proxyType.GetMethod(\"FromAddress\", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static);");
-        sb.AppendLine("            if (method is null) return null;");
-        sb.AppendLine();
-        sb.AppendLine("            return (global::System.Func<ulong, global::Ndump.Core.DumpContext, object>)((addr, c) => method.Invoke(null, [addr, c])!);");
-        sb.AppendLine("        });");
-        sb.AppendLine();
-        sb.AppendLine("        return factory?.Invoke(address, ctx);");
+        sb.AppendLine("        var method = proxyType.GetMethod(\"FromAddress\", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static)");
+        sb.AppendLine("            ?? throw new global::System.InvalidOperationException($\"No FromAddress factory on {proxyType}\");");
+        sb.AppendLine("        return (T)method.Invoke(null, [address, ctx])!;");
         sb.AppendLine("    }");
         sb.AppendLine();
         sb.AppendLine("    private static global::System.Type? ResolveProxyType(string clrTypeName)");

@@ -3,7 +3,7 @@ using Ndump.Core;
 
 namespace _.System.Threading;
 
-public sealed class CancellationToken : global::_.System.Object
+public sealed class CancellationToken : global::_.System.Object, global::Ndump.Core.IProxy<CancellationToken>
 {
     private CancellationToken(ulong address, DumpContext ctx) : base(address, ctx) { }
     private CancellationToken(ulong address, DumpContext ctx, string interiorTypeName) : base(address, ctx, interiorTypeName) { }

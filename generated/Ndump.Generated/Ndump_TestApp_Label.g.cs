@@ -3,7 +3,7 @@ using Ndump.Core;
 
 namespace _.Ndump.TestApp;
 
-public sealed class Label : global::_.System.Object
+public sealed class Label : global::_.System.Object, global::Ndump.Core.IProxy<Label>
 {
     private Label(ulong address, DumpContext ctx) : base(address, ctx) { }
     private Label(ulong address, DumpContext ctx, string interiorTypeName) : base(address, ctx, interiorTypeName) { }

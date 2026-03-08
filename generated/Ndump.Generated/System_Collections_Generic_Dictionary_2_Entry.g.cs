@@ -5,8 +5,9 @@ namespace _.System.Collections.Generic;
 
 public partial class Dictionary<T1, T2>
 {
-    public sealed class Entry : global::_.System.Object
+    public sealed class Entry : global::_.System.Object, global::Ndump.Core.IProxy<Entry>
     {
+        private Entry(ulong address, DumpContext ctx) : base(address, ctx) { }
         private Entry(ulong address, DumpContext ctx, string interiorTypeName) : base(address, ctx, interiorTypeName) { }
 
         public uint hashCode => Field<uint>();
@@ -16,6 +17,9 @@ public partial class Dictionary<T1, T2>
         public T1? key => Field<T1>();
 
         public T2? value => Field<T2>();
+
+        public static new Entry FromAddress(ulong address, DumpContext ctx)
+            => new Entry(address, ctx);
 
         public static Entry FromInterior(ulong address, DumpContext ctx, string interiorTypeName)
             => new Entry(address, ctx, interiorTypeName);

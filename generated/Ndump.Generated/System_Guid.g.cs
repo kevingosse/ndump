@@ -3,9 +3,10 @@ using Ndump.Core;
 
 namespace _.System;
 
-public sealed class Guid : _.System.ValueType
+public sealed class Guid : global::_.System.Object, global::Ndump.Core.IProxy<Guid>
 {
     private Guid(ulong address, DumpContext ctx) : base(address, ctx) { }
+    private Guid(ulong address, DumpContext ctx, string interiorTypeName) : base(address, ctx, interiorTypeName) { }
 
     public int _a => Field<int>();
 
@@ -32,11 +33,8 @@ public sealed class Guid : _.System.ValueType
     public static new Guid FromAddress(ulong address, DumpContext ctx)
         => new Guid(address, ctx);
 
-    public static new global::System.Collections.Generic.IEnumerable<Guid> GetInstances(DumpContext ctx)
-    {
-        foreach (var addr in ctx.EnumerateInstances("System.Guid"))
-            yield return new Guid(addr, ctx);
-    }
+    public static Guid FromInterior(ulong address, DumpContext ctx, string interiorTypeName)
+        => new Guid(address, ctx, interiorTypeName);
 
     public override string ToString() => $"Guid@0x{_objAddress:X}";
 }

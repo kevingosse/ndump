@@ -3,7 +3,7 @@ using Ndump.Core;
 
 namespace _.System;
 
-public sealed class Int32 : global::_.System.Object
+public sealed class Int32 : global::_.System.Object, global::Ndump.Core.IProxy<Int32>
 {
     private Int32(ulong address, DumpContext ctx) : base(address, ctx) { }
     private Int32(ulong address, DumpContext ctx, string interiorTypeName) : base(address, ctx, interiorTypeName) { }

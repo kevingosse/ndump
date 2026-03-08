@@ -3,7 +3,7 @@ using Ndump.Core;
 
 namespace _.System;
 
-public sealed partial class DateTime : global::_.System.Object
+public sealed partial class DateTime : global::_.System.Object, global::Ndump.Core.IProxy<DateTime>
 {
     private DateTime(ulong address, DumpContext ctx) : base(address, ctx) { }
     private DateTime(ulong address, DumpContext ctx, string interiorTypeName) : base(address, ctx, interiorTypeName) { }

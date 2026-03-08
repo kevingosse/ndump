@@ -3,7 +3,7 @@ using Ndump.Core;
 
 namespace _.System;
 
-public sealed class RuntimeFieldHandleInternal : global::_.System.Object
+public sealed class RuntimeFieldHandleInternal : global::_.System.Object, global::Ndump.Core.IProxy<RuntimeFieldHandleInternal>
 {
     private RuntimeFieldHandleInternal(ulong address, DumpContext ctx) : base(address, ctx) { }
     private RuntimeFieldHandleInternal(ulong address, DumpContext ctx, string interiorTypeName) : base(address, ctx, interiorTypeName) { }

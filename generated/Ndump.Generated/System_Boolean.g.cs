@@ -3,7 +3,7 @@ using Ndump.Core;
 
 namespace _.System;
 
-public sealed class Boolean : global::_.System.Object
+public sealed class Boolean : global::_.System.Object, global::Ndump.Core.IProxy<Boolean>
 {
     private Boolean(ulong address, DumpContext ctx) : base(address, ctx) { }
     private Boolean(ulong address, DumpContext ctx, string interiorTypeName) : base(address, ctx, interiorTypeName) { }
