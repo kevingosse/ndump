@@ -11,7 +11,7 @@ public sealed class DumpContext : IDisposable
 {
     private readonly DataTarget _dataTarget;
     private readonly ClrRuntime _runtime;
-    private readonly Dictionary<string, ClrType?> _typeCache = [];
+    private readonly Dictionary<string, ClrType> _specializedTypes = [];
     private bool _disposed;
 
     public ClrRuntime Runtime => _runtime;
@@ -102,8 +102,9 @@ public sealed class DumpContext : IDisposable
 
     /// <summary>
     /// Get the CLR type name of an array's component (element) type.
-    /// Also caches the specialized component type so that FindFieldByTypeName
-    /// resolves to the correct instantiation (important for generic nested value types).
+    /// Registers the specialized component type so that FindTypeByName resolves
+    /// to the correct instantiation (important for generic nested value types
+    /// like Dictionary&lt;K,V&gt;+Entry which module lookup cannot resolve).
     /// </summary>
     public string GetArrayComponentTypeName(ulong arrayAddress)
     {
@@ -115,19 +116,24 @@ public sealed class DumpContext : IDisposable
             ?? throw new InvalidOperationException($"Object at 0x{arrayAddress:X} has no component type");
 
         var name = componentType.Name!;
-        // Cache the specialized component type so FindFieldByTypeName uses it
-        // instead of looking up the generic definition from modules
-        _typeCache.TryAdd(name, componentType);
+        // Register the specialized component type so FindTypeByName resolves
+        // the correct instantiation (e.g. Dictionary<Int32, String>+Entry)
+        // rather than the generic definition from module lookup.
+        _specializedTypes.TryAdd(name, componentType);
         return name;
     }
 
     /// <summary>
-    /// Resolve a CLR type by name, searching all loaded modules. Results are cached.
+    /// Resolve a CLR type by name. Checks registered specialized types first,
+    /// then searches all loaded modules.
     /// </summary>
     public ClrType? FindTypeByName(string typeName)
     {
-        if (_typeCache.TryGetValue(typeName, out var cached))
-            return cached;
+        // Specialized generic types (e.g. Dictionary<Int32, String>+Entry) cannot be
+        // found through module lookup, which only returns the generic definition.
+        // Check registered specialized types first.
+        if (_specializedTypes.TryGetValue(typeName, out var specialized))
+            return specialized;
 
         // ClrMD modules use backtick-arity notation, not angle brackets.
         // Convert "Dictionary<String, Int32>+Entry" to "Dictionary`2+Entry" for lookup.
@@ -140,7 +146,6 @@ public sealed class DumpContext : IDisposable
             if (found is not null) break;
         }
 
-        _typeCache[typeName] = found;
         return found;
     }
 
