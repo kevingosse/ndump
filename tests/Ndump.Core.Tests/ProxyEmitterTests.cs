@@ -212,8 +212,8 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        // GetObjAddress is inherited from _.System.Object, not emitted directly
-        Assert.DoesNotContain("public ulong GetObjAddress()", code);
+        // GetObjectAddress is inherited from _.System.Object, not emitted directly
+        Assert.DoesNotContain("public ulong GetObjectAddress()", code);
         Assert.Contains(": global::_.System.Object", code);
     }
 
@@ -836,7 +836,7 @@ public class ProxyEmitterTests
         // Should declare _objAddress and _context fields
         Assert.Contains("protected readonly ulong _objAddress;", code);
         Assert.Contains("protected readonly DumpContext _context;", code);
-        Assert.Contains("public ulong GetObjAddress() => _objAddress;", code);
+        Assert.Contains("public ulong GetObjectAddress() => _objAddress;", code);
         // Should NOT extend any base class — class declaration has no base
         Assert.Matches(@"public class Object\r?\n", code);
         Assert.DoesNotContain("sealed", code);

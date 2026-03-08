@@ -31,7 +31,7 @@ public sealed class DumpArray<T> : IEnumerable<T>
         }
     }
 
-    public ulong GetObjAddress() => _address;
+    public ulong GetObjectAddress() => _address;
 
     public IEnumerator<T> GetEnumerator()
     {

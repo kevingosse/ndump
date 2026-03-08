@@ -834,7 +834,7 @@ public sealed class ProxyEmitter
     }
 
     /// <summary>
-    /// Generate the root System.Object proxy that declares _objAddress, _context, and GetObjAddress().
+    /// Generate the root System.Object proxy that declares _objAddress, _context, and GetObjectAddress().
     /// All other proxies ultimately inherit from this type.
     /// </summary>
     private static string GenerateSystemObjectProxy(TypeMetadata type)
@@ -866,7 +866,7 @@ public sealed class ProxyEmitter
         sb.AppendLine("        _interiorTypeName = interiorTypeName;");
         sb.AppendLine("    }");
         sb.AppendLine();
-        sb.AppendLine("    public ulong GetObjAddress() => _objAddress;");
+        sb.AppendLine("    public ulong GetObjectAddress() => _objAddress;");
         sb.AppendLine();
         sb.AppendLine("    protected T Field<T>([CallerMemberName] string fieldName = \"\")");
         sb.AppendLine("    {");

@@ -24,7 +24,7 @@ public class Object
         _interiorTypeName = interiorTypeName;
     }
 
-    public ulong GetObjAddress() => _objAddress;
+    public ulong GetObjectAddress() => _objAddress;
 
     protected T Field<T>([CallerMemberName] string fieldName = "")
     {

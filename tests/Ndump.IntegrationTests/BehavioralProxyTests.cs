@@ -246,7 +246,7 @@ public class BehavioralProxyTests : IClassFixture<DumpFixture>
         // nodeA._self should point to itself
         var selfRef = nodeA._self;
         Assert.NotNull(selfRef);
-        Assert.Equal(nodeA.GetObjAddress(), selfRef.GetObjAddress());
+        Assert.Equal(nodeA.GetObjectAddress(), selfRef.GetObjectAddress());
     }
 
     [Fact]
@@ -279,7 +279,7 @@ public class BehavioralProxyTests : IClassFixture<DumpFixture>
         var step2 = step1._next!;          // C
         var step3 = step2._next!;          // A (back to start)
 
-        Assert.Equal(nodeA.GetObjAddress(), step3.GetObjAddress());
+        Assert.Equal(nodeA.GetObjectAddress(), step3.GetObjectAddress());
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -537,7 +537,7 @@ public class BehavioralProxyTests : IClassFixture<DumpFixture>
 
         Assert.NotNull(ref1);
         Assert.NotNull(ref2);
-        Assert.Equal(ref1.GetObjAddress(), ref2.GetObjAddress());
+        Assert.Equal(ref1.GetObjectAddress(), ref2.GetObjectAddress());
     }
 
     [Fact]
@@ -549,7 +549,7 @@ public class BehavioralProxyTests : IClassFixture<DumpFixture>
 
         Assert.NotNull(shared);
         Assert.NotNull(sharedAgain);
-        Assert.Equal(shared.GetObjAddress(), sharedAgain.GetObjAddress());
+        Assert.Equal(shared.GetObjectAddress(), sharedAgain.GetObjectAddress());
     }
 
     [Fact]
@@ -596,14 +596,14 @@ public class BehavioralProxyTests : IClassFixture<DumpFixture>
     }
 
     // ══════════════════════════════════════════════════════════════════
-    //  GetObjAddress() AND ToString()
+    //  GetObjectAddress() AND ToString()
     // ══════════════════════════════════════════════════════════════════
 
     [Fact]
     public void GetObjAddress_ReturnsNonZero()
     {
         var tag = Tag.GetInstances(Context).First();
-        Assert.NotEqual(0UL, tag.GetObjAddress());
+        Assert.NotEqual(0UL, tag.GetObjectAddress());
     }
 
     [Fact]
@@ -618,7 +618,7 @@ public class BehavioralProxyTests : IClassFixture<DumpFixture>
     {
         var tag = Tag.GetInstances(Context).First();
         string str = tag.ToString();
-        ulong addr = tag.GetObjAddress();
+        ulong addr = tag.GetObjectAddress();
         Assert.Contains(addr.ToString("X"), str);
     }
 
@@ -718,7 +718,7 @@ public class BehavioralProxyTests : IClassFixture<DumpFixture>
     {
         var tags = Tag.GetInstances(Context).ToList();
         var importantTag = tags.Single(t => t._label == "important");
-        ulong addr = importantTag.GetObjAddress();
+        ulong addr = importantTag.GetObjectAddress();
 
         // Create a new proxy from the same address
         var newProxy = Tag.FromAddress(addr, Context);

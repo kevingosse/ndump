@@ -179,7 +179,7 @@ public class DumpProjectionTests : IClassFixture<DumpFixture>
 
         var proxy = Tag.FromAddress(addresses[0], Context);
         Assert.NotNull(proxy);
-        Assert.Equal(addresses[0], proxy.GetObjAddress());
+        Assert.Equal(addresses[0], proxy.GetObjectAddress());
     }
 
     [Fact]
