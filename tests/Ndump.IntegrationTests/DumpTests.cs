@@ -1,33 +1,29 @@
-using System.Diagnostics;
-using System.Reflection;
+﻿using System.Diagnostics;
 using Ndump.Core;
 
 namespace Ndump.IntegrationTests;
 
-/// <summary>
-/// Helper to build TestApp, start it (which self-dumps via createdump), and clean up.
-/// Also projects the dump once so all tests share a single projection.
-/// </summary>
-public sealed class DumpFixture : IAsyncLifetime
-{
-    public string DumpPath { get; private set; } = "";
-
-    /// <summary>
-    /// Shared projection result. Tests should use this instead of calling Project() themselves.
-    /// </summary>
-    public DumpProjector.ProjectionResult Projection { get; private set; } = null!;
-
+public abstract class DumpTests
+{    
     private readonly string _testAppDir;
     private readonly string _publishDir;
 
-    public DumpFixture()
+    protected DumpTests()
     {
         var solutionRoot = FindSolutionRoot();
         _testAppDir = Path.Combine(solutionRoot, "src", "Ndump.TestApp");
         _publishDir = Path.Combine(Path.GetTempPath(), $"ndump_testapp_{Guid.NewGuid():N}");
     }
 
-    public async Task InitializeAsync()
+    protected string DumpPath { get; private set; }
+
+    /// <summary>
+    /// Shared projection result. Tests should use this instead of calling Project() themselves.
+    /// </summary>
+    protected DumpProjector.ProjectionResult Projection { get; private set; }
+
+    [OneTimeSetUp]
+    public async Task OneTimeSetUp()
     {
         // Publish TestApp
         Directory.CreateDirectory(_publishDir);
@@ -101,12 +97,41 @@ public sealed class DumpFixture : IAsyncLifetime
         Projection = projector.Project(DumpPath);
     }
 
-    public Task DisposeAsync()
+    [OneTimeTearDown]
+    public void OneTimeTearDown()
     {
-        try { Projection?.Dispose(); } catch { }
-        try { if (File.Exists(DumpPath)) File.Delete(DumpPath); } catch { }
-        try { if (Directory.Exists(_publishDir)) Directory.Delete(_publishDir, true); } catch { }
-        return Task.CompletedTask;
+        try
+        {
+            Projection.Dispose();
+        }
+        catch
+        {
+            //
+        }
+
+        try
+        {
+            if (File.Exists(DumpPath))
+            {
+                File.Delete(DumpPath);
+            }
+        }
+        catch
+        {
+            //
+        }
+
+        try
+        {
+            if (Directory.Exists(_publishDir))
+            {
+                Directory.Delete(_publishDir, true);
+            }
+        }
+        catch
+        {
+            //
+        }
     }
 
     private static string FindSolutionRoot()

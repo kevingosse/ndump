@@ -10,223 +10,213 @@ namespace Ndump.IntegrationTests;
 /// not just the shape of the generated code.
 /// Uses statically-typed proxies from Ndump.Generated.
 /// </summary>
-public class BehavioralProxyTests : IClassFixture<DumpFixture>
+public class BehavioralProxyTests : DumpTests
 {
-    private readonly DumpFixture _fixture;
-    private DumpContext Context => _fixture.Projection.Context;
-
-    public BehavioralProxyTests(DumpFixture fixture)
-    {
-        _fixture = fixture;
-    }
+    private DumpContext Context => Projection.Context;
 
     // ══════════════════════════════════════════════════════════════════
     //  PRIMITIVE TYPES
     // ══════════════════════════════════════════════════════════════════
 
-    [Fact]
+    [Test]
     public void Primitives_Bool_ReadsCorrectValue()
     {
         var obj = AllPrimitives.GetInstances(Context).Single();
-        Assert.True(obj._boolVal);
+        obj._boolVal.ShouldBeTrue();
     }
 
-    [Fact]
+    [Test]
     public void Primitives_Byte_ReadsCorrectValue()
     {
         var obj = AllPrimitives.GetInstances(Context).Single();
-        Assert.Equal((byte)255, obj._byteVal);
+        obj._byteVal.ShouldBe((byte)255);
     }
 
-    [Fact]
+    [Test]
     public void Primitives_SByte_ReadsCorrectValue()
     {
         var obj = AllPrimitives.GetInstances(Context).Single();
-        Assert.Equal((sbyte)-42, obj._sbyteVal);
+        obj._sbyteVal.ShouldBe((sbyte)-42);
     }
 
-    [Fact]
+    [Test]
     public void Primitives_Short_ReadsCorrectValue()
     {
         var obj = AllPrimitives.GetInstances(Context).Single();
-        Assert.Equal((short)-1000, obj._shortVal);
+        obj._shortVal.ShouldBe((short)-1000);
     }
 
-    [Fact]
+    [Test]
     public void Primitives_UShort_ReadsCorrectValue()
     {
         var obj = AllPrimitives.GetInstances(Context).Single();
-        Assert.Equal((ushort)50000, obj._ushortVal);
+        obj._ushortVal.ShouldBe((ushort)50000);
     }
 
-    [Fact]
+    [Test]
     public void Primitives_Int_ReadsCorrectValue()
     {
         var obj = AllPrimitives.GetInstances(Context).Single();
-        Assert.Equal(123456, obj._intVal);
+        obj._intVal.ShouldBe(123456);
     }
 
-    [Fact]
+    [Test]
     public void Primitives_UInt_ReadsCorrectValue()
     {
         var obj = AllPrimitives.GetInstances(Context).Single();
-        Assert.Equal(4000000000u, obj._uintVal);
+        obj._uintVal.ShouldBe(4000000000u);
     }
 
-    [Fact]
+    [Test]
     public void Primitives_Long_ReadsCorrectValue()
     {
         var obj = AllPrimitives.GetInstances(Context).Single();
-        Assert.Equal(9876543210L, obj._longVal);
+        obj._longVal.ShouldBe(9876543210L);
     }
 
-    [Fact]
+    [Test]
     public void Primitives_ULong_ReadsCorrectValue()
     {
         var obj = AllPrimitives.GetInstances(Context).Single();
-        Assert.Equal(18446744073709551615UL, obj._ulongVal);
+        obj._ulongVal.ShouldBe(18446744073709551615UL);
     }
 
-    [Fact]
+    [Test]
     public void Primitives_Float_ReadsCorrectValue()
     {
         var obj = AllPrimitives.GetInstances(Context).Single();
-        Assert.Equal(3.14f, obj._floatVal, precision: 2);
+        obj._floatVal.ShouldBe(3.14f, (float)Math.Pow(10, -2));
     }
 
-    [Fact]
+    [Test]
     public void Primitives_Double_ReadsCorrectValue()
     {
         var obj = AllPrimitives.GetInstances(Context).Single();
-        Assert.Equal(2.718281828, obj._doubleVal, precision: 6);
+        obj._doubleVal.ShouldBe(2.718281828, Math.Pow(10, -6));
     }
 
-    [Fact]
+    [Test]
     public void Primitives_Char_ReadsCorrectValue()
     {
         var obj = AllPrimitives.GetInstances(Context).Single();
-        Assert.Equal('Z', obj._charVal);
+        obj._charVal.ShouldBe('Z');
     }
 
     // ══════════════════════════════════════════════════════════════════
     //  NULLABLE<T> VALUE TYPES
     // ══════════════════════════════════════════════════════════════════
 
-    [Fact]
+    [Test]
     public void Nullable_IntWithValue_ReadsCorrectly()
     {
         var obj = NullableHolder.GetInstances(Context).Single();
-        int? val = obj._intHasValue;
-        Assert.NotNull(val);
-        Assert.Equal(42, val.Value);
+        var val = obj._intHasValue;
+        val.ShouldNotBeNull();
+        val.Value.ShouldBe(42);
     }
 
-    [Fact]
+    [Test]
     public void Nullable_IntNull_ReadsAsNull()
     {
         var obj = NullableHolder.GetInstances(Context).Single();
-        int? val = obj._intNull;
-        Assert.Null(val);
+        obj._intNull.ShouldBeNull();
     }
 
-    [Fact]
+    [Test]
     public void Nullable_DoubleWithValue_ReadsCorrectly()
     {
         var obj = NullableHolder.GetInstances(Context).Single();
-        double? val = obj._doubleHasValue;
-        Assert.NotNull(val);
-        Assert.Equal(3.14, val.Value, precision: 2);
+        var val = obj._doubleHasValue;
+        val.ShouldNotBeNull();
+        val.Value.ShouldBe(3.14, Math.Pow(10, -2));
     }
 
-    [Fact]
+    [Test]
     public void Nullable_DoubleNull_ReadsAsNull()
     {
         var obj = NullableHolder.GetInstances(Context).Single();
-        double? val = obj._doubleNull;
-        Assert.Null(val);
+        obj._doubleNull.ShouldBeNull();
     }
 
-    [Fact]
+    [Test]
     public void Nullable_BoolWithValue_ReadsCorrectly()
     {
         var obj = NullableHolder.GetInstances(Context).Single();
-        bool? val = obj._boolHasValue;
-        Assert.NotNull(val);
-        Assert.True(val.Value);
+        var val = obj._boolHasValue;
+        val.ShouldNotBeNull();
+        val.Value.ShouldBeTrue();
     }
 
-    [Fact]
+    [Test]
     public void Nullable_BoolNull_ReadsAsNull()
     {
         var obj = NullableHolder.GetInstances(Context).Single();
-        bool? val = obj._boolNull;
-        Assert.Null(val);
+        obj._boolNull.ShouldBeNull();
     }
 
-    [Fact]
+    [Test]
     public void Nullable_LongWithValue_ReadsCorrectly()
     {
         var obj = NullableHolder.GetInstances(Context).Single();
-        long? val = obj._longHasValue;
-        Assert.NotNull(val);
-        Assert.Equal(9876543210L, val.Value);
+        var val = obj._longHasValue;
+        val.ShouldNotBeNull();
+        val.Value.ShouldBe(9876543210L);
     }
 
-    [Fact]
+    [Test]
     public void Nullable_LongNull_ReadsAsNull()
     {
         var obj = NullableHolder.GetInstances(Context).Single();
-        long? val = obj._longNull;
-        Assert.Null(val);
+        obj._longNull.ShouldBeNull();
     }
 
     // ══════════════════════════════════════════════════════════════════
     //  STRING VARIANTS
     // ══════════════════════════════════════════════════════════════════
 
-    [Fact]
+    [Test]
     public void Strings_NormalString_ReadsCorrectly()
     {
         var obj = StringVariants.GetInstances(Context).Single();
-        Assert.Equal("hello", obj._normal);
+        obj._normal.ShouldBe("hello");
     }
 
-    [Fact]
+    [Test]
     public void Strings_NullString_ReadsAsNull()
     {
         var obj = StringVariants.GetInstances(Context).Single();
-        Assert.Null(obj._nullString);
+        obj._nullString.ShouldBeNull();
     }
 
-    [Fact]
+    [Test]
     public void Strings_EmptyString_ReadsAsEmpty()
     {
         var obj = StringVariants.GetInstances(Context).Single();
-        Assert.Equal("", obj._empty);
+        obj._empty.ShouldBe("");
     }
 
-    [Fact]
+    [Test]
     public void Strings_Unicode_ReadsCorrectly()
     {
         var obj = StringVariants.GetInstances(Context).Single();
-        Assert.Equal("日本語テスト🎉", obj._unicode);
+        obj._unicode.ShouldBe("日本語テスト🎉");
     }
 
-    [Fact]
+    [Test]
     public void Strings_LongString_ReadsCorrectly()
     {
         var obj = StringVariants.GetInstances(Context).Single();
         string? val = obj._long;
-        Assert.NotNull(val);
-        Assert.Equal(500, val.Length);
-        Assert.True(val.All(c => c == 'x'));
+        val.ShouldNotBeNull();
+        val.Length.ShouldBe(500);
+        val.All(c => c == 'x').ShouldBeTrue();
     }
 
     // ══════════════════════════════════════════════════════════════════
     //  OBJECT REFERENCES: NULL, SELF-REF, CIRCULAR
     // ══════════════════════════════════════════════════════════════════
 
-    [Fact]
+    [Test]
     public void Node_NullNext_ReturnsNull()
     {
         // Node "C" originally has next = null (before circular link is set), but
@@ -234,10 +224,10 @@ public class BehavioralProxyTests : IClassFixture<DumpFixture>
         var nodes = Node.GetInstances(Context).ToList();
         // Find node B: B -> C
         var nodeB = nodes.Single(n => n._name == "B");
-        Assert.NotNull(nodeB._next);
+        nodeB._next.ShouldNotBeNull();
     }
 
-    [Fact]
+    [Test]
     public void Node_SelfReference_SameAddress()
     {
         var nodes = Node.GetInstances(Context).ToList();
@@ -245,30 +235,30 @@ public class BehavioralProxyTests : IClassFixture<DumpFixture>
 
         // nodeA._self should point to itself
         var selfRef = nodeA._self;
-        Assert.NotNull(selfRef);
-        Assert.Equal(nodeA.GetObjectAddress(), selfRef.GetObjectAddress());
+        selfRef.ShouldNotBeNull();
+        selfRef.GetObjectAddress().ShouldBe(nodeA.GetObjectAddress());
     }
 
-    [Fact]
+    [Test]
     public void Node_CircularReference_Traversable()
     {
         var nodes = Node.GetInstances(Context).ToList();
         var nodeA = nodes.Single(n => n._name == "A");
 
         // A -> B -> C -> A (circular)
-        Node? current = nodeA;
+        var current = nodeA;
         var visited = new List<string>();
         for (int i = 0; i < 4; i++)
         {
             visited.Add(current._name!);
             current = current._next;
-            Assert.NotNull(current);
+            current.ShouldNotBeNull();
         }
 
-        Assert.Equal(["A", "B", "C", "A"], visited);
+        visited.ShouldBe(new[] { "A", "B", "C", "A" });
     }
 
-    [Fact]
+    [Test]
     public void Node_CircularReference_AddressesMatch()
     {
         var nodes = Node.GetInstances(Context).ToList();
@@ -279,152 +269,152 @@ public class BehavioralProxyTests : IClassFixture<DumpFixture>
         var step2 = step1._next!;          // C
         var step3 = step2._next!;          // A (back to start)
 
-        Assert.Equal(nodeA.GetObjectAddress(), step3.GetObjectAddress());
+        step3.GetObjectAddress().ShouldBe(nodeA.GetObjectAddress());
     }
 
     // ══════════════════════════════════════════════════════════════════
     //  DEEP INHERITANCE CHAIN
     // ══════════════════════════════════════════════════════════════════
 
-    [Fact]
+    [Test]
     public void DeepInheritance_Leaf_InheritsFromMiddle()
     {
-        Assert.True(typeof(Middle).IsAssignableFrom(typeof(Leaf)));
-        Assert.True(typeof(Base).IsAssignableFrom(typeof(Leaf)));
-        Assert.True(typeof(_.System.Object).IsAssignableFrom(typeof(Leaf)));
+        typeof(Middle).IsAssignableFrom(typeof(Leaf)).ShouldBeTrue();
+        typeof(Base).IsAssignableFrom(typeof(Leaf)).ShouldBeTrue();
+        typeof(_.System.Object).IsAssignableFrom(typeof(Leaf)).ShouldBeTrue();
     }
 
-    [Fact]
+    [Test]
     public void DeepInheritance_Leaf_CanReadAllFields()
     {
         var leaf = Leaf.GetInstances(Context).Single();
 
         // Inherited from Base
-        Assert.Equal(100, leaf._baseField);
+        leaf._baseField.ShouldBe(100);
         // Inherited from Middle
-        Assert.Equal("mid", leaf._middleField);
+        leaf._middleField.ShouldBe("mid");
         // Own field
-        Assert.Equal(3.14, leaf._leafField, precision: 2);
+        leaf._leafField.ShouldBe(3.14, Math.Pow(10, -2));
     }
 
-    [Fact]
+    [Test]
     public void DeepInheritance_FieldsAreDeclaredAtCorrectLevel()
     {
         // _baseField declared on Base only
-        Assert.NotNull(typeof(Base).GetProperty("_baseField", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly));
-        Assert.Null(typeof(Middle).GetProperty("_baseField", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly));
-        Assert.Null(typeof(Leaf).GetProperty("_baseField", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly));
+        typeof(Base).GetProperty("_baseField", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly).ShouldNotBeNull();
+        typeof(Middle).GetProperty("_baseField", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly).ShouldBeNull();
+        typeof(Leaf).GetProperty("_baseField", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly).ShouldBeNull();
 
         // _middleField declared on Middle only
-        Assert.NotNull(typeof(Middle).GetProperty("_middleField", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly));
-        Assert.Null(typeof(Leaf).GetProperty("_middleField", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly));
+        typeof(Middle).GetProperty("_middleField", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly).ShouldNotBeNull();
+        typeof(Leaf).GetProperty("_middleField", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly).ShouldBeNull();
 
         // _leafField declared on Leaf only
-        Assert.NotNull(typeof(Leaf).GetProperty("_leafField", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly));
+        typeof(Leaf).GetProperty("_leafField", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly).ShouldNotBeNull();
     }
 
     // ══════════════════════════════════════════════════════════════════
     //  ENUM FIELDS
     // ══════════════════════════════════════════════════════════════════
 
-    [Fact]
+    [Test]
     public void Enums_IntBacked_ReadsCorrectValue()
     {
         // Enums are projected as their underlying primitive type
         var obj = EnumHolder.GetInstances(Context).Single();
         // Color.Blue = 3
-        Assert.Equal(3, obj._color);
+        obj._color.ShouldBe(3);
     }
 
-    [Fact]
+    [Test]
     public void Enums_ByteBacked_ReadsCorrectValue()
     {
         var obj = EnumHolder.GetInstances(Context).Single();
         // SmallEnum.High = 3
-        Assert.Equal((byte)3, obj._priority);
+        obj._priority.ShouldBe((byte)3);
     }
 
-    [Fact]
+    [Test]
     public void Enums_FlagsEnum_ReadsCorrectValue()
     {
         var obj = EnumHolder.GetInstances(Context).Single();
         // Permissions.Read | Permissions.Write = 1 | 2 = 3
-        Assert.Equal(3, obj._permissions);
+        obj._permissions.ShouldBe(3);
     }
 
     // ══════════════════════════════════════════════════════════════════
     //  STRUCT (VALUE TYPE) FIELDS EMBEDDED IN CLASSES
     // ══════════════════════════════════════════════════════════════════
 
-    [Fact]
+    [Test]
     public void Struct_Point_ReadsFromClass()
     {
         var obj = StructHolder.GetInstances(Context).Single();
         var pt = obj._position;
-        Assert.Equal(10, pt.X);
-        Assert.Equal(20, pt.Y);
+        pt.X.ShouldBe(10);
+        pt.Y.ShouldBe(20);
     }
 
-    [Fact]
+    [Test]
     public void Struct_NestedStruct_Rectangle_ReadsTopLeft()
     {
         var obj = StructHolder.GetInstances(Context).Single();
         var rect = obj._bounds;
         var topLeft = rect.TopLeft;
-        Assert.Equal(10, topLeft.X);
-        Assert.Equal(20, topLeft.Y);
+        topLeft.X.ShouldBe(10);
+        topLeft.Y.ShouldBe(20);
     }
 
-    [Fact]
+    [Test]
     public void Struct_NestedStruct_Rectangle_ReadsBottomRight()
     {
         var obj = StructHolder.GetInstances(Context).Single();
         var rect = obj._bounds;
         var bottomRight = rect.BottomRight;
-        Assert.Equal(30, bottomRight.X);
-        Assert.Equal(40, bottomRight.Y);
+        bottomRight.X.ShouldBe(30);
+        bottomRight.Y.ShouldBe(40);
     }
 
-    [Fact]
+    [Test]
     public void Struct_Label_ReadsStringField()
     {
         var obj = StructHolder.GetInstances(Context).Single();
         var label = obj._label;
-        Assert.Equal("test-label", label.Text);
+        label.Text.ShouldBe("test-label");
     }
 
-    [Fact]
+    [Test]
     public void Struct_Label_ReadsPrimitiveField()
     {
         var obj = StructHolder.GetInstances(Context).Single();
         var label = obj._label;
-        Assert.Equal(5, label.Priority);
+        label.Priority.ShouldBe(5);
     }
 
-    [Fact]
+    [Test]
     public void Struct_Label_ReadsObjectRefField_AsConcreteType()
     {
         var obj = StructHolder.GetInstances(Context).Single();
         var label = obj._label;
         // Metadata was set to tag1 ("important", id=1)
         var meta = label.Metadata;
-        Assert.NotNull(meta);
+        meta.ShouldNotBeNull();
         // It's a Tag proxy resolved via ProxyResolver (typed as _.System.Object)
-        Assert.IsType<Tag>(meta);
+        meta.ShouldBeOfType<Tag>();
     }
 
-    [Fact]
+    [Test]
     public void Struct_Label_ReadsObjectRefField_Data()
     {
         var obj = StructHolder.GetInstances(Context).Single();
         var label = obj._label;
         // Metadata was set to tag1 ("important", id=1) — verify data through resolved proxy
         var meta = (Tag)label.Metadata!;
-        Assert.Equal("important", meta._label);
-        Assert.Equal(1L, meta._id);
+        meta._label.ShouldBe("important");
+        meta._id.ShouldBe(1L);
     }
 
-    [Fact]
+    [Test]
     public void Struct_Label_ReadsObjectRefField_AsSystemObject()
     {
         var obj = StructHolder.GetInstances(Context).Single();
@@ -432,15 +422,15 @@ public class BehavioralProxyTests : IClassFixture<DumpFixture>
         // Metadata was set to tag1 - resolved to concrete Tag proxy via ProxyResolver,
         // which still passes IsInstanceOfType check since Tag inherits from _.System.Object
         var meta = label.Metadata;
-        Assert.NotNull(meta);
-        Assert.IsAssignableFrom<_.System.Object>(meta);
+        meta.ShouldNotBeNull();
+        meta.ShouldBeAssignableTo<_.System.Object>();
     }
 
     // ══════════════════════════════════════════════════════════════════
     //  STRUCT ARRAYS (arrays of value types)
     // ══════════════════════════════════════════════════════════════════
 
-    [Fact]
+    [Test]
     public void StructArray_Point_HasCorrectLength()
     {
         // Find all Point[] arrays on the heap
@@ -451,218 +441,218 @@ public class BehavioralProxyTests : IClassFixture<DumpFixture>
                 pointArrays.Add(obj.Address);
         }
 
-        Assert.NotEmpty(pointArrays);
+        pointArrays.ShouldNotBeEmpty();
 
         // Our Point[] has 3 elements: (1,2), (3,4), (5,6)
         var arr = pointArrays.First(a => Context.GetArrayLength(a) == 3);
-        Assert.Equal(3, Context.GetArrayLength(arr));
+        Context.GetArrayLength(arr).ShouldBe(3);
     }
 
     // ══════════════════════════════════════════════════════════════════
     //  PRIMITIVE ARRAYS
     // ══════════════════════════════════════════════════════════════════
 
-    [Fact]
+    [Test]
     public void PrimitiveArray_Int_ReadsCorrectValues()
     {
         var obj = ArrayHolder.GetInstances(Context).Single();
         var intArr = obj._intArray!.ToList();
-        Assert.Equal([10, 20, 30, 40, 50], intArr);
+        intArr.ShouldBe([10, 20, 30, 40, 50]);
     }
 
-    [Fact]
+    [Test]
     public void PrimitiveArray_Byte_ReadsCorrectValues()
     {
         var obj = ArrayHolder.GetInstances(Context).Single();
         var byteArr = obj._byteArray!.ToList();
-        Assert.Equal([0x01, 0xFF, 0x42], byteArr);
+        byteArr.ShouldBe([0x01, 0xFF, 0x42]);
     }
 
-    [Fact]
+    [Test]
     public void PrimitiveArray_Double_ReadsCorrectValues()
     {
         var obj = ArrayHolder.GetInstances(Context).Single();
         var doubleArr = obj._doubleArray!.ToList();
-        Assert.Equal([1.1, 2.2, 3.3], doubleArr);
+        doubleArr.ShouldBe([1.1, 2.2, 3.3]);
     }
 
-    [Fact]
+    [Test]
     public void PrimitiveArray_Double_HasCorrectLength()
     {
         var obj = ArrayHolder.GetInstances(Context).Single();
-        Assert.Equal(3, obj._doubleArray!.Length);
+        obj._doubleArray!.Length.ShouldBe(3);
     }
 
-    [Fact]
+    [Test]
     public void PrimitiveArray_Bool_ReadsCorrectValues()
     {
         var obj = ArrayHolder.GetInstances(Context).Single();
         var boolArr = obj._boolArray!.ToList();
-        Assert.Equal([true, false, true], boolArr);
+        boolArr.ShouldBe([true, false, true]);
     }
 
-    [Fact]
+    [Test]
     public void PrimitiveArray_Bool_HasCorrectLength()
     {
         var obj = ArrayHolder.GetInstances(Context).Single();
-        Assert.Equal(3, obj._boolArray!.Length);
+        obj._boolArray!.Length.ShouldBe(3);
     }
 
-    [Fact]
+    [Test]
     public void PrimitiveArray_Null_ReturnsNull()
     {
         var obj = ArrayHolder.GetInstances(Context).Single();
         // _nullArray was set to null
-        Assert.Null(obj._nullArray);
+        obj._nullArray.ShouldBeNull();
     }
 
-    [Fact]
+    [Test]
     public void PrimitiveArray_EmptyStringArray_HasLengthZero()
     {
         var obj = ArrayHolder.GetInstances(Context).Single();
         var arr = obj._emptyStringArray!.ToList();
-        Assert.Empty(arr);
+        arr.ShouldBeEmpty();
     }
 
     // ══════════════════════════════════════════════════════════════════
     //  SHARED REFERENCES
     // ══════════════════════════════════════════════════════════════════
 
-    [Fact]
+    [Test]
     public void SharedRefs_SameTag_SameAddress()
     {
         var obj = SharedRefs.GetInstances(Context).Single();
         var ref1 = obj._ref1;
         var ref2 = obj._ref2;
 
-        Assert.NotNull(ref1);
-        Assert.NotNull(ref2);
-        Assert.Equal(ref1.GetObjectAddress(), ref2.GetObjectAddress());
+        ref1.ShouldNotBeNull();
+        ref2.ShouldNotBeNull();
+        ref2.GetObjectAddress().ShouldBe(ref1.GetObjectAddress());
     }
 
-    [Fact]
+    [Test]
     public void SharedRefs_SameAddress_SameAddress()
     {
         var obj = SharedRefs.GetInstances(Context).Single();
         var shared = obj._shared;
         var sharedAgain = obj._sharedAgain;
 
-        Assert.NotNull(shared);
-        Assert.NotNull(sharedAgain);
-        Assert.Equal(shared.GetObjectAddress(), sharedAgain.GetObjectAddress());
+        shared.ShouldNotBeNull();
+        sharedAgain.ShouldNotBeNull();
+        sharedAgain.GetObjectAddress().ShouldBe(shared.GetObjectAddress());
     }
 
-    [Fact]
+    [Test]
     public void SharedRefs_Tag_ReadsCorrectData()
     {
         var obj = SharedRefs.GetInstances(Context).Single();
         // tag1 = ("important", 1)
         var tag = obj._ref1!;
-        Assert.Equal("important", tag._label);
-        Assert.Equal(1L, tag._id);
+        tag._label.ShouldBe("important");
+        tag._id.ShouldBe(1L);
     }
 
-    [Fact]
+    [Test]
     public void SharedRefs_Address_ReadsCorrectData()
     {
         var obj = SharedRefs.GetInstances(Context).Single();
         // addr1 = ("123 Main St", "Springfield", 62701)
         var addr = obj._shared!;
-        Assert.Equal("123 Main St", addr._street);
-        Assert.Equal("Springfield", addr._city);
-        Assert.Equal(62701, addr._zipCode);
+        addr._street.ShouldBe("123 Main St");
+        addr._city.ShouldBe("Springfield");
+        addr._zipCode.ShouldBe(62701);
     }
 
     // ══════════════════════════════════════════════════════════════════
     //  LIST<T> (GENERIC COLLECTIONS)
     // ══════════════════════════════════════════════════════════════════
 
-    [Fact]
+    [Test]
     public void List_StringList_HasCorrectCount()
     {
         var obj = ListHolder.GetInstances(Context).Single();
         var items = obj._items;
-        Assert.NotNull(items);
-        Assert.Equal(3, items._size);
+        items.ShouldNotBeNull();
+        items._size.ShouldBe(3);
     }
 
-    [Fact]
+    [Test]
     public void List_OrderList_HasCorrectCount()
     {
         var obj = ListHolder.GetInstances(Context).Single();
         var orders = obj._orders;
-        Assert.NotNull(orders);
-        Assert.Equal(2, orders._size);
+        orders.ShouldNotBeNull();
+        orders._size.ShouldBe(2);
     }
 
     // ══════════════════════════════════════════════════════════════════
     //  GetObjectAddress() AND ToString()
     // ══════════════════════════════════════════════════════════════════
 
-    [Fact]
+    [Test]
     public void GetObjAddress_ReturnsNonZero()
     {
         var tag = Tag.GetInstances(Context).First();
-        Assert.NotEqual(0UL, tag.GetObjectAddress());
+        tag.GetObjectAddress().ShouldNotBe(0UL);
     }
 
-    [Fact]
+    [Test]
     public void ToString_ContainsTypeName()
     {
         var tag = Tag.GetInstances(Context).First();
-        Assert.Contains("Tag@0x", tag.ToString());
+        tag.ToString().ShouldContain("Tag@0x");
     }
 
-    [Fact]
+    [Test]
     public void ToString_ContainsHexAddress()
     {
         var tag = Tag.GetInstances(Context).First();
         string str = tag.ToString();
         ulong addr = tag.GetObjectAddress();
-        Assert.Contains(addr.ToString("X"), str);
+        str.ShouldContain(addr.ToString("X"));
     }
 
     // ══════════════════════════════════════════════════════════════════
     //  MULTIPLE INSTANCES WITH DIFFERENT VALUES
     // ══════════════════════════════════════════════════════════════════
 
-    [Fact]
+    [Test]
     public void MultipleInstances_Tags_AllDistinctValues()
     {
         var tags = Tag.GetInstances(Context).ToList();
-        Assert.Equal(2, tags.Count);
+        tags.Count.ShouldBe(2);
 
         var labels = tags.Select(t => t._label).OrderBy(l => l).ToList();
         var ids = tags.Select(t => t._id).OrderBy(i => i).ToList();
 
-        Assert.Equal(["important", "urgent"], labels);
-        Assert.Equal([1L, 2L], ids);
+        labels.ShouldBe(["important", "urgent"]);
+        ids.ShouldBe([1L, 2L]);
     }
 
-    [Fact]
+    [Test]
     public void MultipleInstances_Orders_AllHaveUniqueIds()
     {
         var orders = Order.GetInstances(Context).ToList();
         var ids = orders.Select(o => o._orderId).OrderBy(i => i).ToList();
-        Assert.Equal([1001, 1002, 1003], ids);
+        ids.ShouldBe([1001, 1002, 1003]);
     }
 
-    [Fact]
+    [Test]
     public void MultipleInstances_Addresses_DistinctValues()
     {
         var addresses = Address.GetInstances(Context).ToList();
-        Assert.True(addresses.Count >= 2);
+        addresses.Count.ShouldBeGreaterThanOrEqualTo(2);
 
         var streets = addresses.Select(a => a._street).OrderBy(s => s).ToList();
-        Assert.Contains("123 Main St", streets);
-        Assert.Contains("456 Oak Ave", streets);
+        streets.ShouldContain("123 Main St");
+        streets.ShouldContain("456 Oak Ave");
     }
 
     // ══════════════════════════════════════════════════════════════════
     //  PROXY TYPE HIERARCHY VALIDATION
     // ══════════════════════════════════════════════════════════════════
 
-    [Fact]
+    [Test]
     public void ProxyHierarchy_AllTypesInheritFromSystemObject()
     {
         var sysObj = typeof(_.System.Object);
@@ -676,44 +666,44 @@ public class BehavioralProxyTests : IClassFixture<DumpFixture>
 
         foreach (var t in types)
         {
-            Assert.True(sysObj.IsAssignableFrom(t), $"{t.Name} should inherit from _.System.Object");
+            sysObj.IsAssignableFrom(t).ShouldBeTrue($"{t.Name} should inherit from _.System.Object");
         }
     }
 
-    [Fact]
+    [Test]
     public void ProxyHierarchy_Cat_InheritsFromAnimal()
     {
-        Assert.True(typeof(Animal).IsAssignableFrom(typeof(Cat)));
+        typeof(Animal).IsAssignableFrom(typeof(Cat)).ShouldBeTrue();
     }
 
-    [Fact]
+    [Test]
     public void ProxyHierarchy_Leaf_ChainCorrect()
     {
-        Assert.Equal(typeof(Middle), typeof(Leaf).BaseType);
-        Assert.Equal(typeof(Base), typeof(Middle).BaseType);
+        typeof(Leaf).BaseType.ShouldBe(typeof(Middle));
+        typeof(Middle).BaseType.ShouldBe(typeof(Base));
     }
 
     // ══════════════════════════════════════════════════════════════════
     //  STRUCT PROXY TYPE SHAPE VALIDATION
     // ══════════════════════════════════════════════════════════════════
 
-    [Fact]
+    [Test]
     public void StructProxy_Rectangle_HasPointFields()
     {
         var topLeft = typeof(Rectangle).GetProperty("TopLeft");
         var bottomRight = typeof(Rectangle).GetProperty("BottomRight");
-        Assert.NotNull(topLeft);
-        Assert.NotNull(bottomRight);
+        topLeft.ShouldNotBeNull();
+        bottomRight.ShouldNotBeNull();
 
-        Assert.Equal(typeof(Point), topLeft.PropertyType);
-        Assert.Equal(typeof(Point), bottomRight.PropertyType);
+        topLeft.PropertyType.ShouldBe(typeof(Point));
+        bottomRight.PropertyType.ShouldBe(typeof(Point));
     }
 
     // ══════════════════════════════════════════════════════════════════
     //  FROMADDRESS ROUND-TRIP
     // ══════════════════════════════════════════════════════════════════
 
-    [Fact]
+    [Test]
     public void FromAddress_RoundTrip_ReturnsCorrectData()
     {
         var tags = Tag.GetInstances(Context).ToList();
@@ -723,15 +713,15 @@ public class BehavioralProxyTests : IClassFixture<DumpFixture>
         // Create a new proxy from the same address
         var newProxy = Tag.FromAddress(addr, Context);
 
-        Assert.Equal("important", newProxy._label);
-        Assert.Equal(1L, newProxy._id);
+        newProxy._label.ShouldBe("important");
+        newProxy._id.ShouldBe(1L);
     }
 
     // ══════════════════════════════════════════════════════════════════
     //  POLYMORPHIC ARRAYS
     // ══════════════════════════════════════════════════════════════════
 
-    [Fact]
+    [Test]
     public void PolymorphicArray_Pets_ResolvedToConcreteTypes()
     {
         var customers = Customer.GetInstances(Context).ToList();
@@ -739,15 +729,15 @@ public class BehavioralProxyTests : IClassFixture<DumpFixture>
 
         // Charlie has [cat2, dog1, cat1]
         var pets = charlie._pets!.ToList();
-        Assert.Equal(3, pets.Count);
+        pets.Count.ShouldBe(3);
 
         var catCount = pets.Count(p => p is Cat);
         var dogCount = pets.Count(p => p is Dog);
-        Assert.Equal(2, catCount);
-        Assert.Equal(1, dogCount);
+        catCount.ShouldBe(2);
+        dogCount.ShouldBe(1);
     }
 
-    [Fact]
+    [Test]
     public void PolymorphicArray_MixedItems_StringElement()
     {
         var customers = Customer.GetInstances(Context).ToList();
@@ -756,14 +746,14 @@ public class BehavioralProxyTests : IClassFixture<DumpFixture>
         // Charlie has [addr2, "world", order3, tag1, addr1]
         var mixed = charlie._mixedItems!.ToList();
         var stringElem = mixed.OfType<_.System.String>().Single();
-        Assert.Equal("world", stringElem.ToString());
+        stringElem.ToString().ShouldBe("world");
     }
 
     // ══════════════════════════════════════════════════════════════════
     //  DICTIONARY ENTRIES (STRUCT ARRAY INSIDE GENERIC)
     // ══════════════════════════════════════════════════════════════════
 
-    [Fact]
+    [Test]
     public void Dictionary_CanReadAllEntries()
     {
         var customers = Customer.GetInstances(Context).ToList();
@@ -771,11 +761,11 @@ public class BehavioralProxyTests : IClassFixture<DumpFixture>
 
         // Charlie has {"math": 100, "art": 88, "science": 91}
         var scores = charlie._scores!;
-        Assert.Equal(3, scores._count);
+        scores._count.ShouldBe(3);
 
         // Read entries array
         var entries = scores._entries!.ToList();
-        Assert.True(entries.Count >= 3);
+        entries.Count.ShouldBeGreaterThanOrEqualTo(3);
 
         // First 3 entries should contain our data (order depends on hash)
         var values = new List<int>();
@@ -784,113 +774,113 @@ public class BehavioralProxyTests : IClassFixture<DumpFixture>
             values.Add(entries[i].value);
         }
         values.Sort();
-        Assert.Equal([88, 91, 100], values);
+        values.ShouldBe([88, 91, 100]);
     }
 
     // ══════════════════════════════════════════════════════════════════
     //  EDGE CASES / TYPE DISCOVERY
     // ══════════════════════════════════════════════════════════════════
 
-    [Fact]
+    [Test]
     public void TypeDiscovery_FindsAllNewTypes()
     {
-        var typeNames = _fixture.Projection.DiscoveredTypes.Select(t => t.FullName).ToHashSet();
+        var typeNames = Projection.DiscoveredTypes.Select(t => t.FullName).ToHashSet();
 
-        Assert.Contains("Ndump.TestApp.AllPrimitives", typeNames);
-        Assert.Contains("Ndump.TestApp.NullableHolder", typeNames);
-        Assert.Contains("Ndump.TestApp.StringVariants", typeNames);
-        Assert.Contains("Ndump.TestApp.Node", typeNames);
-        Assert.Contains("Ndump.TestApp.Leaf", typeNames);
-        Assert.Contains("Ndump.TestApp.Middle", typeNames);
-        Assert.Contains("Ndump.TestApp.Base", typeNames);
-        Assert.Contains("Ndump.TestApp.StructHolder", typeNames);
-        Assert.Contains("Ndump.TestApp.EnumHolder", typeNames);
-        Assert.Contains("Ndump.TestApp.ArrayHolder", typeNames);
-        Assert.Contains("Ndump.TestApp.SharedRefs", typeNames);
-        Assert.Contains("Ndump.TestApp.ListHolder", typeNames);
+        typeNames.ShouldContain("Ndump.TestApp.AllPrimitives");
+        typeNames.ShouldContain("Ndump.TestApp.NullableHolder");
+        typeNames.ShouldContain("Ndump.TestApp.StringVariants");
+        typeNames.ShouldContain("Ndump.TestApp.Node");
+        typeNames.ShouldContain("Ndump.TestApp.Leaf");
+        typeNames.ShouldContain("Ndump.TestApp.Middle");
+        typeNames.ShouldContain("Ndump.TestApp.Base");
+        typeNames.ShouldContain("Ndump.TestApp.StructHolder");
+        typeNames.ShouldContain("Ndump.TestApp.EnumHolder");
+        typeNames.ShouldContain("Ndump.TestApp.ArrayHolder");
+        typeNames.ShouldContain("Ndump.TestApp.SharedRefs");
+        typeNames.ShouldContain("Ndump.TestApp.ListHolder");
     }
 
-    [Fact]
+    [Test]
     public void TypeDiscovery_FindsStructTypes()
     {
-        var types = _fixture.Projection.DiscoveredTypes;
+        var types = Projection.DiscoveredTypes;
         var point = types.SingleOrDefault(t => t.FullName == "Ndump.TestApp.Point");
-        Assert.NotNull(point);
-        Assert.True(point.IsValueType);
+        point.ShouldNotBeNull();
+        point.IsValueType.ShouldBeTrue();
 
         var rect = types.SingleOrDefault(t => t.FullName == "Ndump.TestApp.Rectangle");
-        Assert.NotNull(rect);
-        Assert.True(rect.IsValueType);
+        rect.ShouldNotBeNull();
+        rect.IsValueType.ShouldBeTrue();
 
         var label = types.SingleOrDefault(t => t.FullName == "Ndump.TestApp.Label");
-        Assert.NotNull(label);
-        Assert.True(label.IsValueType);
+        label.ShouldNotBeNull();
+        label.IsValueType.ShouldBeTrue();
     }
 
-    [Fact]
+    [Test]
     public void TypeDiscovery_PointFields()
     {
-        var types = _fixture.Projection.DiscoveredTypes;
+        var types = Projection.DiscoveredTypes;
         var point = types.Single(t => t.FullName == "Ndump.TestApp.Point");
 
         var fieldNames = point.Fields.Select(f => f.Name).ToHashSet();
-        Assert.Contains("X", fieldNames);
-        Assert.Contains("Y", fieldNames);
+        fieldNames.ShouldContain("X");
+        fieldNames.ShouldContain("Y");
     }
 
-    [Fact]
+    [Test]
     public void TypeDiscovery_RectangleFields()
     {
-        var types = _fixture.Projection.DiscoveredTypes;
+        var types = Projection.DiscoveredTypes;
         var rect = types.Single(t => t.FullName == "Ndump.TestApp.Rectangle");
 
         var topLeft = rect.Fields.Single(f => f.Name == "TopLeft");
-        Assert.Equal(FieldKind.ValueType, topLeft.Kind);
+        topLeft.Kind.ShouldBe(FieldKind.ValueType);
 
         var bottomRight = rect.Fields.Single(f => f.Name == "BottomRight");
-        Assert.Equal(FieldKind.ValueType, bottomRight.Kind);
+        bottomRight.Kind.ShouldBe(FieldKind.ValueType);
     }
 
-    [Fact]
+    [Test]
     public void TypeDiscovery_EnumFields_ArePrimitive()
     {
-        var types = _fixture.Projection.DiscoveredTypes;
+        var types = Projection.DiscoveredTypes;
         var enumHolder = types.Single(t => t.FullName == "Ndump.TestApp.EnumHolder");
 
         var colorField = enumHolder.Fields.Single(f => f.Name == "_color");
-        Assert.Equal(FieldKind.Primitive, colorField.Kind);
+        colorField.Kind.ShouldBe(FieldKind.Primitive);
 
         var priorityField = enumHolder.Fields.Single(f => f.Name == "_priority");
-        Assert.Equal(FieldKind.Primitive, priorityField.Kind);
+        priorityField.Kind.ShouldBe(FieldKind.Primitive);
     }
 
     // ══════════════════════════════════════════════════════════════════
     //  ARRAY LENGTH & INDEXER
     // ══════════════════════════════════════════════════════════════════
 
-    [Fact]
+    [Test]
     public void DumpArray_Length_MatchesOriginal()
     {
         var obj = ArrayHolder.GetInstances(Context).Single();
-        Assert.Equal(5, obj._intArray!.Length);
+        obj._intArray!.Length.ShouldBe(5);
     }
 
-    [Fact]
+    [Test]
     public void DumpArray_Indexer_ReadsCorrectElement()
     {
         var obj = ArrayHolder.GetInstances(Context).Single();
         var intArr = obj._intArray!;
-        Assert.Equal(10, intArr[0]);
-        Assert.Equal(30, intArr[2]);
-        Assert.Equal(50, intArr[4]);
+        intArr[0].ShouldBe(10);
+        intArr[2].ShouldBe(30);
+        intArr[4].ShouldBe(50);
     }
 
-    [Fact]
+    [Test]
     public void DumpArray_Indexer_ThrowsOnOutOfRange()
     {
         var obj = ArrayHolder.GetInstances(Context).Single();
         var intArr = obj._intArray!;
-        Assert.Throws<IndexOutOfRangeException>(() => { var _ = intArr[5]; });
-        Assert.Throws<IndexOutOfRangeException>(() => { var _ = intArr[-1]; });
+        Should.Throw<IndexOutOfRangeException>(() => { var _ = intArr[5]; });
+        Should.Throw<IndexOutOfRangeException>(() => { var _ = intArr[-1]; });
     }
 }

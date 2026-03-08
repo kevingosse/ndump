@@ -19,7 +19,7 @@ public class ProxyCompilerTests
     private string[] GenerateSystemObjectSources()
         => [GenerateSystemObjectCode(), ProxyEmitter.GenerateProxyResolver()];
 
-    [Fact]
+    [Test]
     public void Compile_ValidCode_Succeeds()
     {
         var source = """
@@ -35,13 +35,13 @@ public class ProxyCompilerTests
             }
             """;
 
-        var result = _compiler.CompileFromSource([..GenerateSystemObjectSources(), source]);
+        var result = _compiler.CompileFromSource([.. GenerateSystemObjectSources(), source]);
 
-        Assert.True(result.IsSuccess, string.Join("\n", result.Errors));
-        Assert.NotNull(result.Assembly);
+        result.IsSuccess.ShouldBeTrue(string.Join("\n", result.Errors));
+        result.Assembly.ShouldNotBeNull();
     }
 
-    [Fact]
+    [Test]
     public void Compile_InvalidCode_ReturnsErrors()
     {
         var source = """
@@ -51,11 +51,11 @@ public class ProxyCompilerTests
 
         var result = _compiler.CompileFromSource([source]);
 
-        Assert.False(result.IsSuccess);
-        Assert.NotEmpty(result.Errors);
+        result.IsSuccess.ShouldBeFalse();
+        result.Errors.ShouldNotBeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void Compile_GeneratedProxyType_HasExpectedMembers()
     {
         var sysObj = SystemObjectType;
@@ -77,30 +77,30 @@ public class ProxyCompilerTests
         var resolverCode = ProxyEmitter.GenerateProxyResolver();
         var result = _compiler.CompileFromSource([sysObjCode, code, resolverCode]);
 
-        Assert.True(result.IsSuccess, string.Join("\n", result.Errors));
+        result.IsSuccess.ShouldBeTrue(string.Join("\n", result.Errors));
 
         var proxyType = result.Assembly!.GetType("_.Test.Sample");
-        Assert.NotNull(proxyType);
+        proxyType.ShouldNotBeNull();
 
         // Check that FromAddress exists
         var fromAddr = proxyType.GetMethod("FromAddress");
-        Assert.NotNull(fromAddr);
+        fromAddr.ShouldNotBeNull();
 
         // Check that GetInstances exists
         var getInstances = proxyType.GetMethod("GetInstances");
-        Assert.NotNull(getInstances);
+        getInstances.ShouldNotBeNull();
 
         // Check properties exist
         var valueProp = proxyType.GetProperty("_value");
-        Assert.NotNull(valueProp);
-        Assert.Equal(typeof(int), valueProp.PropertyType);
+        valueProp.ShouldNotBeNull();
+        valueProp.PropertyType.ShouldBe(typeof(int));
 
         var labelProp = proxyType.GetProperty("_label");
-        Assert.NotNull(labelProp);
-        Assert.Equal(typeof(string), labelProp.PropertyType);
+        labelProp.ShouldNotBeNull();
+        labelProp.PropertyType.ShouldBe(typeof(string));
     }
 
-    [Fact]
+    [Test]
     public void Compile_MultipleTypes_WithCrossReferences_Succeeds()
     {
         var sysObj = SystemObjectType;
@@ -143,20 +143,20 @@ public class ProxyCompilerTests
 
         var result = _compiler.CompileFromSource([sysObjCode, orderCode, customerCode, resolverCode]);
 
-        Assert.True(result.IsSuccess, string.Join("\n", result.Errors));
+        result.IsSuccess.ShouldBeTrue(string.Join("\n", result.Errors));
 
         var genOrder = result.Assembly!.GetType("_.App.Order");
         var genCustomer = result.Assembly.GetType("_.App.Customer");
-        Assert.NotNull(genOrder);
-        Assert.NotNull(genCustomer);
+        genOrder.ShouldNotBeNull();
+        genCustomer.ShouldNotBeNull();
 
         // Verify cross-reference property type
         var orderProp = genCustomer.GetProperty("_order");
-        Assert.NotNull(orderProp);
-        Assert.Equal(genOrder, orderProp.PropertyType);
+        orderProp.ShouldNotBeNull();
+        orderProp.PropertyType.ShouldBe(genOrder);
     }
 
-    [Fact]
+    [Test]
     public void Compile_MultipleTypes_CrossNamespaceReferences_Succeeds()
     {
         var sysObj = SystemObjectType;
@@ -198,19 +198,19 @@ public class ProxyCompilerTests
 
         var result = _compiler.CompileFromSource([sysObjCode, orderCode, customerCode, resolverCode]);
 
-        Assert.True(result.IsSuccess, string.Join("\n", result.Errors));
+        result.IsSuccess.ShouldBeTrue(string.Join("\n", result.Errors));
 
         var genOrder = result.Assembly!.GetType("_.App.Orders.Order");
         var genCustomer = result.Assembly.GetType("_.App.Models.Customer");
-        Assert.NotNull(genOrder);
-        Assert.NotNull(genCustomer);
+        genOrder.ShouldNotBeNull();
+        genCustomer.ShouldNotBeNull();
 
         var orderProp = genCustomer.GetProperty("_order");
-        Assert.NotNull(orderProp);
-        Assert.Equal(genOrder, orderProp.PropertyType);
+        orderProp.ShouldNotBeNull();
+        orderProp.PropertyType.ShouldBe(genOrder);
     }
 
-    [Fact]
+    [Test]
     public void Compile_ArrayField_KnownElementType_Succeeds()
     {
         var sysObj = SystemObjectType;
@@ -254,20 +254,20 @@ public class ProxyCompilerTests
 
         var result = _compiler.CompileFromSource([sysObjCode, orderCode, customerCode, resolverCode]);
 
-        Assert.True(result.IsSuccess, string.Join("\n", result.Errors));
+        result.IsSuccess.ShouldBeTrue(string.Join("\n", result.Errors));
 
         var genCustomer = result.Assembly!.GetType("_.App.Customer");
-        Assert.NotNull(genCustomer);
+        genCustomer.ShouldNotBeNull();
 
         var historyProp = genCustomer.GetProperty("_orderHistory");
-        Assert.NotNull(historyProp);
+        historyProp.ShouldNotBeNull();
 
         // Should be DumpArray<Order?>?
-        Assert.True(historyProp.PropertyType.IsGenericType);
-        Assert.Equal(typeof(DumpArray<>), historyProp.PropertyType.GetGenericTypeDefinition());
+        historyProp.PropertyType.IsGenericType.ShouldBeTrue();
+        historyProp.PropertyType.GetGenericTypeDefinition().ShouldBe(typeof(DumpArray<>));
     }
 
-    [Fact]
+    [Test]
     public void Compile_ObjectArrayField_UsesSystemObjectProxy()
     {
         var sysObj = SystemObjectType;
@@ -310,26 +310,26 @@ public class ProxyCompilerTests
         var resolverCode = ProxyEmitter.GenerateProxyResolver();
         var result = _compiler.CompileFromSource([sysObjCode, orderCode, containerCode, resolverCode]);
 
-        Assert.True(result.IsSuccess, string.Join("\n", result.Errors));
+        result.IsSuccess.ShouldBeTrue(string.Join("\n", result.Errors));
 
         var genContainer = result.Assembly!.GetType("_.App.Container");
-        Assert.NotNull(genContainer);
+        genContainer.ShouldNotBeNull();
 
         var itemsProp = genContainer.GetProperty("_items");
-        Assert.NotNull(itemsProp);
+        itemsProp.ShouldNotBeNull();
 
         // Should be DumpArray<_.System.Object?>?
-        Assert.True(itemsProp.PropertyType.IsGenericType);
-        Assert.Equal(typeof(DumpArray<>), itemsProp.PropertyType.GetGenericTypeDefinition());
+        itemsProp.PropertyType.IsGenericType.ShouldBeTrue();
+        itemsProp.PropertyType.GetGenericTypeDefinition().ShouldBe(typeof(DumpArray<>));
 
         // The generic argument should be the generated _.System.Object proxy
         var elementType = itemsProp.PropertyType.GetGenericArguments()[0];
         var genSysObj = result.Assembly.GetType("_.System.Object");
-        Assert.NotNull(genSysObj);
-        Assert.Equal(genSysObj, elementType);
+        genSysObj.ShouldNotBeNull();
+        elementType.ShouldBe(genSysObj);
     }
 
-    [Fact]
+    [Test]
     public void Compile_GeneratedProxy_InheritsFromSystemObject()
     {
         var sysObj = SystemObjectType;
@@ -348,17 +348,17 @@ public class ProxyCompilerTests
         var resolverCode = ProxyEmitter.GenerateProxyResolver();
         var result = _compiler.CompileFromSource([sysObjCode, code, resolverCode]);
 
-        Assert.True(result.IsSuccess, string.Join("\n", result.Errors));
+        result.IsSuccess.ShouldBeTrue(string.Join("\n", result.Errors));
 
         var proxyType = result.Assembly!.GetType("_.Test.Sample");
         var genSysObj = result.Assembly.GetType("_.System.Object");
-        Assert.NotNull(proxyType);
-        Assert.NotNull(genSysObj);
+        proxyType.ShouldNotBeNull();
+        genSysObj.ShouldNotBeNull();
 
-        Assert.True(genSysObj.IsAssignableFrom(proxyType));
+        genSysObj.IsAssignableFrom(proxyType).ShouldBeTrue();
     }
 
-    [Fact]
+    [Test]
     public void Compile_InheritanceHierarchy_Succeeds()
     {
         var sysObj = SystemObjectType;
@@ -410,34 +410,34 @@ public class ProxyCompilerTests
         var resolverCode = ProxyEmitter.GenerateProxyResolver();
         var result = _compiler.CompileFromSource([sysObjCode, animalCode, catCode, dogCode, resolverCode]);
 
-        Assert.True(result.IsSuccess, string.Join("\n", result.Errors));
+        result.IsSuccess.ShouldBeTrue(string.Join("\n", result.Errors));
 
         var genSysObj = result.Assembly!.GetType("_.System.Object");
         var genAnimal = result.Assembly.GetType("_.App.Animal");
         var genCat = result.Assembly.GetType("_.App.Cat");
         var genDog = result.Assembly.GetType("_.App.Dog");
-        Assert.NotNull(genSysObj);
-        Assert.NotNull(genAnimal);
-        Assert.NotNull(genCat);
-        Assert.NotNull(genDog);
+        genSysObj.ShouldNotBeNull();
+        genAnimal.ShouldNotBeNull();
+        genCat.ShouldNotBeNull();
+        genDog.ShouldNotBeNull();
 
         // Cat and Dog extend Animal
-        Assert.True(genAnimal.IsAssignableFrom(genCat));
-        Assert.True(genAnimal.IsAssignableFrom(genDog));
+        genAnimal.IsAssignableFrom(genCat).ShouldBeTrue();
+        genAnimal.IsAssignableFrom(genDog).ShouldBeTrue();
 
         // Animal extends _.System.Object
-        Assert.True(genSysObj.IsAssignableFrom(genAnimal));
+        genSysObj.IsAssignableFrom(genAnimal).ShouldBeTrue();
 
         // Cat has _isIndoor but NOT _name/_age (inherited)
-        Assert.NotNull(genCat.GetProperty("_isIndoor"));
-        Assert.Null(genCat.GetProperty("_name", System.Reflection.BindingFlags.DeclaredOnly | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance));
+        genCat.GetProperty("_isIndoor").ShouldNotBeNull();
+        genCat.GetProperty("_name", System.Reflection.BindingFlags.DeclaredOnly | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance).ShouldBeNull();
 
         // Animal has _name and _age
-        Assert.NotNull(genAnimal.GetProperty("_name"));
-        Assert.NotNull(genAnimal.GetProperty("_age"));
+        genAnimal.GetProperty("_name").ShouldNotBeNull();
+        genAnimal.GetProperty("_age").ShouldNotBeNull();
     }
 
-    [Fact]
+    [Test]
     public void Compile_ToDisk_ProducesFile()
     {
         var source = """
@@ -456,13 +456,20 @@ public class ProxyCompilerTests
         {
             var outputPath = Path.Combine(tempDir, "test.dll");
 
-            var result = _compiler.CompileFromSource([..GenerateSystemObjectSources(), source], outputPath);
-            Assert.True(result.IsSuccess, string.Join("\n", result.Errors));
-            Assert.True(File.Exists(outputPath));
+            var result = _compiler.CompileFromSource([.. GenerateSystemObjectSources(), source], outputPath);
+            result.IsSuccess.ShouldBeTrue(string.Join("\n", result.Errors));
+            File.Exists(outputPath).ShouldBeTrue();
         }
         finally
         {
-            try { Directory.Delete(tempDir, true); } catch { }
+            try
+            {
+                Directory.Delete(tempDir, true);
+            }
+            catch
+            {
+                //
+            }
         }
     }
 }

@@ -4,7 +4,7 @@ public class ProxyEmitterTests
 {
     private readonly ProxyEmitter _emitter = new();
 
-    [Fact]
+    [Test]
     public void GenerateProxy_SimpleType_HasCorrectStructure()
     {
         var type = new TypeMetadata
@@ -21,11 +21,11 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public sealed class Customer : global::_.System.Object", code);
-        Assert.Contains("Customer(ulong address, DumpContext context) : base(address, context) { }", code);
+        code.ShouldContain("public sealed class Customer : global::_.System.Object");
+        code.ShouldContain("Customer(ulong address, DumpContext context) : base(address, context) { }");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_StringField_EmitsStringProperty()
     {
         var type = new TypeMetadata
@@ -41,10 +41,10 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public string? _name => Field<string>();", code);
+        code.ShouldContain("public string? _name => Field<string>();");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_PrimitiveField_EmitsValueProperty()
     {
         var type = new TypeMetadata
@@ -60,10 +60,10 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public int _age => Field<int>();", code);
+        code.ShouldContain("public int _age => Field<int>();");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_ObjectReferenceField_KnownType_EmitsProxyProperty()
     {
         var knownTypes = new HashSet<string> { "MyApp.Customer", "MyApp.Order" };
@@ -86,10 +86,10 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type, knownTypes);
 
-        Assert.Contains("public _.MyApp.Order? _lastOrder => Field<_.MyApp.Order>();", code);
+        code.ShouldContain("public _.MyApp.Order? _lastOrder => Field<_.MyApp.Order>();");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_TypeWithMixedFields_UsesUnifiedFieldOfT()
     {
         var address = new TypeMetadata
@@ -129,18 +129,18 @@ public class ProxyEmitterTests
         var code = _emitter.GenerateProxyCode(customer, allTypes: [address, customer]);
 
         // String uses Field<string>
-        Assert.Contains("public string? _name => Field<string>();", code);
+        code.ShouldContain("public string? _name => Field<string>();");
         // Primitive uses Field<T>
-        Assert.Contains("public int _age => Field<int>();", code);
+        code.ShouldContain("public int _age => Field<int>();");
         // Backing field uses Field<T> with explicit name
-        Assert.Contains("public bool IsActive => Field<bool>(\"<IsActive>k__BackingField\");", code);
+        code.ShouldContain("public bool IsActive => Field<bool>(\"<IsActive>k__BackingField\");");
         // Known reference type uses Field<ProxyType>
-        Assert.Contains("public _.MyApp.Address? _address => Field<_.MyApp.Address>();", code);
+        code.ShouldContain("public _.MyApp.Address? _address => Field<_.MyApp.Address>();");
         // Unknown reference type falls back to _.System.Object
-        Assert.Contains("public global::_.System.Object? _widget => Field<global::_.System.Object>();", code);
+        code.ShouldContain("public global::_.System.Object? _widget => Field<global::_.System.Object>();");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_ObjectReferenceField_UnknownType_EmitsAddressProperty()
     {
         var type = new TypeMetadata
@@ -163,10 +163,10 @@ public class ProxyEmitterTests
         // Only MyApp.Customer is known, not SomeLib.Widget
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public global::_.System.Object? _unknown => Field<global::_.System.Object>();", code);
+        code.ShouldContain("public global::_.System.Object? _unknown => Field<global::_.System.Object>();");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_HasFromAddressFactory()
     {
         var type = new TypeMetadata
@@ -179,10 +179,10 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public static new Tag FromAddress(ulong address, DumpContext context)", code);
+        code.ShouldContain("public static new Tag FromAddress(ulong address, DumpContext context)");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_HasGetInstances()
     {
         var type = new TypeMetadata
@@ -195,11 +195,11 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public static new global::System.Collections.Generic.IEnumerable<Tag> GetInstances(DumpContext context)", code);
-        Assert.Contains("context.EnumerateInstances(\"MyApp.Tag\")", code);
+        code.ShouldContain("public static new global::System.Collections.Generic.IEnumerable<Tag> GetInstances(DumpContext context)");
+        code.ShouldContain("context.EnumerateInstances(\"MyApp.Tag\")");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_InheritsFromSystemObject()
     {
         var type = new TypeMetadata
@@ -213,11 +213,11 @@ public class ProxyEmitterTests
         var code = _emitter.GenerateProxyCode(type);
 
         // GetObjectAddress is inherited from _.System.Object, not emitted directly
-        Assert.DoesNotContain("public ulong GetObjectAddress()", code);
-        Assert.Contains(": global::_.System.Object", code);
+        code.ShouldNotContain("public ulong GetObjectAddress()");
+        code.ShouldContain(": global::_.System.Object");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_BackingField_SanitizesName()
     {
         var type = new TypeMetadata
@@ -239,10 +239,10 @@ public class ProxyEmitterTests
         var code = _emitter.GenerateProxyCode(type);
 
         // Should emit as "Value" not the mangled backing field name
-        Assert.Contains("public int Value =>", code);
+        code.ShouldContain("public int Value =>");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_UsesProxyNamespace()
     {
         var type = new TypeMetadata
@@ -255,10 +255,10 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("namespace _.MyApp;", code);
+        code.ShouldContain("namespace _.MyApp;");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_SystemType_UsesCorrectNamespace()
     {
         var type = new TypeMetadata
@@ -271,10 +271,10 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("namespace _.System.Text;", code);
+        code.ShouldContain("namespace _.System.Text;");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_NoNamespace_UsesUnderscoreNamespace()
     {
         var type = new TypeMetadata
@@ -287,10 +287,10 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("namespace _;", code);
+        code.ShouldContain("namespace _;");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_GenericType_SanitizesBacktick()
     {
         var type = new TypeMetadata
@@ -303,11 +303,11 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public sealed class List_1", code);
-        Assert.Contains("namespace _.System.Collections.Generic;", code);
+        code.ShouldContain("public sealed class List_1");
+        code.ShouldContain("namespace _.System.Collections.Generic;");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_CrossNamespaceReference_UsesFullyQualifiedName()
     {
         var knownTypes = new HashSet<string> { "App.Models.Customer", "App.Orders.Order" };
@@ -330,34 +330,34 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type, knownTypes);
 
-        Assert.Contains("public _.App.Orders.Order? _order", code);
+        code.ShouldContain("public _.App.Orders.Order? _order");
     }
 
-    [Fact]
+    [Test]
     public void GetProxyNamespace_WithNamespace_PrependsDot()
     {
-        Assert.Equal("_.System.Text", ProxyEmitter.GetProxyNamespace("System.Text"));
+        ProxyEmitter.GetProxyNamespace("System.Text").ShouldBe("_.System.Text");
     }
 
-    [Fact]
+    [Test]
     public void GetProxyNamespace_Empty_ReturnsUnderscore()
     {
-        Assert.Equal("_", ProxyEmitter.GetProxyNamespace(""));
+        ProxyEmitter.GetProxyNamespace("").ShouldBe("_");
     }
 
-    [Fact]
+    [Test]
     public void SanitizeTypeName_HandlesArrayBrackets()
     {
-        Assert.Equal("String__", ProxyEmitter.SanitizeTypeName("String[]"));
+        ProxyEmitter.SanitizeTypeName("String[]").ShouldBe("String__");
     }
 
-    [Fact]
+    [Test]
     public void SanitizeTypeName_HandlesBacktick()
     {
-        Assert.Equal("List_1", ProxyEmitter.SanitizeTypeName("List`1"));
+        ProxyEmitter.SanitizeTypeName("List`1").ShouldBe("List_1");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_ArrayField_KnownElementType_EmitsDumpArrayProperty()
     {
         var knownTypes = new HashSet<string> { "MyApp.Customer", "MyApp.Order" };
@@ -381,10 +381,10 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type, knownTypes);
 
-        Assert.Contains("public global::Ndump.Core.DumpArray<_.MyApp.Order?>? _orderHistory => ArrayField<_.MyApp.Order?>()", code);
+        code.ShouldContain("public global::Ndump.Core.DumpArray<_.MyApp.Order?>? _orderHistory => ArrayField<_.MyApp.Order?>()");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_ArrayField_UnknownElementType_EmitsAddressArray()
     {
         var type = new TypeMetadata
@@ -407,10 +407,10 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public global::Ndump.Core.DumpArray<ulong>? _items => ArrayAddresses()", code);
+        code.ShouldContain("public global::Ndump.Core.DumpArray<ulong>? _items => ArrayAddresses()");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_ArrayField_StringElements_EmitsStringArray()
     {
         var type = new TypeMetadata
@@ -433,10 +433,10 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public global::Ndump.Core.DumpArray<string?>? _names => ArrayField<string?>()", code);
+        code.ShouldContain("public global::Ndump.Core.DumpArray<string?>? _names => ArrayField<string?>()");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_ArrayField_PrimitiveElements_EmitsPrimitiveArray()
     {
         var type = new TypeMetadata
@@ -459,10 +459,10 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public global::Ndump.Core.DumpArray<int>? _scores => ArrayField<int>()", code);
+        code.ShouldContain("public global::Ndump.Core.DumpArray<int>? _scores => ArrayField<int>()");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_ArrayField_DoubleElements_EmitsDoubleArray()
     {
         var type = new TypeMetadata
@@ -485,10 +485,10 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public global::Ndump.Core.DumpArray<double>? _values => ArrayField<double>()", code);
+        code.ShouldContain("public global::Ndump.Core.DumpArray<double>? _values => ArrayField<double>()");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_ArrayField_BoolElements_EmitsBoolArray()
     {
         var type = new TypeMetadata
@@ -511,13 +511,12 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public global::Ndump.Core.DumpArray<bool>? _flags => ArrayField<bool>()", code);
+        code.ShouldContain("public global::Ndump.Core.DumpArray<bool>? _flags => ArrayField<bool>()");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_ArrayField_ObjectElements_UsesSystemObjectProxy()
     {
-        var knownTypes = new HashSet<string> { "MyApp.Customer", "MyApp.Order", "System.Object" };
         var type = new TypeMetadata
         {
             FullName = "MyApp.Customer",
@@ -541,10 +540,10 @@ public class ProxyEmitterTests
         var order = new TypeMetadata { FullName = "MyApp.Order", Namespace = "MyApp", Name = "Order", Fields = [], BaseTypeName = "System.Object" };
         var code = _emitter.GenerateProxyCode(type, allTypes: [sysObj, order, type]);
 
-        Assert.Contains("public global::Ndump.Core.DumpArray<_.System.Object?>? _mixedItems => ArrayField<_.System.Object?>()", code);
+        code.ShouldContain("public global::Ndump.Core.DumpArray<_.System.Object?>? _mixedItems => ArrayField<_.System.Object?>()");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_DuplicateFieldNames_SkipsDuplicates()
     {
         var type = new TypeMetadata
@@ -563,11 +562,11 @@ public class ProxyEmitterTests
 
         // Should have exactly one _codePage property, not two
         var count = code.Split("public int _codePage").Length - 1;
-        Assert.Equal(1, count);
-        Assert.Contains("Duplicate field skipped", code);
+        count.ShouldBe(1);
+        code.ShouldContain("Duplicate field skipped");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_GetInstances_UsesGlobalPrefix()
     {
         var type = new TypeMetadata
@@ -581,10 +580,10 @@ public class ProxyEmitterTests
         var code = _emitter.GenerateProxyCode(type);
 
         // Must use global:: to avoid resolving to proxy namespace
-        Assert.Contains("global::System.Collections.Generic.IEnumerable<", code);
+        code.ShouldContain("global::System.Collections.Generic.IEnumerable<");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_WithKnownBaseType_ExtendsBaseProxy()
     {
         var animal = new TypeMetadata
@@ -615,15 +614,15 @@ public class ProxyEmitterTests
         var code = _emitter.GenerateProxyCode(cat, allTypes: [animal, cat]);
 
         // Cat should extend Animal proxy, not _.System.Object
-        Assert.Contains("class Cat : _.MyApp.Animal", code);
+        code.ShouldContain("class Cat : _.MyApp.Animal");
         // Cat should NOT re-emit inherited fields
-        Assert.DoesNotContain("_name", code);
-        Assert.DoesNotContain("_age", code);
+        code.ShouldNotContain("_name");
+        code.ShouldNotContain("_age");
         // Cat SHOULD have its own field
-        Assert.Contains("public bool _isIndoor", code);
+        code.ShouldContain("public bool _isIndoor");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_BaseType_IsNotSealed()
     {
         var animal = new TypeMetadata
@@ -651,11 +650,11 @@ public class ProxyEmitterTests
         var animalCode = _emitter.GenerateProxyCode(animal, allTypes: [animal, cat]);
 
         // Animal should NOT be sealed since Cat extends it
-        Assert.DoesNotContain("sealed", animalCode);
-        Assert.Contains("public class Animal : global::_.System.Object", animalCode);
+        animalCode.ShouldNotContain("sealed");
+        animalCode.ShouldContain("public class Animal : global::_.System.Object");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_LeafType_IsSealed()
     {
         var animal = new TypeMetadata
@@ -676,10 +675,10 @@ public class ProxyEmitterTests
 
         var catCode = _emitter.GenerateProxyCode(cat, allTypes: [animal, cat]);
 
-        Assert.Contains("public sealed class Cat : _.MyApp.Animal", catCode);
+        catCode.ShouldContain("public sealed class Cat : _.MyApp.Animal");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_DerivedType_HasNewKeywordOnFactories()
     {
         var animal = new TypeMetadata
@@ -700,11 +699,11 @@ public class ProxyEmitterTests
 
         var catCode = _emitter.GenerateProxyCode(cat, allTypes: [animal, cat]);
 
-        Assert.Contains("public static new Cat FromAddress", catCode);
-        Assert.Contains("public static new global::System.Collections.Generic.IEnumerable<Cat> GetInstances", catCode);
+        catCode.ShouldContain("public static new Cat FromAddress");
+        catCode.ShouldContain("public static new global::System.Collections.Generic.IEnumerable<Cat> GetInstances");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_ArrayField_BaseElementType_UsesResolverWithFallback()
     {
         var animal = new TypeMetadata
@@ -742,10 +741,10 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(owner, allTypes: [animal, cat, owner]);
 
-        Assert.Contains("DumpArray<_.MyApp.Animal?>? _pets => ArrayField<_.MyApp.Animal?>()", code);
+        code.ShouldContain("DumpArray<_.MyApp.Animal?>? _pets => ArrayField<_.MyApp.Animal?>()");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_ArrayField_LeafElementType_UsesDirectFromAddress()
     {
         var order = new TypeMetadata
@@ -775,10 +774,10 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(owner, allTypes: [order, owner]);
 
-        Assert.Contains("DumpArray<_.MyApp.Order?>? _orders => ArrayField<_.MyApp.Order?>()", code);
+        code.ShouldContain("DumpArray<_.MyApp.Order?>? _orders => ArrayField<_.MyApp.Order?>()");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_ObjectRefField_BaseType_UsesResolverWithFallback()
     {
         var animal = new TypeMetadata
@@ -815,10 +814,10 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(owner, allTypes: [animal, cat, owner]);
 
-        Assert.Contains("public _.MyApp.Animal? _pet => Field<_.MyApp.Animal>();", code);
+        code.ShouldContain("public _.MyApp.Animal? _pet => Field<_.MyApp.Animal>();");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_SystemObject_IsRootProxy()
     {
         var type = new TypeMetadata
@@ -831,18 +830,18 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("namespace _.System;", code);
-        Assert.Contains("public class Object", code);
+        code.ShouldContain("namespace _.System;");
+        code.ShouldContain("public class Object");
         // Should declare _objAddress and _context fields
-        Assert.Contains("protected readonly ulong _objAddress;", code);
-        Assert.Contains("protected readonly DumpContext _context;", code);
-        Assert.Contains("public ulong GetObjectAddress() => _objAddress;", code);
+        code.ShouldContain("protected readonly ulong _objAddress;");
+        code.ShouldContain("protected readonly DumpContext _context;");
+        code.ShouldContain("public ulong GetObjectAddress() => _objAddress;");
         // Should NOT extend any base class — class declaration has no base
-        Assert.Matches(@"public class Object\r?\n", code);
-        Assert.DoesNotContain("sealed", code);
+        System.Text.RegularExpressions.Regex.IsMatch(code, @"public class Object\r?\n").ShouldBeTrue();
+        code.ShouldNotContain("sealed");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_SystemObject_InteriorPath_UsesProxyResolver()
     {
         var type = new TypeMetadata
@@ -856,12 +855,12 @@ public class ProxyEmitterTests
         var code = _emitter.GenerateProxyCode(type);
 
         // Field<T> passes _interiorTypeName as optional parameter to DumpContext methods
-        Assert.Contains("_context.GetFieldValue<T>(_objAddress, fieldName, _interiorTypeName)", code);
-        Assert.Contains("_context.GetStringField(_objAddress, fieldName, _interiorTypeName)", code);
-        Assert.Contains("_context.GetObjectAddress(_objAddress, fieldName, _interiorTypeName)", code);
+        code.ShouldContain("_context.GetFieldValue<T>(_objAddress, fieldName, _interiorTypeName)");
+        code.ShouldContain("_context.GetStringField(_objAddress, fieldName, _interiorTypeName)");
+        code.ShouldContain("_context.GetObjectAddress(_objAddress, fieldName, _interiorTypeName)");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_SystemObject_Field_UsesProxyResolver()
     {
         var type = new TypeMetadata
@@ -875,7 +874,7 @@ public class ProxyEmitterTests
         var code = _emitter.GenerateProxyCode(type);
 
         // Field<T> and ReadArrayElement<T> should both use ProxyResolver.Resolve<T>
-        Assert.Equal(2, CountOccurrences(code, "return global::_.ProxyResolver.Resolve<T>(addr, _context);"));
+        CountOccurrences(code, "return global::_.ProxyResolver.Resolve<T>(addr, _context);").ShouldBe(2);
     }
 
     private static int CountOccurrences(string text, string pattern)
@@ -889,7 +888,7 @@ public class ProxyEmitterTests
         return count;
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_SystemString_HasImplicitOperatorAndToString()
     {
         var sysObj = new TypeMetadata { FullName = "System.Object", Namespace = "System", Name = "Object", Fields = [] };
@@ -904,16 +903,16 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type, allTypes: [sysObj, type]);
 
-        Assert.Contains("namespace _.System;", code);
-        Assert.Contains("class String : global::_.System.Object", code);
-        Assert.Contains("public string? Value => _context.GetStringValue(_objAddress);", code);
-        Assert.Contains("public static implicit operator string?(String? proxy)", code);
-        Assert.Contains("public override string ToString()", code);
-        Assert.Contains("public static new String FromAddress", code);
-        Assert.Contains("public static new global::System.Collections.Generic.IEnumerable<String> GetInstances", code);
+        code.ShouldContain("namespace _.System;");
+        code.ShouldContain("class String : global::_.System.Object");
+        code.ShouldContain("public string? Value => _context.GetStringValue(_objAddress);");
+        code.ShouldContain("public static implicit operator string?(String? proxy)");
+        code.ShouldContain("public override string ToString()");
+        code.ShouldContain("public static new String FromAddress");
+        code.ShouldContain("public static new global::System.Collections.Generic.IEnumerable<String> GetInstances");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_SystemString_IsSealed_WhenNoSubtypes()
     {
         var type = new TypeMetadata
@@ -926,10 +925,10 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public sealed class String", code);
+        code.ShouldContain("public sealed class String");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_NestedType_EmitsNestedClass()
     {
         var type = new TypeMetadata
@@ -942,19 +941,19 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("namespace _.System;", code);
+        code.ShouldContain("namespace _.System;");
         // Outer class is partial (shell for nesting)
-        Assert.Contains("public partial class RuntimeType", code);
+        code.ShouldContain("public partial class RuntimeType");
         // Inner class uses the leaf name only
-        Assert.Contains("public sealed class RuntimeTypeCache : global::_.System.Object", code);
+        code.ShouldContain("public sealed class RuntimeTypeCache : global::_.System.Object");
         // Factories use the leaf name
-        Assert.Contains("RuntimeTypeCache FromAddress(ulong address, DumpContext context)", code);
-        Assert.Contains("new RuntimeTypeCache(addr, context)", code);
+        code.ShouldContain("RuntimeTypeCache FromAddress(ulong address, DumpContext context)");
+        code.ShouldContain("new RuntimeTypeCache(addr, context)");
         // EnumerateInstances still uses the full CLR name
-        Assert.Contains("context.EnumerateInstances(\"System.RuntimeType+RuntimeTypeCache\")", code);
+        code.ShouldContain("context.EnumerateInstances(\"System.RuntimeType+RuntimeTypeCache\")");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_DeeplyNestedType_EmitsMultipleLevels()
     {
         var type = new TypeMetadata
@@ -967,13 +966,13 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("namespace _;", code);
-        Assert.Contains("public partial class Interop", code);
-        Assert.Contains("public partial class Kernel32", code);
-        Assert.Contains("public sealed class ProcessWaitHandle : global::_.System.Object", code);
+        code.ShouldContain("namespace _;");
+        code.ShouldContain("public partial class Interop");
+        code.ShouldContain("public partial class Kernel32");
+        code.ShouldContain("public sealed class ProcessWaitHandle : global::_.System.Object");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_NestingContainerType_IsPartial()
     {
         var runtimeType = new TypeMetadata
@@ -994,10 +993,10 @@ public class ProxyEmitterTests
         var code = _emitter.GenerateProxyCode(runtimeType, allTypes: [runtimeType, nested]);
 
         // RuntimeType is a nesting container, so it must be partial
-        Assert.Contains("partial class RuntimeType", code);
+        code.ShouldContain("partial class RuntimeType");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_GenericWithNestedTypeArg_DoesNotNest()
     {
         var type = new TypeMetadata
@@ -1011,11 +1010,11 @@ public class ProxyEmitterTests
         var code = _emitter.GenerateProxyCode(type);
 
         // The + is inside <>, so this should NOT be nested
-        Assert.DoesNotContain("partial class", code);
-        Assert.Contains("public sealed class Dictionary_System_String__System_Diagnostics_Tracing_EventSource_OverrideEventProvider_", code);
+        code.ShouldNotContain("partial class");
+        code.ShouldContain("public sealed class Dictionary_System_String__System_Diagnostics_Tracing_EventSource_OverrideEventProvider_");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_NestedType_ReferenceUsesNestedSyntax()
     {
         var runtimeType = new TypeMetadata
@@ -1052,42 +1051,43 @@ public class ProxyEmitterTests
         var code = _emitter.GenerateProxyCode(owner, allTypes: [runtimeType, cache, owner]);
 
         // Reference to nested type uses dot-separated C# syntax
-        Assert.Contains("_.System.RuntimeType.ActivatorCache", code);
+        code.ShouldContain("_.System.RuntimeType.ActivatorCache");
     }
 
-    [Fact]
+    [Test]
     public void SplitNestingParts_SimpleType_ReturnsSinglePart()
     {
-        Assert.Equal(["Customer"], ProxyEmitter.SplitNestingParts("Customer"));
+        ProxyEmitter.SplitNestingParts("Customer").ShouldBe(["Customer"]);
     }
 
-    [Fact]
+    [Test]
     public void SplitNestingParts_NestedType_SplitsOnPlus()
     {
-        Assert.Equal(["RuntimeType", "ActivatorCache"], ProxyEmitter.SplitNestingParts("RuntimeType+ActivatorCache"));
+        ProxyEmitter.SplitNestingParts("RuntimeType+ActivatorCache").ShouldBe(["RuntimeType", "ActivatorCache"]);
     }
 
-    [Fact]
+    [Test]
     public void SplitNestingParts_DeeplyNested_SplitsAllLevels()
     {
-        Assert.Equal(["Interop", "Kernel32", "ProcessWaitHandle"], ProxyEmitter.SplitNestingParts("Interop+Kernel32+ProcessWaitHandle"));
+        ProxyEmitter.SplitNestingParts("Interop+Kernel32+ProcessWaitHandle").ShouldBe(["Interop", "Kernel32", "ProcessWaitHandle"
+        ]);
     }
 
-    [Fact]
+    [Test]
     public void SplitNestingParts_PlusInsideGenerics_DoesNotSplit()
     {
         var name = "Dictionary<String, EventSource+OverrideEventProvider>";
-        Assert.Equal([name], ProxyEmitter.SplitNestingParts(name));
+        ProxyEmitter.SplitNestingParts(name).ShouldBe([name]);
     }
 
-    [Fact]
+    [Test]
     public void SplitNestingParts_NestedWithGenerics_SplitsCorrectly()
     {
         // Task+<>c — the + is before the generic markers
-        Assert.Equal(["Task", "<>c"], ProxyEmitter.SplitNestingParts("Task+<>c"));
+        ProxyEmitter.SplitNestingParts("Task+<>c").ShouldBe(["Task", "<>c"]);
     }
 
-    [Fact]
+    [Test]
     public void GetProxyTypeName_NestedType_UsesPlusSeparator()
     {
         var type = new TypeMetadata
@@ -1099,10 +1099,10 @@ public class ProxyEmitterTests
         };
 
         // CLR reflection uses + for nested types
-        Assert.Equal("_.System.RuntimeType+ActivatorCache", ProxyEmitter.GetProxyTypeName(type));
+        ProxyEmitter.GetProxyTypeName(type).ShouldBe("_.System.RuntimeType+ActivatorCache");
     }
 
-    [Fact]
+    [Test]
     public void GetProxyTypeName_DeeplyNestedNoNamespace_UsesPlusSeparator()
     {
         var type = new TypeMetadata
@@ -1113,10 +1113,10 @@ public class ProxyEmitterTests
             Fields = []
         };
 
-        Assert.Equal("_.Interop+Kernel32+ProcessWaitHandle", ProxyEmitter.GetProxyTypeName(type));
+        ProxyEmitter.GetProxyTypeName(type).ShouldBe("_.Interop+Kernel32+ProcessWaitHandle");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_GenericType_EmitsGenericClass()
     {
         var type = new TypeMetadata
@@ -1135,14 +1135,14 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("namespace _.System.Collections.Generic;", code);
-        Assert.Contains("public sealed class List<T> : global::_.System.Object", code);
-        Assert.Contains("private List(ulong address, DumpContext context) : base(address, context) { }", code);
-        Assert.Contains("public static new List<T> FromAddress(ulong address, DumpContext context)", code);
-        Assert.Contains("public int _size => Field<int>();", code);
+        code.ShouldContain("namespace _.System.Collections.Generic;");
+        code.ShouldContain("public sealed class List<T> : global::_.System.Object");
+        code.ShouldContain("private List(ulong address, DumpContext context) : base(address, context) { }");
+        code.ShouldContain("public static new List<T> FromAddress(ulong address, DumpContext context)");
+        code.ShouldContain("public int _size => Field<int>();");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_GenericType_SubstitutesTypeArgForObjectRef()
     {
         var type = new TypeMetadata
@@ -1168,14 +1168,14 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public sealed class Wrapper<T> : global::_.System.Object", code);
+        code.ShouldContain("public sealed class Wrapper<T> : global::_.System.Object");
         // _value type matches type arg MyApp.Order → substituted with T
-        Assert.Contains("public T? _value => Field<T>();", code);
+        code.ShouldContain("public T? _value => Field<T>();");
         // _count is not a type arg → stays as int
-        Assert.Contains("public int _count => Field<int>();", code);
+        code.ShouldContain("public int _count => Field<int>();");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_GenericType_MultipleTypeArgs()
     {
         var type = new TypeMetadata
@@ -1194,11 +1194,11 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public sealed class Dictionary<T1, T2> : global::_.System.Object", code);
-        Assert.Contains("public static new Dictionary<T1, T2> FromAddress", code);
+        code.ShouldContain("public sealed class Dictionary<T1, T2> : global::_.System.Object");
+        code.ShouldContain("public static new Dictionary<T1, T2> FromAddress");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_GenericType_ArrayFieldSubstitutesTypeArg()
     {
         var type = new TypeMetadata
@@ -1225,13 +1225,13 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public sealed class List<T> : global::_.System.Object", code);
+        code.ShouldContain("public sealed class List<T> : global::_.System.Object");
         // Array element type matches type arg → DumpArray<T>
-        Assert.Contains("DumpArray<T>?", code);
-        Assert.Contains("DumpArray<T>? _items => ArrayField<T>()", code);
+        code.ShouldContain("DumpArray<T>?");
+        code.ShouldContain("DumpArray<T>? _items => ArrayField<T>()");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_GenericType_StringTypeArgSubstituted()
     {
         var type = new TypeMetadata
@@ -1250,12 +1250,12 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public sealed class Box<T> : global::_.System.Object", code);
+        code.ShouldContain("public sealed class Box<T> : global::_.System.Object");
         // _value is a String field and System.String is the type arg → T
-        Assert.Contains("public T _value => Field<T>();", code);
+        code.ShouldContain("public T _value => Field<T>();");
     }
 
-    [Fact]
+    [Test]
     public void GetProxyTypeName_GenericType_UsesBacktickNotation()
     {
         var type = new TypeMetadata
@@ -1269,10 +1269,10 @@ public class ProxyEmitterTests
             GenericTypeArguments = ["System.String", "System.Object"]
         };
 
-        Assert.Equal("_.System.Collections.Generic.Dictionary`2", ProxyEmitter.GetProxyTypeName(type));
+        ProxyEmitter.GetProxyTypeName(type).ShouldBe("_.System.Collections.Generic.Dictionary`2");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_ReferenceToGenericType_EmitsGenericProxyType()
     {
         var listType = new TypeMetadata
@@ -1312,34 +1312,34 @@ public class ProxyEmitterTests
         var code = _emitter.GenerateProxyCode(owner, allTypes: [listType, order, owner]);
 
         // Reference to a generic proxy should use proper generic syntax
-        Assert.Contains("_.System.Collections.Generic.List<_.MyApp.Order>", code);
+        code.ShouldContain("_.System.Collections.Generic.List<_.MyApp.Order>");
     }
 
-    [Fact]
+    [Test]
     public void ParseGenericName_SimpleGeneric_ExtractsDefinitionAndArgs()
     {
         var (def, args) = TypeInspector.ParseGenericName("Dictionary<System.String, System.Object>");
-        Assert.Equal("Dictionary", def);
-        Assert.Equal(["System.String", "System.Object"], args);
+        def.ShouldBe("Dictionary");
+        args.ShouldBe(["System.String", "System.Object"]);
     }
 
-    [Fact]
+    [Test]
     public void ParseGenericName_NestedGeneric_PreservesInnerGeneric()
     {
         var (def, args) = TypeInspector.ParseGenericName("List<Func<EventSource>>");
-        Assert.Equal("List", def);
-        Assert.Equal(["Func<EventSource>"], args);
+        def.ShouldBe("List");
+        args.ShouldBe(["Func<EventSource>"]);
     }
 
-    [Fact]
+    [Test]
     public void ParseGenericName_NonGeneric_ReturnsNull()
     {
         var (def, args) = TypeInspector.ParseGenericName("Customer");
-        Assert.Null(def);
-        Assert.Empty(args);
+        def.ShouldBeNull();
+        args.ShouldBeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_NullablePrimitiveField_EmitsNullableProperty()
     {
         var type = new TypeMetadata
@@ -1362,10 +1362,10 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public int? _rating => NullableField<int>();", code);
+        code.ShouldContain("public int? _rating => NullableField<int>();");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_NullablePrimitiveField_BackingField_EmitsNullableWithName()
     {
         var type = new TypeMetadata
@@ -1388,10 +1388,10 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public int? Rating => NullableField<int>(\"<Rating>k__BackingField\");", code);
+        code.ShouldContain("public int? Rating => NullableField<int>(\"<Rating>k__BackingField\");");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_NullableStructField_WithKnownProxy_EmitsNullableStructProperty()
     {
         var dateTimeType = new TypeMetadata
@@ -1422,10 +1422,10 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type, allTypes: [dateTimeType, type]);
 
-        Assert.Contains("public _.System.DateTime? _shippedAt => NullableStructField<_.System.DateTime>(\"System.DateTime\");", code);
+        code.ShouldContain("public _.System.DateTime? _shippedAt => NullableStructField<_.System.DateTime>(\"System.DateTime\");");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_NullableField_UnknownInnerType_EmitsComment()
     {
         var type = new TypeMetadata
@@ -1448,10 +1448,10 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("// Nullable<SomeLib.UnknownStruct> field: _data", code);
+        code.ShouldContain("// Nullable<SomeLib.UnknownStruct> field: _data");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_VoidField_EmitsRawFieldAddress()
     {
         var type = new TypeMetadata
@@ -1473,10 +1473,10 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public ulong _callback => RawFieldAddress();", code);
+        code.ShouldContain("public ulong _callback => RawFieldAddress();");
     }
 
-    [Fact]
+    [Test]
     public void GenerateProxy_VoidField_BackingField_EmitsRawFieldAddressWithName()
     {
         var type = new TypeMetadata
@@ -1498,10 +1498,10 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type);
 
-        Assert.Contains("public ulong Callback => RawFieldAddress(\"<Callback>k__BackingField\");", code);
+        code.ShouldContain("public ulong Callback => RawFieldAddress(\"<Callback>k__BackingField\");");
     }
 
-    [Fact]
+    [Test]
     public void Compile_NullablePrimitiveField_Succeeds()
     {
         var compiler = new ProxyCompiler();
@@ -1538,17 +1538,17 @@ public class ProxyEmitterTests
 
         var resolverCode = ProxyEmitter.GenerateProxyResolver();
         var result = compiler.CompileFromSource([sysObjCode, code, resolverCode]);
-        Assert.True(result.IsSuccess, string.Join("\n", result.Errors));
+        result.IsSuccess.ShouldBeTrue(string.Join("\n", result.Errors));
 
         var proxyType = result.Assembly!.GetType("_.MyApp.Order");
-        Assert.NotNull(proxyType);
+        proxyType.ShouldNotBeNull();
 
         var ratingProp = proxyType.GetProperty("_rating");
-        Assert.NotNull(ratingProp);
-        Assert.Equal(typeof(int?), ratingProp.PropertyType);
+        ratingProp.ShouldNotBeNull();
+        ratingProp.PropertyType.ShouldBe(typeof(int?));
     }
 
-    [Fact]
+    [Test]
     public void Compile_VoidField_Succeeds()
     {
         var compiler = new ProxyCompiler();
@@ -1584,13 +1584,13 @@ public class ProxyEmitterTests
         var resolverCode = ProxyEmitter.GenerateProxyResolver();
 
         var result = compiler.CompileFromSource([sysObjCode, code, resolverCode]);
-        Assert.True(result.IsSuccess, string.Join("\n", result.Errors));
+        result.IsSuccess.ShouldBeTrue(string.Join("\n", result.Errors));
 
         var proxyType = result.Assembly!.GetType("_.MyApp.Holder");
-        Assert.NotNull(proxyType);
+        proxyType.ShouldNotBeNull();
 
         var callbackProp = proxyType.GetProperty("_callback");
-        Assert.NotNull(callbackProp);
-        Assert.Equal(typeof(ulong), callbackProp.PropertyType);
+        callbackProp.ShouldNotBeNull();
+        callbackProp.PropertyType.ShouldBe(typeof(ulong));
     }
 }
