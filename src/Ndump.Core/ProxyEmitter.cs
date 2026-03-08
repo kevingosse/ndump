@@ -70,11 +70,11 @@ public sealed class ProxyEmitter
             {
                 // Emit in own file with partial generic outer class wrapper.
                 // Deduplicate by backtick-form suffix (e.g., only one "Entry" across specializations).
-                var bt = ConvertToBacktickForm(type.FullName);
+                var bt = TypeNameHelper.ConvertToBacktickForm(type.FullName);
                 if (!emittedNestedGeneric.Add(bt))
                     continue;
                 code = GenerateNestedGenericTypeProxy(type);
-                safeName = SanitizeTypeName(ConvertToBacktickForm(type.Name));
+                safeName = SanitizeTypeName(TypeNameHelper.ConvertToBacktickForm(type.Name));
             }
             else if (type.IsGenericInstance)
             {
@@ -191,7 +191,7 @@ public sealed class ProxyEmitter
         foreach (var type in types)
         {
             if (!type.FullName.Contains('<')) continue;
-            var backtickForm = ConvertToBacktickForm(type.FullName);
+            var backtickForm = TypeNameHelper.ConvertToBacktickForm(type.FullName);
             if (backtickForm != type.FullName)
                 _backtickToFullName.TryAdd(backtickForm, type.FullName);
         }
@@ -217,37 +217,6 @@ public sealed class ProxyEmitter
         // Check if the parent is a generic type by looking for its definition in known generic definitions
         var parentGenDef = ExtractGenericDefinitionFullName(parentFullName);
         return parentGenDef is not null && _knownGenericDefinitions.Contains(parentGenDef);
-    }
-
-    private static string ConvertToBacktickForm(string fullName)
-    {
-        var sb = new StringBuilder();
-        int i = 0;
-        while (i < fullName.Length)
-        {
-            if (fullName[i] == '<')
-            {
-                // Count type args and skip to matching >
-                int depth = 1, argCount = 1;
-                int j = i + 1;
-                while (j < fullName.Length && depth > 0)
-                {
-                    if (fullName[j] == '<') depth++;
-                    else if (fullName[j] == '>') depth--;
-                    else if (fullName[j] == ',' && depth == 1) argCount++;
-                    j++;
-                }
-                sb.Append('`');
-                sb.Append(argCount);
-                i = j;
-            }
-            else
-            {
-                sb.Append(fullName[i]);
-                i++;
-            }
-        }
-        return sb.ToString();
     }
 
     private string GenerateProxy(TypeMetadata type)
@@ -413,10 +382,10 @@ public sealed class ProxyEmitter
         var baseClass = "global::_.System.Object";
 
         // Check if any nested types exist for this generic definition
-        var ownerBacktick = ConvertToBacktickForm(representative.FullName);
+        var ownerBacktick = TypeNameHelper.ConvertToBacktickForm(representative.FullName);
         var hasNestedTypes = _typesByName.Values.Any(t =>
         {
-            var bt = ConvertToBacktickForm(t.FullName);
+            var bt = TypeNameHelper.ConvertToBacktickForm(t.FullName);
             var plusIdx = bt.IndexOf('+');
             return plusIdx > 0 && bt[..plusIdx] == ownerBacktick;
         });
@@ -837,7 +806,7 @@ public sealed class ProxyEmitter
             if (plusIdx > 0)
             {
                 var backtickPrefix = elementTypeName[..plusIdx];
-                var ownerBacktick = ConvertToBacktickForm(ownerType.FullName);
+                var ownerBacktick = TypeNameHelper.ConvertToBacktickForm(ownerType.FullName);
                 if (ownerBacktick == backtickPrefix)
                 {
                     var nestedSuffix = elementTypeName[(plusIdx + 1)..];
@@ -1327,12 +1296,12 @@ public sealed class ProxyEmitter
             return refTypeName[prefix.Length..];
 
         // Convert both to backtick form and compare the parent portion
-        var refBacktick = ConvertToBacktickForm(refTypeName);
+        var refBacktick = TypeNameHelper.ConvertToBacktickForm(refTypeName);
         var plusIdx = refBacktick.IndexOf('+');
         if (plusIdx <= 0) return null;
 
         var refParent = refBacktick[..plusIdx];
-        var ownerBacktick = ConvertToBacktickForm(ownerType.FullName);
+        var ownerBacktick = TypeNameHelper.ConvertToBacktickForm(ownerType.FullName);
         // Strip nested part from owner if present
         var ownerPlusIdx = ownerBacktick.IndexOf('+');
         if (ownerPlusIdx > 0) ownerBacktick = ownerBacktick[..ownerPlusIdx];
@@ -1398,7 +1367,7 @@ public sealed class ProxyEmitter
         var backtickPrefix = elementTypeName[..plusIdx]; // e.g., "System.Collections.Generic.Dictionary`2"
 
         // Try to match against the owning type's full name
-        var ownerBacktick = ConvertToBacktickForm(ownerType.FullName);
+        var ownerBacktick = TypeNameHelper.ConvertToBacktickForm(ownerType.FullName);
         if (ownerBacktick == backtickPrefix)
         {
             // The nested type belongs to the owner — reconstruct with owner's concrete name

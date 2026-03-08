@@ -208,7 +208,7 @@ public sealed class DumpContext : IDisposable
 
         // ClrMD modules use backtick-arity notation, not angle brackets.
         // Convert "Dictionary<String, Int32>+Entry" to "Dictionary`2+Entry" for lookup.
-        var lookupName = ConvertToBacktickForm(typeName);
+        var lookupName = TypeNameHelper.ConvertToBacktickForm(typeName);
 
         ClrType? found = null;
         foreach (var module in Runtime.EnumerateModules())
@@ -221,37 +221,6 @@ public sealed class DumpContext : IDisposable
         return found;
     }
 
-    private static string ConvertToBacktickForm(string name)
-    {
-        if (!name.Contains('<')) return name;
-
-        var sb = new System.Text.StringBuilder();
-        int i = 0;
-        while (i < name.Length)
-        {
-            if (name[i] == '<')
-            {
-                int depth = 1, argCount = 1;
-                int j = i + 1;
-                while (j < name.Length && depth > 0)
-                {
-                    if (name[j] == '<') depth++;
-                    else if (name[j] == '>') depth--;
-                    else if (name[j] == ',' && depth == 1) argCount++;
-                    j++;
-                }
-                sb.Append('`');
-                sb.Append(argCount);
-                i = j;
-            }
-            else
-            {
-                sb.Append(name[i]);
-                i++;
-            }
-        }
-        return sb.ToString();
-    }
 
     private ClrInstanceField FindFieldByTypeName(string typeName, string fieldName)
     {
