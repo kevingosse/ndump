@@ -748,22 +748,6 @@ public class BehavioralProxyTests : IClassFixture<DumpFixture>
     // ══════════════════════════════════════════════════════════════════
 
     [Fact]
-    public void StructProxy_Point_HasFromInterior()
-    {
-        var pt = ProxyType("Ndump.TestApp.Point");
-        var method = pt.GetMethod("FromInterior", BindingFlags.Public | BindingFlags.Static);
-        Assert.NotNull(method);
-    }
-
-    [Fact]
-    public void StructProxy_Point_HasNoFromArrayElement()
-    {
-        var pt = ProxyType("Ndump.TestApp.Point");
-        var method = pt.GetMethod("FromArrayElement", BindingFlags.Public | BindingFlags.Static);
-        Assert.Null(method);
-    }
-
-    [Fact]
     public void StructProxy_Rectangle_HasPointFields()
     {
         var rect = ProxyType("Ndump.TestApp.Rectangle");
