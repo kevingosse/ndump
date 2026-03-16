@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 
 namespace Ndump.Core;
@@ -25,6 +26,19 @@ public sealed class ProxyEmitter
     private HashSet<string> _baseTypes = [];
 
     /// <summary>
+    /// CLR type names discovered as value types (structs).
+    /// Used to verify IProxy constraint satisfaction for StructField references.
+    /// </summary>
+    private HashSet<string> _knownValueTypes = [];
+
+    /// <summary>
+    /// Backtick-form names of types discovered as value types.
+    /// Used to detect when a nested type proxy should implement IProxy even if
+    /// the representative instance was discovered on the heap (isValueType=false).
+    /// </summary>
+    private HashSet<string> _valueTypeBacktickNames = [];
+
+    /// <summary>
     /// CLR type names that serve as outer (container) types for nested proxy types.
     /// These must be declared as partial so the nested type can be added in a separate file.
     /// </summary>
@@ -47,6 +61,12 @@ public sealed class ProxyEmitter
     /// Used when ClrMD reports array component types in backtick notation.
     /// </summary>
     private Dictionary<string, string> _backtickToFullName = [];
+
+    /// <summary>
+    /// Backtick-form names of all nested types in the type list.
+    /// Used to verify that a nested type proxy actually exists before emitting short-name references.
+    /// </summary>
+    private HashSet<string> _knownNestedBacktickNames = [];
 
     /// <summary>
     /// Emit .cs files for all discovered types into the given output directory.
@@ -82,7 +102,12 @@ public sealed class ProxyEmitter
                 if (!emittedGenericDefs.Add(type.GenericDefinitionFullName!))
                     continue;
                 code = GenerateGenericProxy(type);
-                safeName = type.GenericDefinitionName! + $"_{type.GenericTypeArguments.Count}";
+                // Include nesting parts in file name for nested generic types (e.g., CommitManager+Set`1)
+                var nameParts = SplitNestingParts(type.Name);
+                if (nameParts.Length > 1)
+                    safeName = SanitizeTypeName(TypeNameHelper.ConvertToBacktickForm(type.Name));
+                else
+                    safeName = type.GenericDefinitionName! + $"_{type.GenericTypeArguments.Count}";
             }
             else
             {
@@ -91,8 +116,9 @@ public sealed class ProxyEmitter
             }
 
             // Include namespace in the filename to avoid collisions
-            var nsPrefix = string.IsNullOrEmpty(type.Namespace) ? "" : type.Namespace.Replace('.', '_') + "_";
-            var filePath = Path.Combine(outputDirectory, $"{nsPrefix}{safeName}.g.cs");
+            var nsPrefix = string.IsNullOrEmpty(type.Namespace) ? "" : SanitizeTypeName(type.Namespace) + "_";
+            var fileName = $"{nsPrefix}{safeName}.g.cs";
+            var filePath = Path.Combine(outputDirectory, TruncateFileName(fileName));
             File.WriteAllText(filePath, code);
             files.Add(filePath);
         }
@@ -154,6 +180,23 @@ public sealed class ProxyEmitter
     private void SetupContext(IReadOnlyList<TypeMetadata> types)
     {
         _knownProxyTypes = new HashSet<string>(types.Where(t => !t.IsGenericInstance).Select(t => t.FullName));
+        _knownValueTypes = new HashSet<string>(types.Where(t => t.IsValueType).Select(t => t.FullName));
+        _valueTypeBacktickNames = new HashSet<string>(
+            types.Where(t => t.IsValueType)
+                 .Select(t => TypeNameHelper.ConvertToBacktickForm(t.FullName)));
+
+        // Also discover value types from field analysis: types referenced as ValueType fields
+        // or ValueType array elements may not have isValueType=true if only discovered on the heap.
+        foreach (var type in types)
+        {
+            foreach (var field in type.Fields)
+            {
+                if (field.Kind == FieldKind.ValueType && field.ReferenceTypeName is not null)
+                    _valueTypeBacktickNames.Add(TypeNameHelper.ConvertToBacktickForm(field.ReferenceTypeName));
+                if (field.Kind == FieldKind.Array && field.ArrayElementKind == FieldKind.ValueType && field.ArrayElementTypeName is not null)
+                    _valueTypeBacktickNames.Add(TypeNameHelper.ConvertToBacktickForm(field.ArrayElementTypeName));
+            }
+        }
         _typesByName = types.ToDictionary(t => t.FullName);
         _baseTypes = new HashSet<string>(
             types.Where(t => t.BaseTypeName is not null && _knownProxyTypes.Contains(t.BaseTypeName))
@@ -184,6 +227,41 @@ public sealed class ProxyEmitter
             _genericRepresentatives[group.Key] = group.First();
         }
 
+        // Also register parent generic definitions discovered from nested types.
+        // e.g., TypeView<SomeType>+<>c → register "TypeView" as a generic definition
+        // even if TypeView<SomeType> itself has no standalone heap instances.
+        foreach (var type in types)
+        {
+            var parts = SplitNestingParts(type.FullName);
+            if (parts.Length < 2) continue;
+            var cumulative = parts[0];
+            for (int pi = 0; pi < parts.Length - 1; pi++)
+            {
+                if (pi > 0) cumulative = cumulative + "+" + parts[pi];
+                var pGenDef = ExtractGenericDefinitionFullName(cumulative);
+                if (pGenDef is not null && _knownGenericDefinitions.Add(pGenDef))
+                {
+                    // Create a synthetic representative from the concrete parent info
+                    var (pDefName, pArgs) = TypeInspector.ParseGenericName(cumulative);
+                    if (pDefName is not null)
+                    {
+                        var pNs = type.Namespace;
+                        _genericRepresentatives.TryAdd(pGenDef, new TypeMetadata
+                        {
+                            FullName = cumulative,
+                            Namespace = pNs,
+                            Name = pNs.Length > 0 && cumulative.StartsWith(pNs + ".") ? cumulative[(pNs.Length + 1)..] : cumulative,
+                            GenericDefinitionName = pDefName.Contains('.') ? pDefName[(pDefName.LastIndexOf('.') + 1)..] : pDefName,
+                            GenericDefinitionFullName = pGenDef,
+                            GenericTypeArguments = pArgs,
+                            Fields = [],
+                            IsValueType = false
+                        });
+                    }
+                }
+            }
+        }
+
         // Build backtick-to-concrete mapping for value types nested inside generic parents.
         // ClrMD reports array component types using backtick notation (e.g., Dictionary`2+Entry)
         // but the discovered types use angle-bracket names (e.g., Dictionary<String, Int32>+Entry).
@@ -195,6 +273,15 @@ public sealed class ProxyEmitter
             if (backtickForm != type.FullName)
                 _backtickToFullName.TryAdd(backtickForm, type.FullName);
         }
+
+        // Build set of known nested type backtick names for proxy existence verification
+        _knownNestedBacktickNames = [];
+        foreach (var type in types)
+        {
+            var btForm = TypeNameHelper.ConvertToBacktickForm(type.FullName);
+            if (btForm.Contains('+'))
+                _knownNestedBacktickNames.Add(btForm);
+        }
     }
 
     /// <summary>
@@ -204,19 +291,30 @@ public sealed class ProxyEmitter
     /// </summary>
     private bool IsNestedInsideGenericParent(TypeMetadata type)
     {
-        // Find the + that separates parent from nested name (outside angle brackets)
-        int depth = 0, plusIdx = -1;
-        for (int i = 0; i < type.FullName.Length; i++)
+        // Check ALL parent parts for generic ancestry using cumulative full names
+        var parts = SplitNestingParts(type.FullName);
+        if (parts.Length < 2) return false;
+
+        // Build cumulative parent full names and check each
+        var cumulativeName = parts[0];
+        for (int i = 0; i < parts.Length - 1; i++)
         {
-            if (type.FullName[i] == '<') depth++;
-            else if (type.FullName[i] == '>') depth--;
-            else if (type.FullName[i] == '+' && depth == 0) { plusIdx = i; break; }
+            if (i > 0)
+                cumulativeName = cumulativeName + "+" + parts[i];
+            // Check angle-bracket form
+            var parentGenDef = ExtractGenericDefinitionFullName(cumulativeName);
+            if (parentGenDef is not null && _knownGenericDefinitions.Contains(parentGenDef))
+                return true;
+            // Check backtick form
+            var backtickIdx = cumulativeName.LastIndexOf('`');
+            if (backtickIdx > 0)
+            {
+                var defName = cumulativeName[..backtickIdx];
+                if (_knownGenericDefinitions.Contains(defName))
+                    return true;
+            }
         }
-        if (plusIdx < 0) return false;
-        var parentFullName = type.FullName[..plusIdx];
-        // Check if the parent is a generic type by looking for its definition in known generic definitions
-        var parentGenDef = ExtractGenericDefinitionFullName(parentFullName);
-        return parentGenDef is not null && _knownGenericDefinitions.Contains(parentGenDef);
+        return false;
     }
 
     private string GenerateProxy(TypeMetadata type)
@@ -229,13 +327,25 @@ public sealed class ProxyEmitter
 
         // Split nested type name into parts (handling + outside generic markers)
         var nestingParts = SplitNestingParts(type.Name);
-        var sanitizedName = SanitizeTypeName(nestingParts[^1]);
+        var sanitizedName = TruncateIdentifier(SanitizeTypeName(nestingParts[^1]));
         var nestingDepth = nestingParts.Length - 1;
 
         // Determine base class: use proxy of CLR base type if known, otherwise _.System.Object
         // Value types always extend _.System.Object directly (they use interior addressing, not CLR hierarchy)
         var isStructProxy = IsStructType(type);
         var hasKnownBase = !isStructProxy && type.BaseTypeName is not null && _knownProxyTypes.Contains(type.BaseTypeName);
+
+        // Detect base type naming conflict: if the base type has a nested type with the same
+        // leaf name as the current type, the inherited nested type shadows the class name,
+        // making constructor calls ambiguous (CS0122). Fall back to Object.
+        if (hasKnownBase)
+        {
+            var leafName = type.Name.Contains('+') ? type.Name[(type.Name.LastIndexOf('+') + 1)..] : type.Name;
+            var baseBacktick = TypeNameHelper.ConvertToBacktickForm(type.BaseTypeName!);
+            if (_knownNestedBacktickNames.Contains($"{baseBacktick}+{leafName}"))
+                hasKnownBase = false;
+        }
+
         var baseClass = hasKnownBase
             ? GetFullyQualifiedProxyType(type.BaseTypeName!)
             : "global::_.System.Object";
@@ -286,14 +396,14 @@ public sealed class ProxyEmitter
         const string newKeyword = "new ";
         body.AppendLine();
         body.AppendLine($"    public static {newKeyword}{sanitizedName} FromAddress(ulong address, DumpContext context)");
-        body.AppendLine($"        => new {sanitizedName}(address, context);");
+        body.AppendLine($"        => new(address, context);");
 
         if (isStructProxy)
         {
             // Factory for interior (embedded) struct fields and array elements
             body.AppendLine();
             body.AppendLine($"    public static {sanitizedName} FromInterior(ulong address, DumpContext context, string interiorTypeName)");
-            body.AppendLine($"        => new {sanitizedName}(address, context, interiorTypeName);");
+            body.AppendLine($"        => new(address, context, interiorTypeName);");
         }
 
         if (!isStructProxy)
@@ -303,7 +413,7 @@ public sealed class ProxyEmitter
             body.AppendLine($"    public static {newKeyword}global::System.Collections.Generic.IEnumerable<{sanitizedName}> GetInstances(DumpContext context)");
             body.AppendLine("    {");
             body.AppendLine($"        foreach (var addr in context.EnumerateInstances(\"{type.FullName}\"))");
-            body.AppendLine($"            yield return new {sanitizedName}(addr, context);");
+            body.AppendLine($"            yield return FromAddress(addr, context);");
             body.AppendLine("    }");
         }
 
@@ -325,11 +435,11 @@ public sealed class ProxyEmitter
 
         if (nestingDepth > 0)
         {
-            // Open outer nesting classes
+            // Open outer nesting classes (non-generic proxy nesting)
             for (int i = 0; i < nestingDepth; i++)
             {
                 var indent = new string(' ', i * 4);
-                sb.AppendLine($"{indent}public partial class {SanitizeTypeName(nestingParts[i])}");
+                sb.AppendLine($"{indent}{BuildNestingWrapperDecl(nestingParts[i])}");
                 sb.AppendLine($"{indent}{{");
             }
 
@@ -377,7 +487,7 @@ public sealed class ProxyEmitter
         for (int i = 0; i < arity; i++)
             typeArgMap[typeArgs[i]] = typeParamNames[i];
 
-        var defName = representative.GenericDefinitionName!;
+        var defName = SanitizeTypeName(representative.GenericDefinitionName!);
         var typeParamList = string.Join(", ", typeParamNames);
         var classNameWithParams = $"{defName}<{typeParamList}>";
 
@@ -385,23 +495,32 @@ public sealed class ProxyEmitter
 
         // Check if any nested types exist for this generic definition
         var ownerBacktick = TypeNameHelper.ConvertToBacktickForm(representative.FullName);
+        var ownerPrefix = ownerBacktick + "+";
         var hasNestedTypes = _typesByName.Values.Any(t =>
         {
             var bt = TypeNameHelper.ConvertToBacktickForm(t.FullName);
-            var plusIdx = bt.IndexOf('+');
-            return plusIdx > 0 && bt[..plusIdx] == ownerBacktick;
+            return bt.StartsWith(ownerPrefix);
         });
-        var classModifiers = hasNestedTypes ? "partial" : "sealed";
+        // Check if any concrete specialization of this generic type serves as a base
+        var isGenericBase = _baseTypes.Any(b =>
+        {
+            var bGenDef = ExtractGenericDefinitionFullName(b);
+            return bGenDef is not null && _knownGenericDefinitions.Contains(bGenDef) &&
+                   bGenDef == ExtractGenericDefinitionFullName(representative.FullName);
+        });
+        var needsPartial = hasNestedTypes || isGenericBase;
+        var classModifiers = needsPartial ? "partial" : "sealed";
+        var ctorAccess = needsPartial ? "protected" : "private";
 
         var isStructProxy = IsStructType(representative);
         var body = new StringBuilder();
         var interfaces = isStructProxy ? $", global::Ndump.Core.IProxy<{classNameWithParams}>" : "";
         body.AppendLine($"public {classModifiers} class {classNameWithParams} : {baseClass}{interfaces}");
         body.AppendLine("{");
-        body.AppendLine($"    private {defName}(ulong address, DumpContext context) : base(address, context) {{ }}");
+        body.AppendLine($"    {ctorAccess} {defName}(ulong address, DumpContext context) : base(address, context) {{ }}");
         if (isStructProxy)
         {
-            body.AppendLine($"    private {defName}(ulong address, DumpContext context, string interiorTypeName) : base(address, context, interiorTypeName) {{ }}");
+            body.AppendLine($"    {ctorAccess} {defName}(ulong address, DumpContext context, string interiorTypeName) : base(address, context, interiorTypeName) {{ }}");
         }
 
         // Properties for each field, substituting type parameters where they match
@@ -423,13 +542,13 @@ public sealed class ProxyEmitter
         // FromAddress factory
         body.AppendLine();
         body.AppendLine($"    public static new {classNameWithParams} FromAddress(ulong address, DumpContext context)");
-        body.AppendLine($"        => new {classNameWithParams}(address, context);");
+        body.AppendLine($"        => new(address, context);");
 
         if (isStructProxy)
         {
             body.AppendLine();
             body.AppendLine($"    public static {classNameWithParams} FromInterior(ulong address, DumpContext context, string interiorTypeName)");
-            body.AppendLine($"        => new {classNameWithParams}(address, context, interiorTypeName);");
+            body.AppendLine($"        => new(address, context, interiorTypeName);");
         }
 
         // ToString override
@@ -447,7 +566,43 @@ public sealed class ProxyEmitter
         var proxyNamespace = GetProxyNamespace(representative.Namespace);
         sb.AppendLine($"namespace {proxyNamespace};");
         sb.AppendLine();
-        sb.Append(body);
+
+        // Check if this generic type is nested inside a non-generic parent (e.g., CommitManager+Set<T>)
+        var nestingParts = SplitNestingParts(representative.Name);
+        var nestingDepth = nestingParts.Length - 1;
+
+        if (nestingDepth > 0)
+        {
+            // Open outer nesting classes (generic proxy nesting)
+            for (int i = 0; i < nestingDepth; i++)
+            {
+                var indent = new string(' ', i * 4);
+                sb.AppendLine($"{indent}{BuildNestingWrapperDecl(nestingParts[i])}");
+                sb.AppendLine($"{indent}{{");
+            }
+
+            // Indent and append class body
+            var nestIndent = new string(' ', nestingDepth * 4);
+            foreach (var line in body.ToString().TrimEnd('\n', '\r').Split('\n'))
+            {
+                var trimmed = line.TrimEnd('\r');
+                if (string.IsNullOrEmpty(trimmed))
+                    sb.AppendLine();
+                else
+                    sb.AppendLine(nestIndent + trimmed);
+            }
+
+            // Close outer nesting classes
+            sb.AppendLine();
+            for (int i = nestingDepth - 1; i >= 0; i--)
+            {
+                sb.AppendLine($"{new string(' ', i * 4)}}}");
+            }
+        }
+        else
+        {
+            sb.Append(body);
+        }
 
         return sb.ToString();
     }
@@ -458,50 +613,64 @@ public sealed class ProxyEmitter
     /// </summary>
     private string GenerateNestedGenericTypeProxy(TypeMetadata nestedType)
     {
-        // Find the + separator between parent and nested name (outside angle brackets)
-        int depth = 0, origPlusIdx = -1;
+        // Find the LAST + at depth 0 to split parent chain from leaf type
+        int depth = 0, lastPlusIdx = -1;
         for (int i = 0; i < nestedType.FullName.Length; i++)
         {
             if (nestedType.FullName[i] == '<') depth++;
             else if (nestedType.FullName[i] == '>') depth--;
-            else if (nestedType.FullName[i] == '+' && depth == 0) { origPlusIdx = i; break; }
+            else if (nestedType.FullName[i] == '+' && depth == 0) lastPlusIdx = i;
         }
-        if (origPlusIdx < 0)
+        if (lastPlusIdx < 0)
             return $"// ERROR: No nesting separator found in {nestedType.FullName}";
 
-        var parentFullName = nestedType.FullName[..origPlusIdx];
-        var nestedSuffix = nestedType.FullName[(origPlusIdx + 1)..];
-        var sanitizedNestedName = SanitizeTypeName(nestedSuffix);
+        var parentChainFullName = nestedType.FullName[..lastPlusIdx];
+        var nestedSuffix = nestedType.FullName[(lastPlusIdx + 1)..];
+        var sanitizedNestedName = TruncateIdentifier(SanitizeTypeName(nestedSuffix));
 
-        // _genericRepresentatives keys are GenericDefinitionFullName (e.g., "System.Collections.Generic.Dictionary")
-        var parentGenDef = ExtractGenericDefinitionFullName(parentFullName);
-        if (parentGenDef is null || !_genericRepresentatives.TryGetValue(parentGenDef, out var parentRep))
+        // Find the generic definition in the parent chain
+        var parentGenDef = ExtractGenericDefinitionFullName(parentChainFullName);
+        if (parentGenDef is null)
+        {
+            var backtickIdx = parentChainFullName.LastIndexOf('`');
+            if (backtickIdx > 0)
+                parentGenDef = parentChainFullName[..backtickIdx];
+        }
+        if (parentGenDef is null)
             return $"// ERROR: Could not find parent generic definition for {nestedType.FullName}";
 
-        // Build type arg map from the nested type's own parent specialization, not the representative.
-        // E.g., for Dictionary<String, Int32>+KeyCollection, use [String, Int32] not [String, Object].
-        var (_, parentTypeArgs) = TypeInspector.ParseGenericName(parentFullName);
+        // Build type arg map from the immediate generic parent's concrete args
+        var (_, parentTypeArgs) = TypeInspector.ParseGenericName(parentChainFullName);
         var arity = parentTypeArgs.Count;
+        if (arity == 0)
+        {
+            var backtickIdx = parentChainFullName.LastIndexOf('`');
+            if (backtickIdx > 0 && int.TryParse(parentChainFullName[(backtickIdx + 1)..], out var backtickArity))
+                arity = backtickArity;
+        }
         var typeParamNames = arity == 1
             ? ["T"]
             : Enumerable.Range(1, arity).Select(i => $"T{i}").ToArray();
         var typeArgMap = new Dictionary<string, string>();
-        for (int i = 0; i < arity; i++)
+        for (int i = 0; i < parentTypeArgs.Count && i < arity; i++)
             typeArgMap[parentTypeArgs[i]] = typeParamNames[i];
-
-        var parentDefName = parentRep.GenericDefinitionName!;
-        var typeParamList = string.Join(", ", typeParamNames);
 
         // Build the nested class body
         var body = new StringBuilder();
-        var nestedInterfaces = nestedType.IsValueType ? $", global::Ndump.Core.IProxy<{sanitizedNestedName}>" : "";
-        body.AppendLine($"    public sealed class {sanitizedNestedName} : global::_.System.Object{nestedInterfaces}");
+        var isNestedBase = _baseTypes.Contains(nestedType.FullName);
+        var nestedSealedKeyword = isNestedBase ? "" : "sealed ";
+        var nestedCtorAccess = isNestedBase ? "protected" : "private";
+        // Check if ANY concrete instance of this nested type is a value type (even if this representative isn't)
+        var nestedBacktick = TypeNameHelper.ConvertToBacktickForm(nestedType.FullName);
+        var isValueType = nestedType.IsValueType || _valueTypeBacktickNames.Contains(nestedBacktick);
+        var nestedInterfaces = isValueType ? $", global::Ndump.Core.IProxy<{sanitizedNestedName}>" : "";
+        body.AppendLine($"    public {nestedSealedKeyword}class {sanitizedNestedName} : global::_.System.Object{nestedInterfaces}");
         body.AppendLine("    {");
 
-        body.AppendLine($"        private {sanitizedNestedName}(ulong address, DumpContext context) : base(address, context) {{ }}");
-        if (nestedType.IsValueType)
+        body.AppendLine($"        {nestedCtorAccess} {sanitizedNestedName}(ulong address, DumpContext context) : base(address, context) {{ }}");
+        if (isValueType)
         {
-            body.AppendLine($"        private {sanitizedNestedName}(ulong address, DumpContext context, string interiorTypeName) : base(address, context, interiorTypeName) {{ }}");
+            body.AppendLine($"        {nestedCtorAccess} {sanitizedNestedName}(ulong address, DumpContext context, string interiorTypeName) : base(address, context, interiorTypeName) {{ }}");
         }
 
         // Emit fields with type param substitution
@@ -535,32 +704,61 @@ public sealed class ProxyEmitter
 
         body.AppendLine();
         body.AppendLine($"        public static new {sanitizedNestedName} FromAddress(ulong address, DumpContext context)");
-        body.AppendLine($"            => new {sanitizedNestedName}(address, context);");
+        body.AppendLine($"            => new(address, context);");
 
-        if (nestedType.IsValueType)
+        if (isValueType)
         {
             body.AppendLine();
             body.AppendLine($"        public static {sanitizedNestedName} FromInterior(ulong address, DumpContext context, string interiorTypeName)");
-            body.AppendLine($"            => new {sanitizedNestedName}(address, context, interiorTypeName);");
+            body.AppendLine($"            => new(address, context, interiorTypeName);");
         }
 
         body.AppendLine();
         body.AppendLine($"        public override string ToString() => $\"{sanitizedNestedName}@0x{{_objAddress:X}}\";");
         body.AppendLine("    }");
 
-        // Build the final output: partial outer class wrapper
+        // Build the final output with nested wrapper structure
         var sb = new StringBuilder();
         sb.AppendLine("#nullable enable");
         sb.AppendLine("using Ndump.Core;");
         sb.AppendLine();
 
-        var proxyNamespace = GetProxyNamespace(parentRep.Namespace);
+        var proxyNamespace = GetProxyNamespace(nestedType.Namespace);
         sb.AppendLine($"namespace {proxyNamespace};");
         sb.AppendLine();
-        sb.AppendLine($"public partial class {parentDefName}<{typeParamList}>");
-        sb.AppendLine("{");
-        sb.Append(body);
-        sb.AppendLine("}");
+
+        // Split the parent chain name (without namespace) into nesting parts for wrapper generation
+        var nsPrefix = string.IsNullOrEmpty(nestedType.Namespace) ? "" : nestedType.Namespace + ".";
+        var parentChainName = parentChainFullName.StartsWith(nsPrefix)
+            ? parentChainFullName[nsPrefix.Length..]
+            : parentChainFullName;
+        var wrapperParts = SplitNestingParts(parentChainName);
+
+        // Open wrapper classes
+        for (int i = 0; i < wrapperParts.Length; i++)
+        {
+            var indent = new string(' ', i * 4);
+            sb.AppendLine($"{indent}{BuildNestingWrapperDecl(wrapperParts[i])}");
+            sb.AppendLine($"{indent}{{");
+        }
+
+        // Indent body by (wrapperParts.Length - 1) * 4 extra spaces
+        var extraIndent = new string(' ', (wrapperParts.Length - 1) * 4);
+        foreach (var line in body.ToString().TrimEnd('\n', '\r').Split('\n'))
+        {
+            var trimmed = line.TrimEnd('\r');
+            if (string.IsNullOrEmpty(trimmed))
+                sb.AppendLine();
+            else
+                sb.AppendLine(extraIndent + trimmed);
+        }
+
+        // Close wrapper classes
+        sb.AppendLine();
+        for (int i = wrapperParts.Length - 1; i >= 0; i--)
+        {
+            sb.AppendLine($"{new string(' ', i * 4)}}}");
+        }
 
         return sb.ToString();
     }
@@ -674,26 +872,55 @@ public sealed class ProxyEmitter
         foreach (var (concreteArg, typeParam) in typeArgMap)
             typeName = typeName.Replace(concreteArg, typeParam);
 
-        // Check if the resolved type is a known generic definition
+        // Check if the resolved type is a known generic definition (with matching arity)
         var genDef = ExtractGenericDefinitionFullName(typeName);
         if (genDef is not null && _knownGenericDefinitions.Contains(genDef))
         {
-            // Build the proxy type reference with type params preserved
-            var lastDot = genDef.LastIndexOf('.');
-            var ns = lastDot > 0 ? genDef[..lastDot] : "";
-            var defName = lastDot > 0 ? genDef[(lastDot + 1)..] : genDef;
-            var proxyNs = GetProxyNamespace(ns);
-
-            // Extract and map type arguments, keeping type params as-is
             var (_, typeArgs) = TypeInspector.ParseGenericName(typeName);
-            var mappedArgs = typeArgs.Select(arg =>
+            // Verify arity matches
+            if (!_genericRepresentatives.TryGetValue(genDef, out var rep)
+                || typeArgs.Count == rep.GenericTypeArguments.Count)
             {
-                // If it's a type param (no dot, like "T1"), keep it
-                if (!arg.Contains('.')) return arg;
-                // Otherwise map CLR type to C# type
-                return MapClrTypeToProxyTypeArg(arg);
-            });
-            return $"{proxyNs}.{defName}<{string.Join(", ", mappedArgs)}>";
+                // Build the proxy type reference with type params preserved
+                // Find last dot OUTSIDE angle brackets in genDef
+                var lastDotIdx = -1;
+                int dotDepth = 0;
+                for (int idx = 0; idx < genDef.Length; idx++)
+                {
+                    if (genDef[idx] == '<') dotDepth++;
+                    else if (genDef[idx] == '>') dotDepth--;
+                    else if (genDef[idx] == '.' && dotDepth == 0) lastDotIdx = idx;
+                }
+                var ns = lastDotIdx > 0 ? genDef[..lastDotIdx] : "";
+                var defName = lastDotIdx > 0 ? genDef[(lastDotIdx + 1)..] : genDef;
+                var proxyNs = GetProxyNamespace(ns);
+                var sanitizedDef = SanitizeTypeNameForSource(defName);
+
+                // Extract and map type arguments, keeping type params as-is
+                var validTypeParams = new HashSet<string>(typeArgMap.Values);
+                var mappedArgsList = new List<string>();
+                bool hasInvalidArg = false;
+                foreach (var arg in typeArgs)
+                {
+                    if (!arg.Contains('.'))
+                    {
+                        // Short name — only keep if it's a valid type param in scope
+                        if (validTypeParams.Contains(arg))
+                            mappedArgsList.Add(arg);
+                        else
+                        {
+                            hasInvalidArg = true;
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        mappedArgsList.Add(MapClrTypeToProxyTypeArg(arg));
+                    }
+                }
+                if (!hasInvalidArg)
+                    return $"{proxyNs}.{sanitizedDef}<{string.Join(", ", mappedArgsList)}>";
+            }
         }
 
         // Check if it's a known non-generic proxy type
@@ -810,6 +1037,27 @@ public sealed class ProxyEmitter
             return;
         }
 
+        // Check if element type is nested inside this generic parent (e.g., Lookup<K,V>+Grouping)
+        if (elementTypeName is not null && (elementKind == FieldKind.ObjectReference || elementKind == FieldKind.ValueType))
+        {
+            var nestedSuffix = TryGetNestedSuffix(elementTypeName, ownerType);
+            if (nestedSuffix is not null && HasNestedTypeProxy(ownerType, nestedSuffix))
+            {
+                // If the nested suffix has a backtick, it's a generic nested type.
+                // Can't reference specific flat-sanitized concrete from generic parent — skip to fallback.
+                if (!nestedSuffix.Contains('`'))
+                {
+                    var sanitizedNested = SanitizeNestedSuffix(nestedSuffix);
+                    var fieldNameArg = propName == field.Name ? "" : $"\"{field.Name}\"";
+                    if (elementKind == FieldKind.ValueType)
+                        sb.AppendLine($"    public global::Ndump.Core.DumpArray<{sanitizedNested}>? {propName} => StructArrayField<{sanitizedNested}>({fieldNameArg});");
+                    else
+                        sb.AppendLine($"    public global::Ndump.Core.DumpArray<{sanitizedNested}?>? {propName} => ArrayField<{sanitizedNested}?>({fieldNameArg});");
+                    return;
+                }
+            }
+        }
+
         // Check if this is a value-type array element nested inside this generic parent
         if (elementKind == FieldKind.ValueType && elementTypeName is not null && elementTypeName.Contains('`'))
         {
@@ -821,7 +1069,7 @@ public sealed class ProxyEmitter
                 if (ownerBacktick == backtickPrefix)
                 {
                     var nestedSuffix = elementTypeName[(plusIdx + 1)..];
-                    var sanitizedNested = SanitizeTypeName(nestedSuffix);
+                    var sanitizedNested = SanitizeNestedSuffix(nestedSuffix);
                     var fieldNameArg = propName == field.Name ? "" : $"\"{field.Name}\"";
                     sb.AppendLine($"    public global::Ndump.Core.DumpArray<{sanitizedNested}>? {propName} => StructArrayField<{sanitizedNested}>({fieldNameArg});");
                     return;
@@ -1128,7 +1376,8 @@ public sealed class ProxyEmitter
 
         if (!IsUselessValueType(field.ReferenceTypeName)
             && !HasUnresolvedTypeParams(field.ReferenceTypeName!)
-            && IsUsableProxyType(field.ReferenceTypeName))
+            && IsUsableProxyType(field.ReferenceTypeName)
+            && IsKnownValueType(field.ReferenceTypeName!))
         {
             var qualifiedProxyType = GetFullyQualifiedProxyType(field.ReferenceTypeName!);
             if (propName == field.Name)
@@ -1155,7 +1404,7 @@ public sealed class ProxyEmitter
             else
                 sb.AppendLine($"    public {csType}? {propName} => NullableField<{csType}>(\"{field.Name}\");");
         }
-        else if (IsUsableProxyType(innerType))
+        else if (IsUsableProxyType(innerType) && IsKnownValueType(innerType))
         {
             // Nullable complex struct with known proxy: emit with NullableStructField
             var qualifiedProxyType = GetFullyQualifiedProxyType(innerType);
@@ -1173,12 +1422,47 @@ public sealed class ProxyEmitter
     private bool IsUsableProxyType(string? typeName)
     {
         if (typeName is null) return false;
+        // System.__Canon is a CLR internal type, never a real proxy
+        if (typeName.Contains("__Canon")) return false;
         if (_knownProxyTypes.Contains(typeName)) return true;
         // Check backtick-form mapping (e.g., Dictionary`2+Entry → Dictionary<String, Int32>+Entry)
         if (_backtickToFullName.ContainsKey(typeName)) return true;
-        // Check if it's a generic specialization whose definition is known
+        // Check if it's a generic specialization whose definition is known (with matching arity)
         var genDef = ExtractGenericDefinitionFullName(typeName);
-        return genDef is not null && _knownGenericDefinitions.Contains(genDef);
+        if (genDef is null || !_knownGenericDefinitions.Contains(genDef)) return false;
+        // For nested types where the LEAF is generic (e.g., Parent<A>+Child<B>),
+        // each concrete specialization produces a unique flat proxy. Other concrete
+        // specializations won't have proxies — require exact match.
+        if (typeName.Contains('+'))
+        {
+            var parts = SplitNestingParts(typeName);
+            var leaf = parts[^1];
+            // If the leaf itself is generic and not an exact known proxy, reject
+            if (leaf.Contains('<') && !leaf.StartsWith('<'))
+                return false;
+        }
+        // Verify arity matches the known generic definition
+        if (_genericRepresentatives.TryGetValue(genDef, out var rep))
+        {
+            var (_, typeArgs) = TypeInspector.ParseGenericName(typeName);
+            if (typeArgs.Count != rep.GenericTypeArguments.Count)
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Check if a type was discovered as a value type (struct) and thus implements IProxy.
+    /// For generic types, checks if any concrete instance was a value type.
+    /// </summary>
+    private bool IsKnownValueType(string typeName)
+    {
+        if (_knownValueTypes.Contains(typeName)) return true;
+        // For generic instances, check if the representative is a value type
+        var genDef = ExtractGenericDefinitionFullName(typeName);
+        if (genDef is not null && _genericRepresentatives.TryGetValue(genDef, out var rep))
+            return rep.IsValueType;
+        return false;
     }
 
     /// <summary>
@@ -1267,15 +1551,39 @@ public sealed class ProxyEmitter
         return null;
     }
 
+    /// <summary>
+    /// Check whether a nested type (identified by its suffix) actually has a proxy in the type list.
+    /// Prevents emitting short-name references to nested types that don't exist.
+    /// </summary>
+    private bool HasNestedTypeProxy(TypeMetadata ownerType, string nestedSuffix)
+    {
+        var ownerBacktick = TypeNameHelper.ConvertToBacktickForm(ownerType.FullName);
+        var ownerPlusIdx = ownerBacktick.IndexOf('+');
+        if (ownerPlusIdx > 0) ownerBacktick = ownerBacktick[..ownerPlusIdx];
+        var nestedFullBacktick = $"{ownerBacktick}+{nestedSuffix}";
+        return _knownNestedBacktickNames.Contains(nestedFullBacktick);
+    }
+
     private void EmitGenericObjectReferenceProperty(StringBuilder sb, TypeMetadata ownerType, FieldInfo field, string propName, Dictionary<string, string> typeArgMap)
     {
         if (field.ReferenceTypeName is not null)
         {
             // Check if field type is nested inside this generic parent
             var nestedSuffix = TryGetNestedSuffix(field.ReferenceTypeName, ownerType);
-            if (nestedSuffix is not null)
+            if (nestedSuffix is not null && HasNestedTypeProxy(ownerType, nestedSuffix))
             {
-                var sanitizedNested = SanitizeTypeName(nestedSuffix);
+                // If the nested suffix has a backtick, it's a generic nested type.
+                // From a generic parent, we can't reference a specific flat-sanitized concrete proxy
+                // because the concrete name depends on the parent's type args. Fall back to object.
+                if (nestedSuffix.Contains('`'))
+                {
+                    if (propName == field.Name)
+                        sb.AppendLine($"    public global::_.System.Object? {propName} => Field<global::_.System.Object>();");
+                    else
+                        sb.AppendLine($"    public global::_.System.Object? {propName} => Field<global::_.System.Object>(\"{field.Name}\");");
+                    return;
+                }
+                var sanitizedNested = SanitizeNestedSuffix(nestedSuffix);
                 if (propName == field.Name)
                     sb.AppendLine($"    public {sanitizedNested}? {propName} => Field<{sanitizedNested}>();");
                 else
@@ -1453,11 +1761,31 @@ public sealed class ProxyEmitter
         if (_backtickToFullName.TryGetValue(fullTypeName, out var concreteFullName))
             fullTypeName = concreteFullName;
 
-        // Check if this is a generic type with a known generic definition
+        // Check if this is a generic type with a known generic definition (arity-checked)
         var genDef = ExtractGenericDefinitionFullName(fullTypeName);
         if (genDef is not null && _knownGenericDefinitions.Contains(genDef))
         {
-            return GetFullyQualifiedGenericProxyType(fullTypeName, genDef);
+            var (_, args) = TypeInspector.ParseGenericName(fullTypeName);
+            if (!_genericRepresentatives.TryGetValue(genDef, out var rep)
+                || args.Count == rep.GenericTypeArguments.Count)
+            {
+                return GetFullyQualifiedGenericProxyType(fullTypeName, genDef);
+            }
+        }
+
+        // Check if this is a non-generic type nested inside a generic parent
+        // e.g., "System.Linq.Lookup<Version, Foo>+Grouping"
+        var nestingParts = SplitNestingParts(fullTypeName);
+        if (nestingParts.Length > 1)
+        {
+            var parentPart = string.Join("+", nestingParts[..^1]);
+            var parentGenDef = ExtractGenericDefinitionFullName(parentPart);
+            if (parentGenDef is not null && _knownGenericDefinitions.Contains(parentGenDef))
+            {
+                var parentRef = GetFullyQualifiedGenericProxyType(parentPart, parentGenDef);
+                var nestedSuffix = nestingParts[^1];
+                return $"{parentRef}.{SanitizeTypeName(nestedSuffix)}";
+            }
         }
 
         return GetFullyQualifiedNonGenericProxyType(fullTypeName);
@@ -1476,6 +1804,9 @@ public sealed class ProxyEmitter
             }
         }
 
+        if (genericStart == 0)
+            return $"_.{SanitizeTypeNameForSource(fullTypeName)}";
+
         var lastDot = fullTypeName.LastIndexOf('.', genericStart - 1);
         if (lastDot > 0)
         {
@@ -1488,17 +1819,77 @@ public sealed class ProxyEmitter
 
     private string GetFullyQualifiedGenericProxyType(string fullTypeName, string genDef)
     {
-        // Parse the type arguments
+        // Parse the LEAF type arguments (e.g., Entry<System.Int32> → [System.Int32])
         var (_, typeArgs) = TypeInspector.ParseGenericName(fullTypeName);
-        // Extract the generic def short name (after last dot)
-        var lastDot = genDef.LastIndexOf('.');
+        // Find the last dot OUTSIDE angle brackets to split namespace from short name
+        var lastDot = -1;
+        int abDepth = 0;
+        for (int i = 0; i < genDef.Length; i++)
+        {
+            if (genDef[i] == '<') abDepth++;
+            else if (genDef[i] == '>') abDepth--;
+            else if (genDef[i] == '.' && abDepth == 0) lastDot = i;
+        }
         var ns = lastDot > 0 ? genDef[..lastDot] : "";
         var defName = lastDot > 0 ? genDef[(lastDot + 1)..] : genDef;
         var proxyNs = GetProxyNamespace(ns);
 
-        // Map each type argument to its proxy representation
-        var mappedArgs = typeArgs.Select(MapClrTypeToProxyTypeArg);
-        return $"{proxyNs}.{defName}<{string.Join(", ", mappedArgs)}>";
+        // Check if defName has top-level nesting (e.g., FrugalMapBase<System.Int32>+Entry)
+        var nestingParts = SplitNestingParts(defName);
+        if (nestingParts.Length > 1)
+        {
+            // Check if any parent part is generic — determines how the leaf was generated
+            bool hasGenericParent = false;
+            var resolvedParts = new List<string>();
+            for (int i = 0; i < nestingParts.Length - 1; i++)
+            {
+                var (partDef, partArgs) = TypeInspector.ParseGenericName(nestingParts[i]);
+                if (partDef is not null && partArgs.Count > 0)
+                    hasGenericParent = true;
+                resolvedParts.Add(BuildGenericTypeRefPart(nestingParts[i]));
+            }
+
+            var leafPart = nestingParts[^1];
+            if (hasGenericParent && typeArgs.Count > 0)
+            {
+                // Nested inside a generic parent → proxy uses flat-sanitized name
+                var originalLeafSuffix = $"{leafPart}<{string.Join(", ", typeArgs)}>";
+                resolvedParts.Add(SanitizeTypeName(originalLeafSuffix));
+            }
+            else if (typeArgs.Count > 0)
+            {
+                // Nested inside non-generic parent → proxy uses generic name
+                var mappedArgs = typeArgs.Select(MapClrTypeToProxyTypeArg);
+                resolvedParts.Add($"{SanitizeTypeName(leafPart)}<{string.Join(", ", mappedArgs)}>");
+            }
+            else
+            {
+                resolvedParts.Add(SanitizeTypeName(leafPart));
+            }
+            return $"{proxyNs}.{string.Join(".", resolvedParts)}";
+        }
+
+        // Simple case: no nesting in defName
+        var sanitizedDef = SanitizeTypeNameForSource(defName);
+        if (typeArgs.Count == 0)
+            return $"{proxyNs}.{sanitizedDef}";
+        var mapped = typeArgs.Select(MapClrTypeToProxyTypeArg);
+        return $"{proxyNs}.{sanitizedDef}<{string.Join(", ", mapped)}>";
+    }
+
+    /// <summary>
+    /// Build a C# type reference for a single nesting part (parent).
+    /// If the part is generic (e.g., "FrugalMapBase&lt;System.Int32&gt;"), resolve its type args.
+    /// </summary>
+    private string BuildGenericTypeRefPart(string part)
+    {
+        var (defPart, args) = TypeInspector.ParseGenericName(part);
+        if (defPart is not null && args.Count > 0)
+        {
+            var mappedArgs = args.Select(MapClrTypeToProxyTypeArg);
+            return $"{SanitizeTypeName(defPart)}<{string.Join(", ", mappedArgs)}>";
+        }
+        return SanitizeTypeName(part);
     }
 
     /// <summary>
@@ -1506,6 +1897,10 @@ public sealed class ProxyEmitter
     /// </summary>
     private string MapClrTypeToProxyTypeArg(string clrTypeName)
     {
+        // System.__Canon is the CLR's internal canonical type for shared generics — map to object
+        if (clrTypeName == "System.__Canon")
+            return "object";
+
         // Check for string
         if (clrTypeName == "System.String") return "string";
 
@@ -1513,22 +1908,29 @@ public sealed class ProxyEmitter
         var primitive = MapClrPrimitiveTypeName(clrTypeName);
         if (primitive != "int" || clrTypeName == "System.Int32") return primitive;
 
-        // Check if it's a known proxy type (non-generic)
+        // Check if it's a known proxy type (non-generic) — use full resolution to handle nested-in-generic
         if (_knownProxyTypes.Contains(clrTypeName))
-            return GetFullyQualifiedNonGenericProxyType(clrTypeName);
+            return GetFullyQualifiedProxyType(clrTypeName);
 
-        // Check if it's a generic specialization with a known definition (recursive)
+        // Check if it's a generic specialization with a known definition (recursive, arity-checked)
         var genDef = ExtractGenericDefinitionFullName(clrTypeName);
         if (genDef is not null && _knownGenericDefinitions.Contains(genDef))
-            return GetFullyQualifiedGenericProxyType(clrTypeName, genDef);
+        {
+            var (_, args) = TypeInspector.ParseGenericName(clrTypeName);
+            if (!_genericRepresentatives.TryGetValue(genDef, out var rep)
+                || args.Count == rep.GenericTypeArguments.Count)
+            {
+                return GetFullyQualifiedGenericProxyType(clrTypeName, genDef);
+            }
+        }
 
         // If the name has no dot, it's likely an open generic parameter (e.g., "T1", "TKey")
         // from ClrMD reporting unresolved type params. Fall back to object.
         if (!clrTypeName.Contains('.'))
             return "object";
 
-        // Fallback: use the real CLR type with global prefix
-        return $"global::{clrTypeName}";
+        // Fallback: unknown type — use object since the real CLR type isn't available during proxy compilation
+        return "object";
     }
 
     /// <summary>
@@ -1555,7 +1957,59 @@ public sealed class ProxyEmitter
             .Replace('.', '_')
             .Replace('`', '_')
             .Replace('[', '_')
-            .Replace(']', '_');
+            .Replace(']', '_')
+            .Replace('-', '_')
+            .Replace('|', '_')
+            .Replace('/', '_')
+            .Replace('\\', '_')
+            .Replace(':', '_')
+            .Replace('*', '_')
+            .Replace('?', '_')
+            .Replace('"', '_')
+            .Replace('$', '_')
+            .Replace('@', '_')
+            .Replace('=', '_');
+    }
+
+    /// <summary>
+    /// Sanitize a nested type suffix that may contain '+' (multi-level nesting).
+    /// Splits on '+', sanitizes each part, and joins with '.' (C# nesting separator).
+    /// E.g., "ValuePropertiesSupport+ValuePropertiesSupportApartment" → "ValuePropertiesSupport.ValuePropertiesSupportApartment"
+    /// </summary>
+    private static string SanitizeNestedSuffix(string nestedSuffix)
+    {
+        if (!nestedSuffix.Contains('+'))
+            return SanitizeTypeName(nestedSuffix);
+        var parts = nestedSuffix.Split('+');
+        return string.Join(".", parts.Select(SanitizeTypeName));
+    }
+
+    /// <summary>
+    /// Truncate a C# identifier (class name) to stay within .NET metadata limits.
+    /// The CLR metadata limit is 1023 bytes. We use a conservative limit to leave room for
+    /// namespace and parent class name qualification.
+    /// </summary>
+    internal static string TruncateIdentifier(string name, int maxLength = 450)
+    {
+        if (name.Length <= maxLength)
+            return name;
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(name)))[..12];
+        return $"{name[..(maxLength - 1 - hash.Length)]}_{hash}";
+    }
+
+    /// <summary>
+    /// Truncate a file name to stay within filesystem limits.
+    /// Preserves the .g.cs extension and appends a hash suffix for uniqueness.
+    /// </summary>
+    internal static string TruncateFileName(string fileName, int maxLength = 200)
+    {
+        if (fileName.Length <= maxLength)
+            return fileName;
+
+        const string extension = ".g.cs";
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(fileName)))[..12];
+        var truncated = fileName[..(maxLength - extension.Length - 1 - hash.Length)];
+        return $"{truncated}_{hash}{extension}";
     }
 
     /// <summary>
@@ -1582,6 +2036,29 @@ public sealed class ProxyEmitter
         }
         parts.Add(name[start..]);
         return parts.ToArray();
+    }
+
+    /// <summary>
+    /// Build a nesting wrapper declaration for a parent type part.
+    /// If the part is generic (e.g. "FrugalMapBase&lt;System.Int32&gt;"), emit "partial class FrugalMapBase&lt;T&gt;".
+    /// If not generic, emit "partial class SanitizedName".
+    /// </summary>
+    private static string BuildNestingWrapperDecl(string nestingPart)
+    {
+        var angleIdx = nestingPart.IndexOf('<');
+        if (angleIdx > 0 && !nestingPart.AsSpan(angleIdx).StartsWith("<>"))
+        {
+            // Generic parent: extract def name and count type args
+            var defName = nestingPart[..angleIdx];
+            var (_, args) = TypeInspector.ParseGenericName(nestingPart);
+            var arity = args.Count;
+            if (arity > 0)
+            {
+                var paramNames = arity == 1 ? "T" : string.Join(", ", Enumerable.Range(1, arity).Select(j => $"T{j}"));
+                return $"public partial class {SanitizeTypeName(defName)}<{paramNames}>";
+            }
+        }
+        return $"public partial class {SanitizeTypeName(nestingPart)}";
     }
 
     internal static string GenerateProxyResolver()
@@ -1757,13 +2234,43 @@ public sealed class ProxyEmitter
         // Handle backing fields like <PropertyName>k__BackingField
         if (fieldName.StartsWith('<') && fieldName.Contains(">k__BackingField"))
         {
-            var propName = fieldName[1..fieldName.IndexOf('>')];
-            return propName;
+            // Use ">k__BackingField" as the end marker to handle nested <> in names
+            var endIdx = fieldName.IndexOf(">k__BackingField");
+            var propName = fieldName[1..endIdx];
+            // Sanitize dots from explicit interface implementation names
+            // e.g., "System.Windows.Interop.IKeyboardInputSink.KeyboardInputSite" → last segment
+            var lastDot = propName.LastIndexOf('.');
+            if (lastDot >= 0)
+                propName = propName[(lastDot + 1)..];
+            // Sanitize any remaining < > from generic interface names
+            propName = propName.Replace('<', '_').Replace('>', '_');
+            return EscapeIfKeyword(propName);
         }
 
-        return fieldName
+        var sanitized = fieldName
             .Replace('<', '_')
             .Replace('>', '_')
-            .Replace(' ', '_');
+            .Replace(' ', '_')
+            .Replace('-', '_')
+            .Replace('.', '_')
+            .Replace('$', '_')
+            .Replace('@', '_');
+
+        return EscapeIfKeyword(sanitized);
     }
+
+    private static string EscapeIfKeyword(string name) => CSharpKeywords.Contains(name) ? $"@{name}" : name;
+
+    private static readonly HashSet<string> CSharpKeywords =
+    [
+        "abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char", "checked",
+        "class", "const", "continue", "decimal", "default", "delegate", "do", "double", "else",
+        "enum", "event", "explicit", "extern", "false", "finally", "fixed", "float", "for",
+        "foreach", "goto", "if", "implicit", "in", "int", "interface", "internal", "is", "lock",
+        "long", "namespace", "new", "null", "object", "operator", "out", "override", "params",
+        "private", "protected", "public", "readonly", "ref", "return", "sbyte", "sealed", "short",
+        "sizeof", "stackalloc", "static", "string", "struct", "switch", "this", "throw", "true",
+        "try", "typeof", "uint", "ulong", "unchecked", "unsafe", "ushort", "using", "virtual",
+        "void", "volatile", "while"
+    ];
 }

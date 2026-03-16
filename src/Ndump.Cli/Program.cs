@@ -167,7 +167,7 @@ internal class Program
         }
         finally
         {
-            try { Directory.Delete(tempDir, true); } catch { }
+            try { Directory.Delete(tempDir, recursive: true); } catch { }
         }
     }
 
