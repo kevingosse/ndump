@@ -148,9 +148,12 @@ public sealed class ProxyEmitter
                 : type.IsGenericInstance ? [] : new HashSet<string> { type.FullName };
             _typesByName = [];
             _baseTypes = [];
+            _knownValueTypes = [];
+            _valueTypeBacktickNames = [];
             _nestingContainerTypes = [];
             _knownGenericDefinitions = [];
             _genericRepresentatives = [];
+            _knownNestedBacktickNames = [];
 
             // If the type itself is generic, set up its definition as known
             if (type.IsGenericInstance)
@@ -285,9 +288,9 @@ public sealed class ProxyEmitter
     }
 
     /// <summary>
-    /// Convert a CLR type name with angle brackets to backtick arity form.
-    /// E.g., "System.Collections.Generic.Dictionary&lt;System.String, System.Int32&gt;+Entry"
-    /// → "System.Collections.Generic.Dictionary`2+Entry"
+    /// Determine if a type is nested inside a generic parent type.
+    /// E.g., "Dictionary&lt;String, Int32&gt;+Entry" is nested inside the generic Dictionary.
+    /// Used to route nested types to GenerateNestedGenericTypeProxy for correct wrapping.
     /// </summary>
     private bool IsNestedInsideGenericParent(TypeMetadata type)
     {
@@ -2218,7 +2221,12 @@ public sealed class ProxyEmitter
         sb.AppendLine("            .Replace(',', '_').Replace(' ', '_')");
         sb.AppendLine("            .Replace('+', '_').Replace('.', '_')");
         sb.AppendLine("            .Replace('`', '_').Replace('[', '_')");
-        sb.AppendLine("            .Replace(']', '_');");
+        sb.AppendLine("            .Replace(']', '_').Replace('-', '_')");
+        sb.AppendLine("            .Replace('|', '_').Replace('/', '_')");
+        sb.AppendLine("            .Replace('\\\\', '_').Replace(':', '_')");
+        sb.AppendLine("            .Replace('*', '_').Replace('?', '_')");
+        sb.AppendLine("            .Replace('\"', '_').Replace('$', '_')");
+        sb.AppendLine("            .Replace('@', '_').Replace('=', '_');");
         sb.AppendLine("    }");
         sb.AppendLine("}");
         return sb.ToString();
