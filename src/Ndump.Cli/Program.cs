@@ -8,6 +8,8 @@ internal class Program
 {
     static int Main(string[] args)
     {
+        Console.OutputEncoding = System.Text.Encoding.UTF8;
+
         if (args.Length < 1)
             return PrintUsage();
 
@@ -52,12 +54,7 @@ internal class Program
 
         using var context = Step("Opening dump", () => DumpContext.Open(dumpPath));
 
-        var types = Step("Discovering types", () =>
-        {
-            var inspector = new TypeInspector();
-            return inspector.DiscoverTypes(context);
-        });
-        AnsiConsole.MarkupLine($"         [dim]found[/] [bold]{types.Count}[/] [dim]type(s)[/]");
+        var types = DiscoverTypesWithProgress(context);
 
         // Clean existing generated files
         if (Directory.Exists(outputDir))
@@ -66,12 +63,7 @@ internal class Program
                 File.Delete(f);
         }
 
-        var generatedFiles = Step("Emitting source files", () =>
-        {
-            var emitter = new ProxyEmitter();
-            return emitter.EmitProxies(types, outputDir);
-        });
-        AnsiConsole.MarkupLine($"         [dim]wrote[/] [bold]{generatedFiles.Count}[/] [dim]file(s)[/]");
+        var generatedFiles = EmitWithProgress(types, outputDir, "Emitting source files");
 
         // Generate csproj if not present
         var dirName = new DirectoryInfo(outputDir).Name;
@@ -115,27 +107,14 @@ internal class Program
 
         using var context = Step("Opening dump", () => DumpContext.Open(dumpPath));
 
-        var types = Step("Discovering types", () =>
-        {
-            var inspector = new TypeInspector();
-            return inspector.DiscoverTypes(context);
-        });
-        AnsiConsole.MarkupLine($"         [dim]found[/] [bold]{types.Count}[/] [dim]type(s)[/]");
-        AnsiConsole.WriteLine();
+        var types = DiscoverTypesWithProgress(context);
 
-        WriteTypeTable(types);
-
-        var tempDir = Path.Combine(Path.GetTempPath(), "ndump_" + Guid.NewGuid().ToString("N")[..8]);
+        var tempDir= Path.Combine(Path.GetTempPath(), "ndump_" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(tempDir);
 
         try
         {
-            var generatedFiles = Step("Emitting proxy sources", () =>
-            {
-                var emitter = new ProxyEmitter();
-                return emitter.EmitProxies(types, tempDir);
-            });
-            AnsiConsole.MarkupLine($"         [dim]wrote[/] [bold]{generatedFiles.Count}[/] [dim]file(s)[/]");
+            var generatedFiles = EmitWithProgress(types, tempDir, "Emitting proxy sources");
 
             var result = Step("Compiling assembly", () =>
             {
@@ -208,6 +187,66 @@ internal class Program
 
     // ── helpers ─────────────────────────────────────────────────────────
 
+    static IReadOnlyList<TypeMetadata> DiscoverTypesWithProgress(DumpContext context)
+    {
+        IReadOnlyList<TypeMetadata>? types = null;
+        AnsiConsole.Status()
+            .Spinner(Spinner.Known.Dots)
+            .SpinnerStyle(Style.Parse("blue"))
+            .Start("Discovering types...", ctx =>
+            {
+                var inspector = new TypeInspector();
+                types = inspector.DiscoverTypes(context, typesFound =>
+                {
+                    ctx.Status($"Discovering types... [bold]{typesFound}[/] found");
+                });
+            });
+
+        AnsiConsole.MarkupLine("  [green]✓[/] Discovering types");
+        AnsiConsole.MarkupLine($"         [dim]found[/] [bold]{types!.Count}[/] [dim]type(s)[/]");
+        return types;
+    }
+
+    static IReadOnlyList<string> EmitWithProgress(IReadOnlyList<TypeMetadata> types, string outputDir,
+        string description)
+    {
+        IReadOnlyList<string>? files = null;
+        AnsiConsole.Progress()
+            .AutoClear(true)
+            .Columns(
+                new SpinnerColumn { Style = Style.Parse("blue") },
+                new TaskDescriptionColumn(),
+                new ProgressBarColumn(),
+                new PercentageColumn())
+            .Start(ctx =>
+            {
+                var task = ctx.AddTask(description, maxValue: types.Count);
+                Stopwatch? sw = null;
+                var emitter = new ProxyEmitter();
+                files = emitter.EmitProxies(types, outputDir, (current, total) =>
+                {
+                    task.Value = current;
+                    sw ??= Stopwatch.StartNew();
+
+                    if (current > 1 && sw.Elapsed.TotalSeconds >= 1)
+                    {
+                        var rate = current / sw.Elapsed.TotalSeconds;
+                        var eta = TimeSpan.FromSeconds((total - current) / rate);
+                        task.Description = $"{description} [dim]({FormatEta(eta)} remaining)[/]";
+                    }
+                });
+                task.Value = task.MaxValue;
+            });
+
+        AnsiConsole.MarkupLine($"  [green]✓[/] {description}");
+        AnsiConsole.MarkupLine($"         [dim]wrote[/] [bold]{files!.Count}[/] [dim]file(s)[/]");
+        return files;
+    }
+
+    static string FormatEta(TimeSpan eta) => eta.TotalMinutes >= 1
+        ? $"{(int)eta.TotalMinutes}:{eta.Seconds:D2}"
+        : $"0:{eta.Seconds:D2}";
+
     static T Step<T>(string description, Func<T> action)
     {
         var result = AnsiConsole.Status()
@@ -217,25 +256,6 @@ internal class Program
 
         AnsiConsole.MarkupLine($"  [green]✓[/] {description}");
         return result;
-    }
-
-    static void WriteTypeTable(IReadOnlyList<TypeMetadata> types)
-    {
-        const int maxRows = 20;
-
-        var table = new Table()
-            .Border(TableBorder.Rounded)
-            .AddColumn("[bold]Type[/]")
-            .AddColumn(new TableColumn("[bold]Fields[/]").Centered());
-
-        foreach (var type in types.Take(maxRows))
-            table.AddRow(Markup.Escape(type.FullName), type.Fields.Count.ToString());
-
-        if (types.Count > maxRows)
-            table.AddRow($"[dim]… and {types.Count - maxRows} more[/]", "[dim]…[/]");
-
-        AnsiConsole.Write(table);
-        AnsiConsole.WriteLine();
     }
 
     static void WriteSuccess(string message)

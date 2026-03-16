@@ -72,7 +72,11 @@ public sealed class ProxyEmitter
     /// Emit .cs files for all discovered types into the given output directory.
     /// Returns the list of generated file paths.
     /// </summary>
-    public IReadOnlyList<string> EmitProxies(IReadOnlyList<TypeMetadata> types, string outputDirectory)
+    /// <param name="types">The discovered types to emit proxies for.</param>
+    /// <param name="outputDirectory">The directory to write generated files to.</param>
+    /// <param name="onProgress">Optional callback invoked for each type processed, with (current, total).</param>
+    public IReadOnlyList<string> EmitProxies(IReadOnlyList<TypeMetadata> types, string outputDirectory,
+        Action<int, int>? onProgress = null)
     {
         Directory.CreateDirectory(outputDirectory);
         SetupContext(types);
@@ -81,6 +85,7 @@ public sealed class ProxyEmitter
 
         var emittedNestedGeneric = new HashSet<string>();
 
+        int emitIndex = 0;
         foreach (var type in types)
         {
             string code;
@@ -92,7 +97,10 @@ public sealed class ProxyEmitter
                 // Deduplicate by backtick-form suffix (e.g., only one "Entry" across specializations).
                 var bt = TypeNameHelper.ConvertToBacktickForm(type.FullName);
                 if (!emittedNestedGeneric.Add(bt))
+                {
+                    onProgress?.Invoke(++emitIndex, types.Count);
                     continue;
+                }
                 code = GenerateNestedGenericTypeProxy(type);
                 safeName = SanitizeTypeName(TypeNameHelper.ConvertToBacktickForm(type.Name));
             }
@@ -100,7 +108,10 @@ public sealed class ProxyEmitter
             {
                 // Emit one generic proxy per definition, skip subsequent specializations
                 if (!emittedGenericDefs.Add(type.GenericDefinitionFullName!))
+                {
+                    onProgress?.Invoke(++emitIndex, types.Count);
                     continue;
+                }
                 code = GenerateGenericProxy(type);
                 // Include nesting parts in file name for nested generic types (e.g., CommitManager+Set`1)
                 var nameParts = SplitNestingParts(type.Name);
@@ -121,6 +132,8 @@ public sealed class ProxyEmitter
             var filePath = Path.Combine(outputDirectory, TruncateFileName(fileName));
             File.WriteAllText(filePath, code);
             files.Add(filePath);
+
+            onProgress?.Invoke(++emitIndex, types.Count);
         }
 
         // Emit the resolver that enables polymorphic field/array resolution
