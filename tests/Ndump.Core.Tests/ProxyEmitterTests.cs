@@ -888,6 +888,781 @@ public class ProxyEmitterTests
         return count;
     }
 
+    // ───── SanitizeTypeName: reserved characters ─────
+
+    [Test]
+    public void SanitizeTypeName_HandlesAngleBrackets()
+    {
+        ProxyEmitter.SanitizeTypeName("<>c").ShouldBe("__c");
+    }
+
+    [Test]
+    public void SanitizeTypeName_HandlesDash()
+    {
+        ProxyEmitter.SanitizeTypeName("my-type").ShouldBe("my_type");
+    }
+
+    [Test]
+    public void SanitizeTypeName_HandlesPipe()
+    {
+        ProxyEmitter.SanitizeTypeName("A|B").ShouldBe("A_B");
+    }
+
+    [Test]
+    public void SanitizeTypeName_HandlesSlashAndBackslash()
+    {
+        ProxyEmitter.SanitizeTypeName("A/B\\C").ShouldBe("A_B_C");
+    }
+
+    [Test]
+    public void SanitizeTypeName_HandlesColon()
+    {
+        ProxyEmitter.SanitizeTypeName("A:B").ShouldBe("A_B");
+    }
+
+    [Test]
+    public void SanitizeTypeName_HandlesDollarAndAt()
+    {
+        ProxyEmitter.SanitizeTypeName("$Foo@Bar").ShouldBe("_Foo_Bar");
+    }
+
+    [Test]
+    public void SanitizeTypeName_HandlesEquals()
+    {
+        ProxyEmitter.SanitizeTypeName("A=B").ShouldBe("A_B");
+    }
+
+    [Test]
+    public void SanitizeTypeName_HandlesPlus()
+    {
+        ProxyEmitter.SanitizeTypeName("Outer+Inner").ShouldBe("Outer_Inner");
+    }
+
+    [Test]
+    public void SanitizeTypeName_HandlesDot()
+    {
+        ProxyEmitter.SanitizeTypeName("System.Object").ShouldBe("System_Object");
+    }
+
+    [Test]
+    public void SanitizeTypeName_HandlesCommaAndSpace()
+    {
+        ProxyEmitter.SanitizeTypeName("Dictionary<String, Int32>").ShouldBe("Dictionary_String__Int32_");
+    }
+
+    [Test]
+    public void SanitizeTypeName_HandlesStarAndQuestion()
+    {
+        ProxyEmitter.SanitizeTypeName("A*B?C").ShouldBe("A_B_C");
+    }
+
+    // ───── SanitizeNestedSuffix (tested via proxy codegen) ─────
+
+    [Test]
+    public void GenerateProxy_NestedType_MultiLevelSuffix_SanitizesWithDots()
+    {
+        // A nested type like Outer+Mid+Inner where Mid+Inner is the nested suffix
+        var type = new TypeMetadata
+        {
+            FullName = "MyApp.Outer+Mid+Inner",
+            Namespace = "MyApp",
+            Name = "Outer+Mid+Inner",
+            Fields = []
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        // Should produce nested partial wrappers
+        code.ShouldContain("public partial class Outer");
+        code.ShouldContain("public partial class Mid");
+        code.ShouldContain("public sealed class Inner : global::_.System.Object");
+    }
+
+    // ───── TruncateIdentifier ─────
+
+    [Test]
+    public void TruncateIdentifier_ShortName_Unchanged()
+    {
+        ProxyEmitter.TruncateIdentifier("Customer").ShouldBe("Customer");
+    }
+
+    [Test]
+    public void TruncateIdentifier_ExactlyAtLimit_Unchanged()
+    {
+        var name = new string('A', 450);
+        ProxyEmitter.TruncateIdentifier(name).ShouldBe(name);
+    }
+
+    [Test]
+    public void TruncateIdentifier_OverLimit_TruncatesWithHash()
+    {
+        var name = new string('A', 500);
+        var result = ProxyEmitter.TruncateIdentifier(name);
+        result.Length.ShouldBeLessThanOrEqualTo(450);
+        result.ShouldContain("_"); // hash separator
+        // Should be deterministic
+        ProxyEmitter.TruncateIdentifier(name).ShouldBe(result);
+    }
+
+    [Test]
+    public void TruncateIdentifier_DifferentLongNames_ProduceDifferentResults()
+    {
+        var name1 = new string('A', 500);
+        var name2 = new string('B', 500);
+        ProxyEmitter.TruncateIdentifier(name1).ShouldNotBe(ProxyEmitter.TruncateIdentifier(name2));
+    }
+
+    // ───── TruncateFileName ─────
+
+    [Test]
+    public void TruncateFileName_ShortName_Unchanged()
+    {
+        ProxyEmitter.TruncateFileName("MyApp_Customer.g.cs").ShouldBe("MyApp_Customer.g.cs");
+    }
+
+    [Test]
+    public void TruncateFileName_OverLimit_TruncatesWithHashAndExtension()
+    {
+        var name = new string('A', 250) + ".g.cs";
+        var result = ProxyEmitter.TruncateFileName(name);
+        result.Length.ShouldBeLessThanOrEqualTo(200);
+        result.ShouldEndWith(".g.cs");
+        // Should be deterministic
+        ProxyEmitter.TruncateFileName(name).ShouldBe(result);
+    }
+
+    [Test]
+    public void TruncateFileName_DifferentLongNames_ProduceDifferentResults()
+    {
+        var name1 = new string('A', 250) + ".g.cs";
+        var name2 = new string('B', 250) + ".g.cs";
+        ProxyEmitter.TruncateFileName(name1).ShouldNotBe(ProxyEmitter.TruncateFileName(name2));
+    }
+
+    // ───── Compiler-generated types with reserved chars ─────
+
+    [Test]
+    public void GenerateProxy_CompilerGeneratedType_AngleBracketsAreSanitized()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "MyApp.Task+<>c",
+            Namespace = "MyApp",
+            Name = "Task+<>c",
+            Fields = []
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        code.ShouldContain("namespace _.MyApp;");
+        code.ShouldContain("public partial class Task");
+        code.ShouldContain("public sealed class __c : global::_.System.Object");
+    }
+
+    [Test]
+    public void GenerateProxy_CompilerGeneratedStateMachine_Sanitized()
+    {
+        // State machine types like <ReadAsync>d__5
+        var type = new TypeMetadata
+        {
+            FullName = "MyApp.Reader+<ReadAsync>d__5",
+            Namespace = "MyApp",
+            Name = "Reader+<ReadAsync>d__5",
+            Fields =
+            [
+                new FieldInfo { Name = "<>1__state", TypeName = "int", Kind = FieldKind.Primitive }
+            ]
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        code.ShouldContain("namespace _.MyApp;");
+        code.ShouldContain("public partial class Reader");
+        // Angle brackets and backtick-like chars should be sanitized
+        code.ShouldContain("class _ReadAsync_d__5 : global::_.System.Object");
+        // Field name with angle brackets should produce clean property
+        code.ShouldContain("public int __1__state =>");
+    }
+
+    // ───── Value type proxy: IProxy + FromInterior ─────
+
+    [Test]
+    public void GenerateProxy_ValueType_ImplementsIProxy()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "System.DateTime",
+            Namespace = "System",
+            Name = "DateTime",
+            Fields = [],
+            IsValueType = true
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        code.ShouldContain("global::Ndump.Core.IProxy<DateTime>");
+        code.ShouldContain("FromInterior(ulong address, DumpContext context, string interiorTypeName)");
+        // Value types should NOT have GetInstances (they're not heap objects)
+        code.ShouldNotContain("GetInstances");
+    }
+
+    [Test]
+    public void GenerateProxy_ValueType_ViaBaseTypeName_ImplementsIProxy()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "MyApp.MyStruct",
+            Namespace = "MyApp",
+            Name = "MyStruct",
+            Fields = [],
+            BaseTypeName = "System.ValueType"
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        code.ShouldContain("global::Ndump.Core.IProxy<MyStruct>");
+    }
+
+    [Test]
+    public void GenerateProxy_EnumType_ImplementsIProxy()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "MyApp.Color",
+            Namespace = "MyApp",
+            Name = "Color",
+            Fields = [],
+            BaseTypeName = "System.Enum"
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        code.ShouldContain("global::Ndump.Core.IProxy<Color>");
+    }
+
+    // ───── Value type discovery from field analysis ─────
+
+    [Test]
+    public void GenerateProxy_ValueTypeDiscoveredFromFieldKind_NestedGenericGetsIProxy()
+    {
+        // A nested type inside a generic parent isn't marked IsValueType=true,
+        // but another type's field references it as ValueType. The field-based discovery
+        // should cause the nested generic proxy to implement IProxy.
+        var dictType = new TypeMetadata
+        {
+            FullName = "System.Collections.Generic.Dictionary<System.String, System.Int32>",
+            Namespace = "System.Collections.Generic",
+            Name = "Dictionary<System.String, System.Int32>",
+            Fields = [],
+            GenericDefinitionName = "Dictionary",
+            GenericDefinitionFullName = "System.Collections.Generic.Dictionary",
+            GenericTypeArguments = ["System.String", "System.Int32"]
+        };
+        var entryType = new TypeMetadata
+        {
+            FullName = "System.Collections.Generic.Dictionary<System.String, System.Int32>+Entry",
+            Namespace = "System.Collections.Generic",
+            Name = "Dictionary<System.String, System.Int32>+Entry",
+            Fields = [],
+            IsValueType = false // NOT marked as value type by ClrMD heap discovery
+        };
+        var holder = new TypeMetadata
+        {
+            FullName = "MyApp.Holder",
+            Namespace = "MyApp",
+            Name = "Holder",
+            Fields =
+            [
+                new FieldInfo
+                {
+                    Name = "_entry",
+                    TypeName = "object",
+                    Kind = FieldKind.ValueType,
+                    // Field analysis reveals it's a value type
+                    ReferenceTypeName = "System.Collections.Generic.Dictionary<System.String, System.Int32>+Entry"
+                }
+            ]
+        };
+
+        var emitter = new ProxyEmitter();
+        var allTypes = new TypeMetadata[] { dictType, entryType, holder };
+        var dir = Path.Combine(Path.GetTempPath(), $"ndump_test_{Guid.NewGuid():N}");
+        var files = emitter.EmitProxies(allTypes, dir);
+
+        try
+        {
+            var entryFile = files.FirstOrDefault(f => f.Contains("Entry"));
+            entryFile.ShouldNotBeNull();
+            var code = File.ReadAllText(entryFile);
+
+            // Entry should implement IProxy because field analysis discovered it as value type
+            code.ShouldContain("global::Ndump.Core.IProxy<Entry>");
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    [Test]
+    public void GenerateProxy_ValueTypeDiscoveredFromArrayElement_NestedGenericGetsIProxy()
+    {
+        var dictType = new TypeMetadata
+        {
+            FullName = "System.Collections.Generic.Dictionary<System.String, System.Int32>",
+            Namespace = "System.Collections.Generic",
+            Name = "Dictionary<System.String, System.Int32>",
+            Fields =
+            [
+                new FieldInfo
+                {
+                    Name = "_entries",
+                    TypeName = "System.Collections.Generic.Dictionary<System.String, System.Int32>+Entry[]",
+                    Kind = FieldKind.Array,
+                    ArrayElementTypeName = "System.Collections.Generic.Dictionary<System.String, System.Int32>+Entry",
+                    ArrayElementKind = FieldKind.ValueType
+                }
+            ],
+            GenericDefinitionName = "Dictionary",
+            GenericDefinitionFullName = "System.Collections.Generic.Dictionary",
+            GenericTypeArguments = ["System.String", "System.Int32"]
+        };
+        var entryType = new TypeMetadata
+        {
+            FullName = "System.Collections.Generic.Dictionary<System.String, System.Int32>+Entry",
+            Namespace = "System.Collections.Generic",
+            Name = "Dictionary<System.String, System.Int32>+Entry",
+            Fields = [],
+            IsValueType = false // Not marked by ClrMD
+        };
+
+        var emitter = new ProxyEmitter();
+        var allTypes = new TypeMetadata[] { dictType, entryType };
+        var dir = Path.Combine(Path.GetTempPath(), $"ndump_test_{Guid.NewGuid():N}");
+        var files = emitter.EmitProxies(allTypes, dir);
+
+        try
+        {
+            var entryFile = files.FirstOrDefault(f => f.Contains("Entry"));
+            entryFile.ShouldNotBeNull();
+            var code = File.ReadAllText(entryFile);
+
+            code.ShouldContain("global::Ndump.Core.IProxy<Entry>");
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    // ───── Base type naming conflict (CS0122 avoidance) ─────
+
+    [Test]
+    public void GenerateProxy_BaseTypeNamingConflict_FallsBackToObject()
+    {
+        // If base type "Control" has a nested type "Control+Button", and the derived
+        // type is also named "Button", there's a constructor ambiguity. Should fall back to Object.
+        var control = new TypeMetadata
+        {
+            FullName = "UI.Control",
+            Namespace = "UI",
+            Name = "Control",
+            Fields = []
+        };
+        var controlButton = new TypeMetadata
+        {
+            FullName = "UI.Control+Button",
+            Namespace = "UI",
+            Name = "Control+Button",
+            Fields = []
+        };
+        var button = new TypeMetadata
+        {
+            FullName = "UI.Button",
+            Namespace = "UI",
+            Name = "Button",
+            BaseTypeName = "UI.Control",
+            Fields = []
+        };
+
+        var code = _emitter.GenerateProxyCode(button, allTypes: [control, controlButton, button]);
+
+        // Should NOT extend Control (naming conflict with Control.Button)
+        code.ShouldContain("class Button : global::_.System.Object");
+        code.ShouldNotContain("class Button : _.UI.Control");
+    }
+
+    [Test]
+    public void GenerateProxy_BaseTypeNoConflict_ExtendsBaseProxy()
+    {
+        // When there's no naming conflict, normal inheritance should work
+        var control = new TypeMetadata
+        {
+            FullName = "UI.Control",
+            Namespace = "UI",
+            Name = "Control",
+            Fields = []
+        };
+        var button = new TypeMetadata
+        {
+            FullName = "UI.Button",
+            Namespace = "UI",
+            Name = "Button",
+            BaseTypeName = "UI.Control",
+            Fields = []
+        };
+
+        var code = _emitter.GenerateProxyCode(button, allTypes: [control, button]);
+
+        code.ShouldContain("class Button : _.UI.Control");
+    }
+
+    // ───── __Canon references in generic proxies ─────
+
+    [Test]
+    public void GenerateProxy_CanonFieldReference_MapsToSystemObject()
+    {
+        var type = new TypeMetadata
+        {
+            FullName = "MyApp.Wrapper<MyApp.Item>",
+            Namespace = "MyApp",
+            Name = "Wrapper<MyApp.Item>",
+            Fields =
+            [
+                new FieldInfo
+                {
+                    Name = "_value",
+                    TypeName = "System.__Canon",
+                    Kind = FieldKind.ObjectReference,
+                    ReferenceTypeName = "System.__Canon"
+                }
+            ],
+            GenericDefinitionName = "Wrapper",
+            GenericDefinitionFullName = "MyApp.Wrapper",
+            GenericTypeArguments = ["MyApp.Item"]
+        };
+
+        var code = _emitter.GenerateProxyCode(type);
+
+        // __Canon should be mapped to _.System.Object, not cause a missing type error
+        code.ShouldContain("global::_.System.Object?");
+        code.ShouldNotContain("__Canon");
+    }
+
+    // ───── Nested generic type proxy ─────
+
+    [Test]
+    public void GenerateProxy_NestedInsideGenericParent_WrappedInGenericPartialClass()
+    {
+        var dictType = new TypeMetadata
+        {
+            FullName = "System.Collections.Generic.Dictionary<System.String, System.Int32>",
+            Namespace = "System.Collections.Generic",
+            Name = "Dictionary<System.String, System.Int32>",
+            Fields = [],
+            GenericDefinitionName = "Dictionary",
+            GenericDefinitionFullName = "System.Collections.Generic.Dictionary",
+            GenericTypeArguments = ["System.String", "System.Int32"]
+        };
+        var entryType = new TypeMetadata
+        {
+            FullName = "System.Collections.Generic.Dictionary<System.String, System.Int32>+Entry",
+            Namespace = "System.Collections.Generic",
+            Name = "Dictionary<System.String, System.Int32>+Entry",
+            Fields =
+            [
+                new FieldInfo { Name = "_hashCode", TypeName = "int", Kind = FieldKind.Primitive }
+            ],
+            IsValueType = true
+        };
+
+        var emitter = new ProxyEmitter();
+        var allTypes = new TypeMetadata[] { dictType, entryType };
+        var files = emitter.EmitProxies(allTypes, Path.Combine(Path.GetTempPath(), $"ndump_test_{Guid.NewGuid():N}"));
+
+        try
+        {
+            // Find the Entry proxy file
+            var entryFile = files.FirstOrDefault(f => f.Contains("Entry"));
+            entryFile.ShouldNotBeNull();
+            var code = File.ReadAllText(entryFile);
+
+            // Should be wrapped in generic partial class
+            code.ShouldContain("public partial class Dictionary<T1, T2>");
+            code.ShouldContain("class Entry : global::_.System.Object");
+            code.ShouldContain("int _hashCode");
+        }
+        finally
+        {
+            var dir = Path.GetDirectoryName(files[0])!;
+            Directory.Delete(dir, true);
+        }
+    }
+
+    // ───── BuildNestingWrapperDecl: generic parent wrappers ─────
+
+    [Test]
+    public void GenerateProxy_NestedInGenericParent_CompilerGeneratedChild_SanitizedCorrectly()
+    {
+        // Type like FrugalMapBase<System.Int32>+<>c
+        var parent = new TypeMetadata
+        {
+            FullName = "MyApp.FrugalMapBase<System.Int32>",
+            Namespace = "MyApp",
+            Name = "FrugalMapBase<System.Int32>",
+            Fields = [],
+            GenericDefinitionName = "FrugalMapBase",
+            GenericDefinitionFullName = "MyApp.FrugalMapBase",
+            GenericTypeArguments = ["System.Int32"]
+        };
+        var nested = new TypeMetadata
+        {
+            FullName = "MyApp.FrugalMapBase<System.Int32>+<>c",
+            Namespace = "MyApp",
+            Name = "FrugalMapBase<System.Int32>+<>c",
+            Fields = []
+        };
+
+        var emitter = new ProxyEmitter();
+        var allTypes = new TypeMetadata[] { parent, nested };
+        var dir = Path.Combine(Path.GetTempPath(), $"ndump_test_{Guid.NewGuid():N}");
+        var files = emitter.EmitProxies(allTypes, dir);
+
+        try
+        {
+            var nestedFile = files.FirstOrDefault(f =>
+                Path.GetFileName(f) != "ProxyResolver.g.cs" &&
+                !Path.GetFileName(f)!.EndsWith("FrugalMapBase_1.g.cs"));
+
+            nestedFile.ShouldNotBeNull();
+            var code = File.ReadAllText(nestedFile);
+
+            // Outer wrapper should be generic partial class
+            code.ShouldContain("public partial class FrugalMapBase<T>");
+            // Inner class should have sanitized name
+            code.ShouldContain("class __c : global::_.System.Object");
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    // ───── SplitNestingParts: additional edge cases ─────
+
+    [Test]
+    public void SplitNestingParts_CompilerGeneratedNested_SplitsCorrectly()
+    {
+        // Compiler-generated display class
+        ProxyEmitter.SplitNestingParts("Reader+<ReadAsync>d__5").ShouldBe(["Reader", "<ReadAsync>d__5"]);
+    }
+
+    [Test]
+    public void SplitNestingParts_GenericParentWithNestedChild_SplitsCorrectly()
+    {
+        ProxyEmitter.SplitNestingParts("Dictionary<String, Int32>+Entry").ShouldBe(
+            ["Dictionary<String, Int32>", "Entry"]);
+    }
+
+    [Test]
+    public void SplitNestingParts_MultipleLevels_SplitsAll()
+    {
+        ProxyEmitter.SplitNestingParts("A+B+C+D").ShouldBe(["A", "B", "C", "D"]);
+    }
+
+    // ───── Value type struct field references ─────
+
+    [Test]
+    public void GenerateProxy_StructField_KnownValueType_EmitsStructField()
+    {
+        var dateTime = new TypeMetadata
+        {
+            FullName = "System.DateTime",
+            Namespace = "System",
+            Name = "DateTime",
+            Fields = [],
+            IsValueType = true
+        };
+        var order = new TypeMetadata
+        {
+            FullName = "MyApp.Order",
+            Namespace = "MyApp",
+            Name = "Order",
+            Fields =
+            [
+                new FieldInfo
+                {
+                    Name = "_created",
+                    TypeName = "object",
+                    Kind = FieldKind.ValueType,
+                    ReferenceTypeName = "System.DateTime"
+                }
+            ]
+        };
+
+        var code = _emitter.GenerateProxyCode(order, allTypes: [dateTime, order]);
+
+        code.ShouldContain("_.System.DateTime _created => StructField<_.System.DateTime>(\"System.DateTime\");");
+    }
+
+    // ───── Compile tests for new patterns ─────
+
+    [Test]
+    public void Compile_ValueTypeProxy_Succeeds()
+    {
+        var compiler = new ProxyCompiler();
+        var sysObj = new TypeMetadata
+        {
+            FullName = "System.Object",
+            Namespace = "System",
+            Name = "Object",
+            Fields = []
+        };
+        var dateTime = new TypeMetadata
+        {
+            FullName = "System.DateTime",
+            Namespace = "System",
+            Name = "DateTime",
+            Fields =
+            [
+                new FieldInfo { Name = "_ticks", TypeName = "long", Kind = FieldKind.Primitive }
+            ],
+            IsValueType = true,
+            BaseTypeName = "System.Object"
+        };
+
+        var allTypes = new[] { sysObj, dateTime };
+        var sysObjCode = _emitter.GenerateProxyCode(sysObj, allTypes: allTypes);
+        var code = _emitter.GenerateProxyCode(dateTime, allTypes: allTypes);
+        var resolverCode = ProxyEmitter.GenerateProxyResolver();
+
+        var result = compiler.CompileFromSource([sysObjCode, code, resolverCode]);
+        result.IsSuccess.ShouldBeTrue(string.Join("\n", result.Errors));
+
+        var proxyType = result.Assembly!.GetType("_.System.DateTime");
+        proxyType.ShouldNotBeNull();
+
+        // Should implement IProxy<DateTime>
+        var iproxyType = proxyType.GetInterfaces()
+            .FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition().Name == "IProxy`1");
+        iproxyType.ShouldNotBeNull();
+    }
+
+    [Test]
+    public void Compile_CompilerGeneratedType_Succeeds()
+    {
+        var compiler = new ProxyCompiler();
+        var sysObj = new TypeMetadata
+        {
+            FullName = "System.Object",
+            Namespace = "System",
+            Name = "Object",
+            Fields = []
+        };
+        var task = new TypeMetadata
+        {
+            FullName = "MyApp.Task",
+            Namespace = "MyApp",
+            Name = "Task",
+            Fields = [],
+            BaseTypeName = "System.Object"
+        };
+        var compilerGenerated = new TypeMetadata
+        {
+            FullName = "MyApp.Task+<>c",
+            Namespace = "MyApp",
+            Name = "Task+<>c",
+            Fields = [],
+            BaseTypeName = "System.Object"
+        };
+
+        var allTypes = new[] { sysObj, task, compilerGenerated };
+        var sysObjCode = _emitter.GenerateProxyCode(sysObj, allTypes: allTypes);
+        var taskCode = _emitter.GenerateProxyCode(task, allTypes: allTypes);
+        var genCode = _emitter.GenerateProxyCode(compilerGenerated, allTypes: allTypes);
+        var resolverCode = ProxyEmitter.GenerateProxyResolver();
+
+        var result = compiler.CompileFromSource([sysObjCode, taskCode, genCode, resolverCode]);
+        result.IsSuccess.ShouldBeTrue(string.Join("\n", result.Errors));
+
+        var proxyType = result.Assembly!.GetType("_.MyApp.Task+__c");
+        proxyType.ShouldNotBeNull();
+    }
+
+    [Test]
+    public void Compile_BaseTypeNamingConflict_Succeeds()
+    {
+        var compiler = new ProxyCompiler();
+        var sysObj = new TypeMetadata
+        {
+            FullName = "System.Object",
+            Namespace = "System",
+            Name = "Object",
+            Fields = []
+        };
+        var control = new TypeMetadata
+        {
+            FullName = "UI.Control",
+            Namespace = "UI",
+            Name = "Control",
+            Fields = [],
+            BaseTypeName = "System.Object"
+        };
+        var controlButton = new TypeMetadata
+        {
+            FullName = "UI.Control+Button",
+            Namespace = "UI",
+            Name = "Control+Button",
+            Fields = [],
+            BaseTypeName = "System.Object"
+        };
+        var button = new TypeMetadata
+        {
+            FullName = "UI.Button",
+            Namespace = "UI",
+            Name = "Button",
+            BaseTypeName = "UI.Control",
+            Fields = [],
+        };
+
+        var allTypes = new[] { sysObj, control, controlButton, button };
+        var codes = allTypes.Select(t => _emitter.GenerateProxyCode(t, allTypes: allTypes)).ToList();
+        codes.Add(ProxyEmitter.GenerateProxyResolver());
+
+        var result = compiler.CompileFromSource(codes.ToArray());
+        result.IsSuccess.ShouldBeTrue(string.Join("\n", result.Errors));
+    }
+
+    [Test]
+    public void Compile_LongTypeName_Succeeds()
+    {
+        var compiler = new ProxyCompiler();
+        var sysObj = new TypeMetadata
+        {
+            FullName = "System.Object",
+            Namespace = "System",
+            Name = "Object",
+            Fields = []
+        };
+        var longName = "VeryLong" + new string('X', 500) + "TypeName";
+        var longType = new TypeMetadata
+        {
+            FullName = $"MyApp.{longName}",
+            Namespace = "MyApp",
+            Name = longName,
+            Fields = [],
+            BaseTypeName = "System.Object"
+        };
+
+        var allTypes = new[] { sysObj, longType };
+        var sysObjCode = _emitter.GenerateProxyCode(sysObj, allTypes: allTypes);
+        var code = _emitter.GenerateProxyCode(longType, allTypes: allTypes);
+        var resolverCode = ProxyEmitter.GenerateProxyResolver();
+
+        var result = compiler.CompileFromSource([sysObjCode, code, resolverCode]);
+        result.IsSuccess.ShouldBeTrue(string.Join("\n", result.Errors));
+    }
+
     [Test]
     public void GenerateProxy_SystemString_HasImplicitOperatorAndToString()
     {
@@ -948,7 +1723,7 @@ public class ProxyEmitterTests
         code.ShouldContain("public sealed class RuntimeTypeCache : global::_.System.Object");
         // Factories use the leaf name
         code.ShouldContain("RuntimeTypeCache FromAddress(ulong address, DumpContext context)");
-        code.ShouldContain("new RuntimeTypeCache(addr, context)");
+        code.ShouldContain("yield return FromAddress(addr, context)");
         // EnumerateInstances still uses the full CLR name
         code.ShouldContain("context.EnumerateInstances(\"System.RuntimeType+RuntimeTypeCache\")");
     }

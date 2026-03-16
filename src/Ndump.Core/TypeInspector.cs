@@ -408,6 +408,10 @@ public sealed class TypeInspector
             }
         }
 
+        // No namespace part before the generic/special marker
+        if (genericStart == 0)
+            return -1;
+
         // Find the last dot before generic args
         var lastDot = fullName.LastIndexOf('.', genericStart - 1);
         return lastDot;
