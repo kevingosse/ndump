@@ -5,7 +5,7 @@ namespace Ndump.Core;
 /// <summary>
 /// Shared helpers for CLR type name manipulation.
 /// </summary>
-internal static class TypeNameHelper
+public static class TypeNameHelper
 {
     /// <summary>
     /// Convert a CLR generic type name from angle-bracket form to backtick-arity form.
