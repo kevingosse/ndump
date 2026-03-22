@@ -18,7 +18,7 @@ public sealed class TypeInspector
     /// <summary>
     /// Discover all user-defined reference types on the heap.
     /// </summary>
-    public IReadOnlyList<TypeMetadata> DiscoverTypes(DumpContext context)
+    public IReadOnlyList<TypeMetadata> DiscoverTypes(DumpContext context, Action<int>? onTypeDiscovered = null)
     {
         var seen = new HashSet<string>();
         var result = new List<TypeMetadata>();
@@ -47,6 +47,7 @@ public sealed class TypeInspector
                 }
 
                 result.Add(BuildTypeMetadata(clrType, isValueType: false));
+                onTypeDiscovered?.Invoke(result.Count);
 
                 // Discover value types used as fields
                 foreach (var field in clrType.Fields)
@@ -69,6 +70,7 @@ public sealed class TypeInspector
         {
             if (!seen.Add(vt.Name!)) continue;
             result.Add(BuildTypeMetadata(vt, isValueType: true));
+            onTypeDiscovered?.Invoke(result.Count);
         }
 
         return result;

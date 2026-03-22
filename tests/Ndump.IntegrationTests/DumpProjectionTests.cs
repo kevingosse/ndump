@@ -41,6 +41,20 @@ public class DumpProjectionTests : DumpTests
     }
 
     [Test]
+    public void TypeInspector_ProgressCallbackReportsDiscoveredTypeCount()
+    {
+        using var ctx = DumpContext.Open(DumpPath);
+        var inspector = new TypeInspector();
+        var counts = new List<int>();
+
+        var types = inspector.DiscoverTypes(ctx, counts.Add);
+
+        counts.ShouldNotBeEmpty();
+        counts.Last().ShouldBe(types.Count);
+        counts.ShouldBe(Enumerable.Range(1, types.Count).ToList());
+    }
+
+    [Test]
     public void TypeInspector_CustomerHasExpectedFields()
     {
         using var ctx = DumpContext.Open(DumpPath);
