@@ -935,7 +935,7 @@ public sealed class ProxyEmitter
                     }
                 }
                 if (!hasInvalidArg)
-                    return $"{proxyNs}.{sanitizedDef}<{string.Join(", ", mappedArgsList)}>";
+                    return $"global::{proxyNs}.{sanitizedDef}<{string.Join(", ", mappedArgsList)}>";
             }
         }
 
@@ -1828,7 +1828,7 @@ public sealed class ProxyEmitter
         }
 
         if (genericStart == 0)
-            return $"_.{SanitizeTypeNameForSource(fullTypeName)}";
+            return $"global::_.{SanitizeTypeNameForSource(fullTypeName)}";
 
         var lastDot = fullTypeName.LastIndexOf('.', genericStart - 1);
         if (lastDot > 0)
@@ -1836,9 +1836,9 @@ public sealed class ProxyEmitter
             var ns = fullTypeName[..lastDot];
             var name = fullTypeName[(lastDot + 1)..];
             var sanitizedNs = string.Join(".", ns.Split('.').Select(SanitizeTypeName));
-            return $"_.{sanitizedNs}.{SanitizeTypeNameForSource(name)}";
+            return $"global::_.{sanitizedNs}.{SanitizeTypeNameForSource(name)}";
         }
-        return $"_.{SanitizeTypeNameForSource(fullTypeName)}";
+        return $"global::_.{SanitizeTypeNameForSource(fullTypeName)}";
     }
 
     private string GetFullyQualifiedGenericProxyType(string fullTypeName, string genDef)
@@ -1890,15 +1890,15 @@ public sealed class ProxyEmitter
             {
                 resolvedParts.Add(SanitizeTypeName(leafPart));
             }
-            return $"{proxyNs}.{string.Join(".", resolvedParts)}";
+            return $"global::{proxyNs}.{string.Join(".", resolvedParts)}";
         }
 
         // Simple case: no nesting in defName
         var sanitizedDef = SanitizeTypeNameForSource(defName);
         if (typeArgs.Count == 0)
-            return $"{proxyNs}.{sanitizedDef}";
+            return $"global::{proxyNs}.{sanitizedDef}";
         var mapped = typeArgs.Select(MapClrTypeToProxyTypeArg);
-        return $"{proxyNs}.{sanitizedDef}<{string.Join(", ", mapped)}>";
+        return $"global::{proxyNs}.{sanitizedDef}<{string.Join(", ", mapped)}>";
     }
 
     /// <summary>

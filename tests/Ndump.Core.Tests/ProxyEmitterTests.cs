@@ -86,7 +86,7 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type, knownTypes);
 
-        code.ShouldContain("public _.MyApp.Order? _lastOrder => Field<_.MyApp.Order>();");
+        code.ShouldContain("public global::_.MyApp.Order? _lastOrder => Field<global::_.MyApp.Order>();");
     }
 
     [Test]
@@ -135,7 +135,7 @@ public class ProxyEmitterTests
         // Backing field uses Field<T> with explicit name
         code.ShouldContain("public bool IsActive => Field<bool>(\"<IsActive>k__BackingField\");");
         // Known reference type uses Field<ProxyType>
-        code.ShouldContain("public _.MyApp.Address? _address => Field<_.MyApp.Address>();");
+        code.ShouldContain("public global::_.MyApp.Address? _address => Field<global::_.MyApp.Address>();");
         // Unknown reference type falls back to _.System.Object
         code.ShouldContain("public global::_.System.Object? _widget => Field<global::_.System.Object>();");
     }
@@ -330,7 +330,7 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type, knownTypes);
 
-        code.ShouldContain("public _.App.Orders.Order? _order");
+        code.ShouldContain("public global::_.App.Orders.Order? _order");
     }
 
     [Test]
@@ -389,7 +389,7 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type, knownTypes);
 
-        code.ShouldContain("public global::Ndump.Core.DumpArray<_.MyApp.Order?>? _orderHistory => ArrayField<_.MyApp.Order?>()");
+        code.ShouldContain("public global::Ndump.Core.DumpArray<global::_.MyApp.Order?>? _orderHistory => ArrayField<global::_.MyApp.Order?>()");
     }
 
     [Test]
@@ -548,7 +548,7 @@ public class ProxyEmitterTests
         var order = new TypeMetadata { FullName = "MyApp.Order", Namespace = "MyApp", Name = "Order", Fields = [], BaseTypeName = "System.Object" };
         var code = _emitter.GenerateProxyCode(type, allTypes: [sysObj, order, type]);
 
-        code.ShouldContain("public global::Ndump.Core.DumpArray<_.System.Object?>? _mixedItems => ArrayField<_.System.Object?>()");
+        code.ShouldContain("public global::Ndump.Core.DumpArray<global::_.System.Object?>? _mixedItems => ArrayField<global::_.System.Object?>()");
     }
 
     [Test]
@@ -622,7 +622,7 @@ public class ProxyEmitterTests
         var code = _emitter.GenerateProxyCode(cat, allTypes: [animal, cat]);
 
         // Cat should extend Animal proxy, not _.System.Object
-        code.ShouldContain("class Cat : _.MyApp.Animal");
+        code.ShouldContain("class Cat : global::_.MyApp.Animal");
         // Cat should NOT re-emit inherited fields
         code.ShouldNotContain("_name");
         code.ShouldNotContain("_age");
@@ -683,7 +683,7 @@ public class ProxyEmitterTests
 
         var catCode = _emitter.GenerateProxyCode(cat, allTypes: [animal, cat]);
 
-        catCode.ShouldContain("public sealed class Cat : _.MyApp.Animal");
+        catCode.ShouldContain("public sealed class Cat : global::_.MyApp.Animal");
     }
 
     [Test]
@@ -749,7 +749,7 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(owner, allTypes: [animal, cat, owner]);
 
-        code.ShouldContain("DumpArray<_.MyApp.Animal?>? _pets => ArrayField<_.MyApp.Animal?>()");
+        code.ShouldContain("DumpArray<global::_.MyApp.Animal?>? _pets => ArrayField<global::_.MyApp.Animal?>()");
     }
 
     [Test]
@@ -782,7 +782,7 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(owner, allTypes: [order, owner]);
 
-        code.ShouldContain("DumpArray<_.MyApp.Order?>? _orders => ArrayField<_.MyApp.Order?>()");
+        code.ShouldContain("DumpArray<global::_.MyApp.Order?>? _orders => ArrayField<global::_.MyApp.Order?>()");
     }
 
     [Test]
@@ -822,7 +822,7 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(owner, allTypes: [animal, cat, owner]);
 
-        code.ShouldContain("public _.MyApp.Animal? _pet => Field<_.MyApp.Animal>();");
+        code.ShouldContain("public global::_.MyApp.Animal? _pet => Field<global::_.MyApp.Animal>();");
     }
 
     [Test]
@@ -1335,7 +1335,7 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(button, allTypes: [control, button]);
 
-        code.ShouldContain("class Button : _.UI.Control");
+        code.ShouldContain("class Button : global::_.UI.Control");
     }
 
     // ───── __Canon references in generic proxies ─────
@@ -1523,7 +1523,7 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(order, allTypes: [dateTime, order]);
 
-        code.ShouldContain("_.System.DateTime _created => StructField<_.System.DateTime>(\"System.DateTime\");");
+        code.ShouldContain("global::_.System.DateTime _created => StructField<global::_.System.DateTime>(\"System.DateTime\");");
     }
 
     // ───── Compile tests for new patterns ─────
@@ -1847,7 +1847,7 @@ public class ProxyEmitterTests
         var code = _emitter.GenerateProxyCode(owner, allTypes: [runtimeType, cache, owner]);
 
         // Reference to nested type uses dot-separated C# syntax
-        code.ShouldContain("_.System.RuntimeType.ActivatorCache");
+        code.ShouldContain("global::_.System.RuntimeType.ActivatorCache");
     }
 
     [Test]
@@ -2108,7 +2108,7 @@ public class ProxyEmitterTests
         var code = _emitter.GenerateProxyCode(owner, allTypes: [listType, order, owner]);
 
         // Reference to a generic proxy should use proper generic syntax
-        code.ShouldContain("_.System.Collections.Generic.List<_.MyApp.Order>");
+        code.ShouldContain("global::_.System.Collections.Generic.List<global::_.MyApp.Order>");
     }
 
     [Test]
@@ -2218,7 +2218,7 @@ public class ProxyEmitterTests
 
         var code = _emitter.GenerateProxyCode(type, allTypes: [dateTimeType, type]);
 
-        code.ShouldContain("public _.System.DateTime? _shippedAt => NullableStructField<_.System.DateTime>(\"System.DateTime\");");
+        code.ShouldContain("public global::_.System.DateTime? _shippedAt => NullableStructField<global::_.System.DateTime>(\"System.DateTime\");");
     }
 
     [Test]
