@@ -1741,7 +1741,14 @@ public sealed class ProxyEmitter
     /// </summary>
     internal static string GetProxyNamespace(string originalNamespace)
     {
-        return string.IsNullOrEmpty(originalNamespace) ? "_" : $"_.{originalNamespace}";
+        if (string.IsNullOrEmpty(originalNamespace))
+            return "_";
+
+        // Sanitize each segment of the namespace individually to preserve the dot structure
+        // while replacing invalid C# identifier characters (e.g., '!' or ':' from CLR type names).
+        var segments = originalNamespace.Split('.');
+        var sanitized = string.Join(".", segments.Select(SanitizeTypeName));
+        return $"_.{sanitized}";
     }
 
     /// <summary>
@@ -1828,7 +1835,8 @@ public sealed class ProxyEmitter
         {
             var ns = fullTypeName[..lastDot];
             var name = fullTypeName[(lastDot + 1)..];
-            return $"_.{ns}.{SanitizeTypeNameForSource(name)}";
+            var sanitizedNs = string.Join(".", ns.Split('.').Select(SanitizeTypeName));
+            return $"_.{sanitizedNs}.{SanitizeTypeNameForSource(name)}";
         }
         return $"_.{SanitizeTypeNameForSource(fullTypeName)}";
     }
@@ -1964,7 +1972,7 @@ public sealed class ProxyEmitter
         // Handle generic type names and other special characters.
         // Note: + (nested type separator) is intentionally kept — nesting
         // is handled at a higher level via SplitNestingParts.
-        return name
+        var result = name
             .Replace('<', '_')
             .Replace('>', '_')
             .Replace(',', '_')
@@ -1984,7 +1992,37 @@ public sealed class ProxyEmitter
             .Replace('"', '_')
             .Replace('$', '_')
             .Replace('@', '_')
-            .Replace('=', '_');
+            .Replace('=', '_')
+            .Replace('!', '_');
+
+        // Strip any remaining characters that are invalid in C# identifiers
+        return StripInvalidIdentifierChars(result);
+    }
+
+    /// <summary>
+    /// Remove characters that are not valid in a C# identifier (letters, digits, underscore).
+    /// Ensures CLR type names with exotic characters produce compilable identifiers.
+    /// </summary>
+    private static string StripInvalidIdentifierChars(string name)
+    {
+        // Fast path: check if all chars are already valid
+        bool allValid = true;
+        foreach (var ch in name)
+        {
+            if (!char.IsLetterOrDigit(ch) && ch != '_')
+            {
+                allValid = false;
+                break;
+            }
+        }
+        if (allValid) return name;
+
+        var sb = new StringBuilder(name.Length);
+        foreach (var ch in name)
+        {
+            sb.Append(char.IsLetterOrDigit(ch) || ch == '_' ? ch : '_');
+        }
+        return sb.ToString();
     }
 
     /// <summary>
@@ -2203,7 +2241,9 @@ public sealed class ProxyEmitter
         sb.AppendLine("        {");
         sb.AppendLine("            var ns = clrTypeName[..lastDot];");
         sb.AppendLine("            var name = clrTypeName[(lastDot + 1)..];");
-        sb.AppendLine("            return \"_.\" + ns + \".\" + SanitizeNested(name);");
+        sb.AppendLine("            var nsParts = ns.Split('.');");
+        sb.AppendLine("            for (int i = 0; i < nsParts.Length; i++) nsParts[i] = Sanitize(nsParts[i]);");
+        sb.AppendLine("            return \"_.\" + string.Join(\".\", nsParts) + \".\" + SanitizeNested(name);");
         sb.AppendLine("        }");
         sb.AppendLine("        return \"_.\" + SanitizeNested(clrTypeName);");
         sb.AppendLine("    }");
@@ -2229,7 +2269,7 @@ public sealed class ProxyEmitter
         sb.AppendLine();
         sb.AppendLine("    private static string Sanitize(string name)");
         sb.AppendLine("    {");
-        sb.AppendLine("        return name");
+        sb.AppendLine("        var result = name");
         sb.AppendLine("            .Replace('<', '_').Replace('>', '_')");
         sb.AppendLine("            .Replace(',', '_').Replace(' ', '_')");
         sb.AppendLine("            .Replace('+', '_').Replace('.', '_')");
@@ -2239,7 +2279,13 @@ public sealed class ProxyEmitter
         sb.AppendLine("            .Replace('\\\\', '_').Replace(':', '_')");
         sb.AppendLine("            .Replace('*', '_').Replace('?', '_')");
         sb.AppendLine("            .Replace('\"', '_').Replace('$', '_')");
-        sb.AppendLine("            .Replace('@', '_').Replace('=', '_');");
+        sb.AppendLine("            .Replace('@', '_').Replace('=', '_')");
+        sb.AppendLine("            .Replace('!', '_');");
+        sb.AppendLine("        // Strip any remaining invalid identifier characters");
+        sb.AppendLine("        var sb = new global::System.Text.StringBuilder(result.Length);");
+        sb.AppendLine("        foreach (var ch in result)");
+        sb.AppendLine("            sb.Append(char.IsLetterOrDigit(ch) || ch == '_' ? ch : '_');");
+        sb.AppendLine("        return sb.ToString();");
         sb.AppendLine("    }");
         sb.AppendLine("}");
         return sb.ToString();
@@ -2265,7 +2311,7 @@ public sealed class ProxyEmitter
                 propName = propName[(lastDot + 1)..];
             // Sanitize any remaining < > from generic interface names
             propName = propName.Replace('<', '_').Replace('>', '_');
-            return EscapeIfKeyword(propName);
+            return EscapeIfKeyword(StripInvalidIdentifierChars(propName));
         }
 
         var sanitized = fieldName
@@ -2275,9 +2321,10 @@ public sealed class ProxyEmitter
             .Replace('-', '_')
             .Replace('.', '_')
             .Replace('$', '_')
-            .Replace('@', '_');
+            .Replace('@', '_')
+            .Replace('!', '_');
 
-        return EscapeIfKeyword(sanitized);
+        return EscapeIfKeyword(StripInvalidIdentifierChars(sanitized));
     }
 
     private static string EscapeIfKeyword(string name) => CSharpKeywords.Contains(name) ? $"@{name}" : name;

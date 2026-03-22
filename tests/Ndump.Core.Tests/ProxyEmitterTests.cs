@@ -346,6 +346,14 @@ public class ProxyEmitterTests
     }
 
     [Test]
+    public void GetProxyNamespace_SanitizesInvalidCharsInSegments()
+    {
+        // CLR namespaces from compiled XAML can contain '!' and ':'
+        ProxyEmitter.GetProxyNamespace("CompiledAvaloniaXaml.!AvaloniaResources.NamespaceInfo:")
+            .ShouldBe("_.CompiledAvaloniaXaml._AvaloniaResources.NamespaceInfo_");
+    }
+
+    [Test]
     public void SanitizeTypeName_HandlesArrayBrackets()
     {
         ProxyEmitter.SanitizeTypeName("String[]").ShouldBe("String__");
@@ -954,6 +962,19 @@ public class ProxyEmitterTests
     public void SanitizeTypeName_HandlesStarAndQuestion()
     {
         ProxyEmitter.SanitizeTypeName("A*B?C").ShouldBe("A_B_C");
+    }
+
+    [Test]
+    public void SanitizeTypeName_HandlesExclamationMark()
+    {
+        ProxyEmitter.SanitizeTypeName("CompiledAvaloniaXaml_!AvaloniaResources").ShouldBe("CompiledAvaloniaXaml__AvaloniaResources");
+    }
+
+    [Test]
+    public void SanitizeTypeName_StripsExoticCharacters()
+    {
+        // Characters not in the explicit replace list should still be sanitized
+        ProxyEmitter.SanitizeTypeName("A~B#C%D").ShouldBe("A_B_C_D");
     }
 
     // ───── SanitizeNestedSuffix (tested via proxy codegen) ─────
